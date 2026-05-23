@@ -1,12 +1,12 @@
 [package]
-name = "muzikku"
-version = "0.1.0"
-description = "muzikku — local-first music player"
-authors = ["you"]
+name = "noctune"
+version = "1.0.0"
+description = "noctune — local-first music player"
+authors = ["caya8205-2"]
 edition = "2021"
 
 [lib]
-name = "muzikku_lib"
+name = "noctune_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

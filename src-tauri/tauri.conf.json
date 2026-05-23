@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Noctune",
-  "version": "0.1.0",
-  "identifier": "dev.noctune.app",
+  "version": "1.0.0",
+  "identifier": "dev.noctune.desktop",
   "build": {
     "beforeDevCommand": "npm run dev --workspace=frontend",
     "beforeBuildCommand": "npm run build --workspace=frontend",

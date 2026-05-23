@@ -1,5 +1,7 @@
 # Noctune
 
+<img src="app-icon.png" width="128" alt="Noctune Logo" />
+
 A local-first desktop music player with Spotify-powered discovery, YouTube stream playback, smart autoqueue, and background prefetching.
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111111)](https://react.dev/)
@@ -81,6 +83,9 @@ pip install yt-dlp
 
 # Windows
 winget install yt-dlp
+# or if you use Chocolatey:
+choco install yt-dlp
+# or just look up the download on the web i guess
 ```
 
 Optional Spotify search requires a Spotify developer app client ID and secret. Add them from the app Settings screen.

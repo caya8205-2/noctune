@@ -1,6 +1,6 @@
 {
   "name": "noctune",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "frontend",
@@ -15,6 +15,7 @@
     "tauri:build": "npm run build && tauri build"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "concurrently": "^8.2.2"
   }
 }
