@@ -49,14 +49,14 @@ export function PlayerBar() {
 
       <div className="flex items-center px-5 flex-1 gap-4">
         {/* Track info */}
-        <div className="flex items-center gap-3 w-64 min-w-0">
+        <div className="flex items-center gap-3 w-72 min-w-0">
           {currentTrack ? (
             <>
               <div className="relative flex-shrink-0">
                 <img
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
-                  className="w-10 h-10 rounded-lg object-cover"
+                  className="w-11 h-11 rounded-lg object-cover"
                   onError={(e) => (e.currentTarget.style.display = 'none')}
                 />
                 {isLoading && (
@@ -75,14 +75,14 @@ export function PlayerBar() {
             </>
           ) : (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-base-800" />
+              <div className="w-11 h-11 rounded-lg bg-base-800 border border-base-600/30" />
               <span className="text-sm text-muted">Nothing playing</span>
             </div>
           )}
         </div>
 
         {/* Controls */}
-        <div className="flex-1 flex items-center justify-center gap-3">
+        <div className="flex-1 flex items-center justify-center gap-2">
           <button
             onClick={toggleShuffle}
             className={clsx('btn-ghost', shuffle && 'text-accent')}
@@ -97,8 +97,8 @@ export function PlayerBar() {
           <button
             onClick={togglePlay}
             disabled={!currentTrack}
-            className="w-9 h-9 rounded-full bg-accent text-base-950 flex items-center justify-center
-                       hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-10 h-10 rounded-full bg-accent text-base-950 flex items-center justify-center
+                       hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-accent/10"
           >
             {isLoading
               ? <Loader2 size={16} className="animate-spin" />
@@ -121,7 +121,7 @@ export function PlayerBar() {
         </div>
 
         {/* Time + Volume */}
-        <div className="flex items-center gap-3 w-64 justify-end">
+        <div className="flex items-center gap-3 w-72 justify-end">
           <span className="text-xs text-muted font-mono tabular-nums">
             {formatDuration(progress)} / {formatDuration(duration)}
           </span>

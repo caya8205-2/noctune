@@ -1,4 +1,4 @@
-import { Home, Search, ListMusic, ListOrdered, Plus, Trash2, Settings } from 'lucide-react';
+import { Home, Search, ListMusic, ListOrdered, Plus, Trash2, Settings, Moon } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
@@ -33,10 +33,16 @@ export function Sidebar() {
   return (
     <div className="flex flex-col h-full bg-base-950 px-3 py-4">
       {/* Logo */}
-      <div className="px-3 mb-6">
-        <h1 className="font-display text-xl text-white">
-          muzikku<span className="text-accent">.</span>
-        </h1>
+      <div className="px-3 mb-6 flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-accent text-base-950 flex items-center justify-center shadow-lg shadow-accent/10">
+          <Moon size={17} fill="currentColor" />
+        </div>
+        <div>
+          <h1 className="font-display text-xl text-white leading-none">
+            Noctune<span className="text-accent">.</span>
+          </h1>
+          <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Local player</p>
+        </div>
       </div>
 
       {/* Main nav */}
