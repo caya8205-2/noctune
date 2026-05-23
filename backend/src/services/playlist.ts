@@ -4,11 +4,15 @@ import fs from 'fs';
 import crypto from 'crypto';
 import type { Playlist } from '../types/index.js';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'muzikku.db');
+// APP_DATA_DIR can be set at launch so the data folder lands in a predictable
+// location. Falls back to <cwd>/data.
+const DATA_DIR = process.env.APP_DATA_DIR
+  ? path.resolve(process.env.APP_DATA_DIR)
+  : path.join(process.cwd(), 'data');
+const DB_PATH = path.join(DATA_DIR, 'noctune.db');
 
 function ensureDataDir() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 function getDb(): Database.Database {

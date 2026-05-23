@@ -1,7 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
-const CONFIG_FILE = path.join(process.cwd(), 'data', 'config.json');
+// APP_DATA_DIR can be set at launch (e.g. via Tauri sidecar env) so the data
+// folder always ends up in a predictable location. Falls back to <cwd>/data.
+const DATA_DIR = process.env.APP_DATA_DIR
+  ? path.resolve(process.env.APP_DATA_DIR)
+  : path.join(process.cwd(), 'data');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 export interface EnvConfig {
     spotifyClientId: string;
@@ -16,8 +21,7 @@ const DEFAULTS: EnvConfig = {
 };
 
 function ensureDataDir() {
-    const dir = path.dirname(CONFIG_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 // In-memory config (load once)
@@ -52,3 +56,4 @@ export function isSpotifyConfigured(): boolean {
     const c = getEnvConfig();
     return Boolean(c.spotifyClientId && c.spotifyClientSecret);
 }
+

@@ -1,4 +1,7 @@
-const BASE = '/api';
+// In production Tauri builds the Vite proxy doesn't exist, so we call the backend directly.
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const BASE = IS_TAURI ? 'http://127.0.0.1:3131' : '/api';
+export const API_BASE = BASE;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -77,3 +80,4 @@ export interface Playlist {
   updatedAt: number;
   trackIds: string[];
 }
+

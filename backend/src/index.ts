@@ -7,6 +7,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { queueRoutes } from './routes/queue.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
+import { getEnvConfig } from './services/env.js';
 import { getPrefetchStatus } from './services/prefetch.js';
 
 const PORT = Number(process.env.PORT ?? 3131);
@@ -24,7 +25,7 @@ async function bootstrap() {
 
   // CORS — allow Tauri WebView and dev server
   await app.register(cors, {
-    origin: ['http://localhost:5173', 'tauri://localhost', 'https://tauri.localhost'],
+    origin: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 
@@ -62,3 +63,4 @@ bootstrap().catch(err => {
   console.error('[fatal]', err);
   process.exit(1);
 });
+

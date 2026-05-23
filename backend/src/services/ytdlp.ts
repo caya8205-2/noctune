@@ -58,7 +58,7 @@ function pickThumbnail(info: YTInfo): string {
 /** Search YouTube and return top results as Track objects. */
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
   const rawResults = await ytDlp.execPromise([
-    `ytsearch${limit}:${query}`,
+    `ytsearch${limit}:"${query}"{query}`,
     '--dump-json',
     '--no-playlist',
     '--flat-playlist',

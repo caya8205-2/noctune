@@ -11,6 +11,7 @@ import {
   Trash2,
   XCircle,
 } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -35,7 +36,7 @@ export function SettingsView() {
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/settings')
+    fetch(API_BASE + '/settings')
       .then((r) => r.json())
       .then((d: SettingsData) => {
         setData(d);
@@ -54,7 +55,7 @@ export function SettingsView() {
       if (clientId) body.spotifyClientId = clientId;
       if (clientSecret) body.spotifyClientSecret = clientSecret;
 
-      const res = await fetch('/api/settings', {
+      const res = await fetch(API_BASE + '/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -77,7 +78,7 @@ export function SettingsView() {
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/settings/spotify/test', { method: 'POST' });
+      const res = await fetch(API_BASE + '/settings/spotify/test', { method: 'POST' });
       const result = (await res.json()) as { ok: boolean; error?: string };
       setTestResult(result);
     } catch {
@@ -92,7 +93,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch('/api/settings/cache/export');
+      const res = await fetch(API_BASE + '/settings/cache/export');
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -118,7 +119,7 @@ export function SettingsView() {
 
     try {
       const json = JSON.parse(await file.text());
-      const res = await fetch('/api/settings/cache/import', {
+      const res = await fetch(API_BASE + '/settings/cache/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(json),
@@ -139,7 +140,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch('/api/settings/cache', { method: 'DELETE' });
+      const res = await fetch(API_BASE + '/settings/cache', { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear cache failed');
       setCacheMessage({ ok: true, text: 'Cache cleared.' });
     } catch (err) {

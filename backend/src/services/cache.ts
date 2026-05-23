@@ -5,7 +5,10 @@ import { CacheStore, CachedTrack, Track } from '../types/index.js';
 
 const CACHE_VERSION = 1;
 const URL_TTL_MS = 6 * 60 * 60 * 1000;        // 6 hours — YT URL expiry
-const CACHE_FILE = path.join(process.cwd(), 'data', 'songs.json');
+const DATA_DIR = process.env.APP_DATA_DIR
+  ? path.resolve(process.env.APP_DATA_DIR)
+  : path.join(process.cwd(), 'data');
+const CACHE_FILE = path.join(DATA_DIR, 'songs.json');
 
 function ensureDataDir() {
   const dir = path.dirname(CACHE_FILE);

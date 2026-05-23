@@ -3,10 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "main": "dist/index.js",
+  "bin": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "build:binary": "pkg . --target node24-win-x64 --output ../src-tauri/binaries/noctune-backend-x86_64-pc-windows-msvc.exe"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": [
+      "../node_modules/better-sqlite3/prebuilds/**/*",
+      "../node_modules/better-sqlite3/build/Release/**/*.node"
+    ]
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -24,7 +33,9 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/fluent-ffmpeg": "^2.1.24",
     "@types/node": "^22.0.0",
+    "@yao-pkg/pkg": "^6.19.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }
 }
+

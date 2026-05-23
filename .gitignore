@@ -8,6 +8,8 @@ frontend/dist/
 *.db-shm
 *.db-wal
 src-tauri/target/
+src-tauri/binaries/*.exe
+src-tauri/binaries/noctune-backend-*
 .env
 .env.local
 backend/.env

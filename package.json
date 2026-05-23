@@ -11,8 +11,9 @@
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "tauri": "npm run build:backend && tauri dev",
-    "tauri:build": "npm run build && tauri build"
+    "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
+    "tauri": "npm run build:backend && concurrently \"npm run dev:backend\" \"tauri dev\"",
+    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
