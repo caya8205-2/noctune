@@ -1,0 +1,94 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { getEnvConfig, saveEnvConfig } from '../services/env.js';
+import { testSpotifyCredentials, invalidateToken } from '../services/spotify.js';
+import {
+    clearCacheStore,
+    exportCacheStore,
+    getCacheStats,
+    importCacheStore,
+} from '../services/cache.js';
+
+const UpdateBody = z.object({
+    spotifyClientId: z.string().optional(),
+    spotifyClientSecret: z.string().optional(),
+    searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
+});
+
+export async function settingsRoutes(app: FastifyInstance) {
+    // GET /settings — return current config (secrets masked)
+    app.get('/settings', async (_req, reply) => {
+        const config = getEnvConfig();
+        return reply.send({
+            searchEngine: config.searchEngine,
+            spotify: {
+                clientId: config.spotifyClientId,
+                // Mask secret — only show last 4 chars if set
+                clientSecretMasked: config.spotifyClientSecret
+                    ? '••••••••' + config.spotifyClientSecret.slice(-4)
+                    : '',
+                configured: Boolean(config.spotifyClientId && config.spotifyClientSecret),
+            },
+        });
+    });
+
+    // PATCH /settings — update config
+    app.patch('/settings', async (req, reply) => {
+        const parsed = UpdateBody.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+        }
+        const updated = saveEnvConfig(parsed.data);
+
+        // Invalidate Spotify token if credentials changed
+        if (parsed.data.spotifyClientId || parsed.data.spotifyClientSecret) {
+            invalidateToken();
+        }
+
+        return reply.send({
+            ok: true,
+            searchEngine: updated.searchEngine,
+            spotify: {
+                clientId: updated.spotifyClientId,
+                clientSecretMasked: updated.spotifyClientSecret
+                    ? '••••••••' + updated.spotifyClientSecret.slice(-4)
+                    : '',
+                configured: Boolean(updated.spotifyClientId && updated.spotifyClientSecret),
+            },
+        });
+    });
+
+    // POST /settings/spotify/test — verify credentials work
+    app.post('/settings/spotify/test', async (_req, reply) => {
+        const result = await testSpotifyCredentials();
+        return reply.send(result);
+    });
+
+    // GET /settings/cache/export — export cache learning JSON
+    app.get('/settings/cache/export', async (_req, reply) => {
+        reply.header('Content-Disposition', 'attachment; filename="muzikku-cache.json"');
+        return reply.send(exportCacheStore());
+    });
+
+    // POST /settings/cache/import — replace cache learning JSON
+    app.post('/settings/cache/import', async (req, reply) => {
+        try {
+            const imported = importCacheStore(req.body);
+            return reply.send({
+                ok: true,
+                cache: {
+                    total: Object.keys(imported.tracks).length,
+                    totalQueries: Object.keys(imported.queryIndex).length,
+                },
+            });
+        } catch (err) {
+            return reply.status(400).send({ error: 'Invalid cache JSON', message: (err as Error).message });
+        }
+    });
+
+    // DELETE /settings/cache — clear cache learning JSON
+    app.delete('/settings/cache', async (_req, reply) => {
+        clearCacheStore();
+        return reply.send({ ok: true, cache: getCacheStats() });
+    });
+}

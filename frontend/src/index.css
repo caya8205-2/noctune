@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: #080808;
+    color: #e8e8e8;
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2e2e2e;
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+  }
+}
+
+@layer components {
+  .btn-ghost {
+    @apply flex items-center justify-center rounded-lg p-2 text-soft hover:text-white hover:bg-base-700 transition-all duration-150 cursor-pointer;
+  }
+
+  .btn-accent {
+    @apply flex items-center justify-center gap-2 rounded-full bg-accent text-base-950 font-semibold px-5 py-2.5 text-sm hover:bg-accent-dim transition-colors duration-150 cursor-pointer;
+  }
+
+  .input-base {
+    @apply w-full bg-base-800 border border-base-600 rounded-xl px-4 py-2.5 text-sm text-white placeholder-muted outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all duration-150;
+  }
+
+  .track-row {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-base-800 cursor-pointer transition-colors duration-100;
+  }
+
+  .track-row.active {
+    @apply bg-base-700;
+  }
+}
+
+/* Tauri window drag region */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+
+[data-tauri-drag-region] * {
+  -webkit-app-region: no-drag;
+}

@@ -1,0 +1,44 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { getCachedByQuery } from '../services/cache.js';
+import { searchTracks } from '../services/ytdlp.js';
+import { getEnvConfig } from '../services/env.js';
+import { searchSpotify } from '../services/spotify.js';
+
+const SearchQuery = z.object({
+  q: z.string().min(1).max(200),
+  limit: z.coerce.number().min(1).max(20).default(10),
+});
+
+export async function searchRoutes(app: FastifyInstance) {
+  app.get('/search', async (req, reply) => {
+    const parsed = SearchQuery.safeParse(req.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid query', issues: parsed.error.issues });
+    }
+    const { q, limit } = parsed.data;
+
+    // Check cache first — if we have an exact query hit, return instantly
+    const cached = getCachedByQuery(q);
+    if (cached) {
+      return reply.send({
+        fromCache: true,
+        query: q,
+        tracks: [cached],
+      });
+    }
+
+    const { searchEngine } = getEnvConfig();
+
+    // Live search via selected engine.
+    try {
+      const tracks = searchEngine === 'spotify'
+        ? await searchSpotify(q, limit)
+        : await searchTracks(q, limit);
+      return reply.send({ fromCache: false, query: q, tracks });
+    } catch (err) {
+      app.log.error(err, 'Search failed');
+      return reply.status(502).send({ error: 'Search failed', message: (err as Error).message });
+    }
+  });
+}

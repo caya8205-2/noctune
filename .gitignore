@@ -1,0 +1,16 @@
+node_modules/
+dist/
+data/
+backend/data/
+backend/dist/
+frontend/dist/
+*.db
+*.db-shm
+*.db-wal
+src-tauri/target/
+.env
+.env.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
