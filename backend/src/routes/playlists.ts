@@ -8,6 +8,7 @@ import {
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
+  reorderPlaylistTracks,
   importPlaylist,
 } from '../services/playlist.js';
 import { parseMediaUrl } from '../services/urlParser.js';
@@ -93,6 +94,15 @@ export async function playlistRoutes(app: FastifyInstance) {
     return reply.status(201).send({ ok: true });
   });
 
+  app.patch<{ Params: { id: string } }>('/playlists/:id/tracks/reorder', async (req, reply) => {
+    const { fromIndex, toIndex } = req.body as { fromIndex: number; toIndex: number };
+    if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
+      return reply.status(400).send({ error: 'fromIndex and toIndex are required' });
+    }
+    reorderPlaylistTracks(req.params.id, fromIndex, toIndex);
+    return reply.send({ ok: true });
+  });
+
   app.delete<{ Params: { id: string; trackId: string } }>(
     '/playlists/:id/tracks/:trackId',
     async (req, reply) => {
@@ -101,3 +111,4 @@ export async function playlistRoutes(app: FastifyInstance) {
     }
   );
 }
+

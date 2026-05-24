@@ -1,4 +1,5 @@
 import { usePlayerStore } from '../../store/player';
+import { useRef } from 'react';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
 import {
@@ -9,6 +10,8 @@ import {
 import { clsx } from 'clsx';
 
 export function PlayerBar() {
+  const seekDragging = useRef(false);
+  const volDragging = useRef(false);
   const {
     currentTrack, isPlaying, isLoading,
     volume, progress, duration,
@@ -19,16 +22,54 @@ export function PlayerBar() {
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
-  function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
+  function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
     const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
     seekAudio(pct * duration);
+    seekDragging.current = true;
+
+    function onMove(ev: MouseEvent) {
+      const r = bar.getBoundingClientRect();
+      const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      seekAudio(v * duration);
+    }
+    function onUp(ev: MouseEvent) {
+      const r = bar.getBoundingClientRect();
+      const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      seekAudio(v * duration);
+      seekDragging.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
 
-  function handleVolume(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
+  function handleVolDown(e: React.MouseEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
     const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
     setVolume(pct);
+    volDragging.current = true;
+
+    function onMove(ev: MouseEvent) {
+      const r = bar.getBoundingClientRect();
+      const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      setVolume(v);
+    }
+    function onUp(ev: MouseEvent) {
+      const r = bar.getBoundingClientRect();
+      const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      setVolume(v);
+      volDragging.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
 
   return (
@@ -36,7 +77,7 @@ export function PlayerBar() {
       {/* Progress bar */}
       <div
         className="w-full h-0.5 bg-base-600 cursor-pointer group/progress relative"
-        onClick={handleSeek}
+        onMouseDown={handleSeekDown}
       >
         <div
           className="h-full bg-accent transition-none relative"
@@ -141,7 +182,7 @@ export function PlayerBar() {
 
           <div
             className="w-20 h-1 bg-base-600 rounded-full cursor-pointer group/vol relative"
-            onClick={handleVolume}
+            onMouseDown={handleVolDown}
           >
             <div
               className="h-full bg-soft rounded-full group-hover/vol:bg-accent transition-colors"
@@ -153,3 +194,5 @@ export function PlayerBar() {
     </div>
   );
 }
+
+

@@ -9,6 +9,7 @@ import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { usePlayerStore } from './store/player';
 import { useAudio } from './hooks/useAudio';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
@@ -16,6 +17,7 @@ const qc = new QueryClient({
 
 function AppInner() {
   useAudio();
+  useKeyboardShortcuts();
   const { activeView } = usePlayerStore();
 
   const IS_TAURI =
@@ -109,3 +111,5 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
+

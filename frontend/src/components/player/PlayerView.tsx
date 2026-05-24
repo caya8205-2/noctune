@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
+import { Visualizer } from './Visualizer';
 
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
@@ -50,7 +51,12 @@ export function PlayerView() {
               <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />
               <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner" />
               {isPlaying && (
+              <>
                 <div className="absolute -inset-1 rounded-full border border-accent/30 animate-pulse-accent" />
+                  <div >
+                    <Visualizer />
+                  </div>
+                </>
               )}
             </div>
 
@@ -123,3 +129,8 @@ export function PlayerView() {
     </div>
   );
 }
+
+
+
+
+

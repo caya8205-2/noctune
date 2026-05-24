@@ -8,6 +8,7 @@ import {
   upsertTrack,
 } from '../services/cache.js';
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/ytdlp.js';
+import { Readable } from 'stream';
 import { matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { Track } from '../types/index.js';
 import {
@@ -162,6 +163,28 @@ export async function playerRoutes(app: FastifyInstance) {
     }
   );
 
+  // Stream audio through backend (bypass CORS for Web Audio API)
+  app.get('/player/stream/:videoId', async (req, reply) => {
+    const { videoId } = req.params as { videoId: string };
+    const cached = getCachedById(videoId);
+    if (!cached || !isUrlFresh(cached)) {
+      return reply.status(404).send({ error: 'No fresh stream, resolve first' });
+    }
+    try {
+      const ytRes = await fetch(cached.audioUrl);
+      if (!ytRes.ok || !ytRes.body) {
+        return reply.status(502).send({ error: 'YouTube stream failed' });
+      }
+      reply
+        .header('Content-Type', ytRes.headers.get('content-type') || 'audio/webm')
+        .header('Access-Control-Allow-Origin', '*')
+        .header('Cache-Control', 'public, max-age=3600');
+      const nodeStream = Readable.fromWeb(ytRes.body as any);
+      return reply.send(nodeStream);
+    } catch (err) {
+      return reply.status(502).send({ error: 'Stream proxy failed', message: (err as Error).message });
+    }
+  });
   app.post('/player/prefetch', async (req, reply) => {
     const parsed = QueueBody.safeParse(req.body);
     if (!parsed.success) {

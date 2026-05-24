@@ -66,6 +66,12 @@ export const api = {
     request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' }),
   addTrack: (playlistId: string, trackId: string) =>
     request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ trackId }) }),
+  reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) =>
+    request<{ ok: boolean }>('/playlists/' + playlistId + '/tracks/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ fromIndex, toIndex }),
+    }),
+
   removeTrack: (playlistId: string, trackId: string) =>
     request(`/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' }),
 };
@@ -104,4 +110,6 @@ export interface Playlist {
   trackIds: string[];
   tracks?: Track[];
 }
+
+
 
