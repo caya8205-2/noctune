@@ -15,6 +15,11 @@ const UpdateBody = z.object({
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
 });
 
+const TestBody = z.object({
+    spotifyClientId: z.string().optional(),
+    spotifyClientSecret: z.string().optional(),
+}).optional();
+
 export async function settingsRoutes(app: FastifyInstance) {
     // GET /settings — return current config (secrets masked)
     app.get('/settings', async (_req, reply) => {
@@ -59,8 +64,31 @@ export async function settingsRoutes(app: FastifyInstance) {
     });
 
     // POST /settings/spotify/test — verify credentials work
-    app.post('/settings/spotify/test', async (_req, reply) => {
+    app.post('/settings/spotify/test', async (req, reply) => {
+        const parsed = TestBody.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+        }
+
+        const body = parsed.data;
+        const hasNewCredentials = Boolean(body?.spotifyClientId || body?.spotifyClientSecret);
+        const previous = getEnvConfig();
+
+        if (hasNewCredentials) {
+            saveEnvConfig({
+                spotifyClientId: body?.spotifyClientId || previous.spotifyClientId,
+                spotifyClientSecret: body?.spotifyClientSecret || previous.spotifyClientSecret,
+            });
+            invalidateToken();
+        }
+
         const result = await testSpotifyCredentials();
+
+        if (!result.ok && hasNewCredentials) {
+            saveEnvConfig(previous);
+            invalidateToken();
+        }
+
         return reply.send(result);
     });
 

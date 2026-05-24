@@ -3,6 +3,7 @@ import path from 'path';
 import PQueue from 'p-queue';
 import type { Track } from '../types/index.js';
 import { searchTracks } from './ytdlp.js';
+import { getDataDir } from './env.js';
 
 interface MatchCacheEntry {
   spotifyId: string;
@@ -25,7 +26,7 @@ interface ScoredCandidate {
   reasons: string[];
 }
 
-const CACHE_FILE = path.join(process.cwd(), 'data', 'spotify-youtube-map.json');
+const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
 const CACHE_VERSION = 1;
 const matchQueue = new PQueue({ concurrency: 2 });
 
@@ -43,7 +44,21 @@ const positiveChannelKeywords = ['official', 'vevo', 'topic'];
 const negativeKeywords = [
   'reaction',
   'reacts',
+  'react',
+  'first time hearing',
+  'first time',
+  'watching',
   'review',
+  'breakdown',
+  'analysis',
+  'commentary',
+  'trailer',
+  'movie',
+  'film',
+  'scene',
+  'clip',
+  'clips',
+  'shorts',
   'cover',
   'karaoke',
   'instrumental',
@@ -169,7 +184,7 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const keyword of negativeKeywords) {
     if (combined.includes(keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
-      score -= keyword === 'reaction' ? 120 : 75;
+      score -= keyword.includes('react') || keyword === 'reaction' ? 250 : 120;
       reasons.push(`negative:${keyword}`);
     }
   }
@@ -251,11 +266,11 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
   const cached = fromCache(spotifyTrack);
   if (cached) return cached;
 
-  const query = `${spotifyTrack.title} ${spotifyTrack.artist}`;
+  const query = `${spotifyTrack.title} - ${spotifyTrack.artist}`;
 
   const result = await matchQueue.add<Track | null>(async () => {
     const startedAt = Date.now();
-    const candidates = await searchTracks(query, 8);
+    const candidates = await searchTracks(query, 12);
     const ranked = candidates
       .map((candidate) => scoreCandidate(spotifyTrack, candidate))
       .sort((a, b) => b.score - a.score);

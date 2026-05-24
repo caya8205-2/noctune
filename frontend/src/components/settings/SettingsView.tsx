@@ -30,6 +30,7 @@ export function SettingsView() {
   const [engine, setEngine] = useState<'ytdlp' | 'spotify'>('ytdlp');
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingEngine, setSavingEngine] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
@@ -45,6 +46,29 @@ export function SettingsView() {
       })
       .catch(console.error);
   }, []);
+
+  async function handleEngineChange(nextEngine: 'ytdlp' | 'spotify') {
+    if (nextEngine === engine || savingEngine) return;
+
+    const previousEngine = engine;
+    setEngine(nextEngine);
+    setSavingEngine(true);
+
+    try {
+      const res = await fetch(API_BASE + '/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchEngine: nextEngine }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      setData(updated);
+    } catch (err) {
+      console.error('Search engine save failed:', err);
+      setEngine(previousEngine);
+    } finally {
+      setSavingEngine(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -78,8 +102,31 @@ export function SettingsView() {
     setTestResult(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/spotify/test', { method: 'POST' });
+      const body: Record<string, string> = {};
+      if (clientId) body.spotifyClientId = clientId;
+      if (clientSecret) body.spotifyClientSecret = clientSecret;
+
+      const res = await fetch(API_BASE + '/settings/spotify/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       const result = (await res.json()) as { ok: boolean; error?: string };
+      if (result.ok) {
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                spotify: {
+                  ...current.spotify,
+                  clientId: clientId || current.spotify.clientId,
+                  configured: true,
+                },
+              }
+            : current
+        );
+        setClientSecret('');
+      }
       setTestResult(result);
     } catch {
       setTestResult({ ok: false, error: 'Request failed' });
@@ -165,14 +212,24 @@ export function SettingsView() {
           {(['ytdlp', 'spotify'] as const).map((option) => (
             <button
               key={option}
-              onClick={() => setEngine(option)}
+              onClick={() => handleEngineChange(option)}
+              disabled={savingEngine}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
                 engine === option
                   ? 'bg-accent/10 border-accent/40 text-accent'
                   : 'bg-base-800 border-base-600 text-muted hover:text-white hover:border-base-500'
-              }`}
+              } disabled:opacity-60 disabled:cursor-wait`}
             >
-              {option === 'ytdlp' ? 'yt-dlp (default)' : 'Spotify'}
+              {savingEngine && engine === option ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Loader2 size={13} className="animate-spin" />
+                  Saving
+                </span>
+              ) : option === 'ytdlp' ? (
+                'yt-dlp (default)'
+              ) : (
+                'Spotify'
+              )}
             </button>
           ))}
         </div>
@@ -284,7 +341,7 @@ export function SettingsView() {
                 <CheckCircle size={14} /> Saved!
               </>
             ) : (
-              'Save Settings'
+              'Save Credentials'
             )}
           </button>
         </div>

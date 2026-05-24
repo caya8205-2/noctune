@@ -8,6 +8,10 @@ const DATA_DIR = process.env.APP_DATA_DIR
   : path.join(process.cwd(), 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
+export function getDataDir(): string {
+    return DATA_DIR;
+}
+
 export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;

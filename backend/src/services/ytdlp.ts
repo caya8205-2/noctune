@@ -55,10 +55,154 @@ function pickThumbnail(info: YTInfo): string {
   return info.thumbnail ?? '';
 }
 
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\bbaels\b/g, 'baelz')
+    .replace(/\bhakoz\b/g, 'hakos')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function words(value: string): string[] {
+  return normalize(value)
+    .split(' ')
+    .filter((word) => word.length > 1);
+}
+
+function parseSearchQuery(query: string): { title: string; artist: string; searchQuery: string } {
+  const parts = query.split(/\s+-\s+|\s+by\s+/i).map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const [title, artist] = parts;
+    const searchTitle = title.replace(/\bhakoz\b/gi, 'Hakos').replace(/\bbaels\b/gi, 'Baelz');
+    const searchArtist = artist.replace(/\bhakoz\b/gi, 'Hakos').replace(/\bbaels\b/gi, 'Baelz');
+    return {
+      title,
+      artist,
+      searchQuery: `${searchArtist} ${searchTitle} official audio`,
+    };
+  }
+
+  const searchQuery = query.replace(/\bhakoz\b/gi, 'Hakos').replace(/\bbaels\b/gi, 'Baelz');
+
+  return {
+    title: query,
+    artist: '',
+    searchQuery: `${searchQuery} official audio`,
+  };
+}
+
+const positiveTitleKeywords = [
+  'official audio',
+  'official video',
+  'official music video',
+  'official lyric video',
+  'lyric video',
+  'audio',
+];
+
+const positiveChannelKeywords = ['official', 'vevo', 'topic'];
+
+const negativeKeywords = [
+  'reaction',
+  'reacts',
+  'react',
+  'first time hearing',
+  'first time',
+  'watching',
+  'review',
+  'breakdown',
+  'analysis',
+  'commentary',
+  'trailer',
+  'movie',
+  'film',
+  'scene',
+  'clip',
+  'clips',
+  'shorts',
+  'cover',
+  'karaoke',
+  'instrumental',
+  'sped up',
+  'slowed',
+  'nightcore',
+  'tutorial',
+  'performance',
+  '8d',
+];
+
+const liveVersionKeywords = [
+  'live',
+  'live version',
+  'live performance',
+  'concert',
+  'stage',
+  'showcase',
+];
+
+function keywordAllowed(keyword: string, queryTitle: string): boolean {
+  return normalize(queryTitle).includes(keyword);
+}
+
+function scoreSearchCandidate(
+  candidate: Track,
+  profile: { title: string; artist: string; query: string }
+): number {
+  const queryTitle = normalize(profile.title);
+  const queryArtist = normalize(profile.artist);
+  const queryWords = words(profile.query);
+  const candidateTitle = normalize(candidate.title);
+  const candidateArtist = normalize(candidate.artist);
+  const combined = `${candidateTitle} ${candidateArtist}`;
+  let score = 0;
+
+  for (const word of queryWords) {
+    if (candidateTitle.includes(word)) score += 12;
+    if (candidateArtist.includes(word)) score += 8;
+  }
+
+  if (queryTitle && candidateTitle.includes(queryTitle)) score += 80;
+  if (queryArtist && combined.includes(queryArtist)) score += 90;
+
+  for (const word of words(profile.title)) {
+    if (candidateTitle.includes(word)) score += 18;
+  }
+
+  for (const word of words(profile.artist)) {
+    if (combined.includes(word)) score += 22;
+  }
+
+  for (const keyword of positiveTitleKeywords) {
+    if (candidateTitle.includes(keyword)) score += keyword.startsWith('official') ? 90 : 25;
+  }
+
+  for (const keyword of positiveChannelKeywords) {
+    if (candidateArtist.includes(keyword)) score += keyword === 'official' ? 75 : 60;
+  }
+
+  for (const keyword of negativeKeywords) {
+    if (combined.includes(keyword) && !keywordAllowed(keyword, profile.title)) {
+      score -= keyword.includes('react') || keyword === 'reaction' ? 250 : 120;
+    }
+  }
+
+  for (const keyword of liveVersionKeywords) {
+    if (combined.includes(keyword) && !keywordAllowed(keyword, profile.title)) {
+      score -= 140;
+    }
+  }
+
+  return score;
+}
+
 /** Search YouTube and return top results as Track objects. */
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
+  const profile = parseSearchQuery(query);
+  const searchLimit = Math.min(Math.max(limit * 3, 15), 30);
   const rawResults = await ytDlp.execPromise([
-    `ytsearch${limit}:"${query}"{query}`,
+    `ytsearch${searchLimit}:${profile.searchQuery}`,
     '--dump-json',
     '--no-playlist',
     '--flat-playlist',
@@ -84,7 +228,27 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
     }
   }
 
-  return tracks;
+  const ranked = tracks
+    .map((track) => ({
+      track,
+      score: scoreSearchCandidate(track, { ...profile, query }),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  console.log(
+    `[search:ytdlp] ${JSON.stringify({
+      query,
+      searchQuery: profile.searchQuery,
+      top: ranked.slice(0, 5).map((item) => ({
+        id: item.track.id,
+        title: item.track.title,
+        artist: item.track.artist,
+        score: item.score,
+      })),
+    })}`
+  );
+
+  return ranked.slice(0, limit).map((item) => item.track);
 }
 
 /** Resolve a full audio stream URL for a videoId. */
