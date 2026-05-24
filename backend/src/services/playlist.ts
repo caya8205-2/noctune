@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import type { Playlist } from '../types/index.js';
+import type { Playlist, Track } from '../types/index.js';
 
 // APP_DATA_DIR can be set at launch so the data folder lands in a predictable
 // location. Falls back to <cwd>/data.
@@ -37,6 +37,7 @@ export function initDb(): void {
     CREATE TABLE IF NOT EXISTS playlist_tracks (
       playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
       track_id TEXT NOT NULL,
+      metadata_json TEXT,
       position INTEGER NOT NULL,
       added_at INTEGER NOT NULL,
       PRIMARY KEY (playlist_id, track_id)
@@ -45,6 +46,12 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position
       ON playlist_tracks(playlist_id, position);
   `);
+
+  const columns = db.prepare('PRAGMA table_info(playlist_tracks)').all() as { name: string }[];
+  if (!columns.some((column) => column.name === 'metadata_json')) {
+    db.exec('ALTER TABLE playlist_tracks ADD COLUMN metadata_json TEXT');
+  }
+
   db.close();
 }
 
@@ -61,6 +68,15 @@ export function createPlaylist(name: string): Playlist {
   return { id, name, createdAt: now, updatedAt: now, trackIds: [] };
 }
 
+function parseTrackMetadata(value: string | null): Track | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as Track;
+  } catch {
+    return null;
+  }
+}
+
 export function getPlaylist(id: string): Playlist | null {
   const db = getDb();
   const row = db.prepare('SELECT * FROM playlists WHERE id = ?').get(id) as {
@@ -69,8 +85,8 @@ export function getPlaylist(id: string): Playlist | null {
   if (!row) { db.close(); return null; }
 
   const tracks = db
-    .prepare('SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC')
-    .all(row.id) as { track_id: string }[];
+    .prepare('SELECT track_id, metadata_json FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC')
+    .all(row.id) as { track_id: string; metadata_json: string | null }[];
   db.close();
 
   return {
@@ -79,6 +95,7 @@ export function getPlaylist(id: string): Playlist | null {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     trackIds: tracks.map(t => t.track_id),
+    tracks: tracks.map(t => parseTrackMetadata(t.metadata_json)).filter((track): track is Track => Boolean(track)),
   };
 }
 
@@ -89,14 +106,15 @@ export function getAllPlaylists(): Playlist[] {
   }[];
   const playlists: Playlist[] = rows.map(row => {
     const tracks = db
-      .prepare('SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC')
-      .all(row.id) as { track_id: string }[];
+      .prepare('SELECT track_id, metadata_json FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC')
+      .all(row.id) as { track_id: string; metadata_json: string | null }[];
     return {
       id: row.id,
       name: row.name,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       trackIds: tracks.map(t => t.track_id),
+      tracks: tracks.map(t => parseTrackMetadata(t.metadata_json)).filter((track): track is Track => Boolean(track)),
     };
   });
   db.close();
@@ -115,16 +133,24 @@ export function deletePlaylist(id: string): void {
   db.close();
 }
 
-export function addTrackToPlaylist(playlistId: string, trackId: string): void {
+export function addTrackToPlaylist(playlistId: string, trackId: string, track?: Track): void {
   const db = getDb();
   const maxPos = (db
     .prepare('SELECT MAX(position) as m FROM playlist_tracks WHERE playlist_id = ?')
     .get(playlistId) as { m: number | null }).m ?? -1;
   db.prepare(
-    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at) VALUES (?, ?, ?, ?)'
-  ).run(playlistId, trackId, maxPos + 1, Date.now());
+    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, metadata_json, position, added_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(playlistId, trackId, track ? JSON.stringify(track) : null, maxPos + 1, Date.now());
   db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').run(Date.now(), playlistId);
   db.close();
+}
+
+export function importPlaylist(name: string, tracks: Track[]): Playlist {
+  const playlist = createPlaylist(name);
+  for (const track of tracks) {
+    addTrackToPlaylist(playlist.id, track.id, track);
+  }
+  return getPlaylist(playlist.id) ?? playlist;
 }
 
 export function removeTrackFromPlaylist(playlistId: string, trackId: string): void {

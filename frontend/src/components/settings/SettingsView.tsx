@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle,
+  Database,
   Download,
   ExternalLink,
   Eye,
   EyeOff,
   FileUp,
+  ListMusic,
   Loader2,
   Settings,
+  Sparkles,
   Trash2,
+  Zap,
   XCircle,
 } from 'lucide-react';
 import { API_BASE } from '../../utils/api';
@@ -22,15 +26,36 @@ interface SettingsData {
   };
 }
 
+const engineNotes = [
+  {
+    Icon: Database,
+    title: 'Local cache',
+    desc: 'Tracks and resolved audio URLs are kept locally so repeat plays can start faster.',
+  },
+  {
+    Icon: Zap,
+    title: 'Prefetch queue',
+    desc: 'Upcoming tracks are prepared in the background after playback starts.',
+  },
+  {
+    Icon: Sparkles,
+    title: 'Spotify matching',
+    desc: 'Spotify results provide metadata, then Noctune maps the track to a playable YouTube stream.',
+  },
+  {
+    Icon: ListMusic,
+    title: 'Auto queue',
+    desc: 'Recommendations are built from the selected seed track and filtered before playback.',
+  },
+];
+
 export function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
-  const [engine, setEngine] = useState<'ytdlp' | 'spotify'>('ytdlp');
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingEngine, setSavingEngine] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
@@ -42,40 +67,16 @@ export function SettingsView() {
       .then((d: SettingsData) => {
         setData(d);
         setClientId(d.spotify.clientId);
-        setEngine(d.searchEngine);
       })
       .catch(console.error);
   }, []);
-
-  async function handleEngineChange(nextEngine: 'ytdlp' | 'spotify') {
-    if (nextEngine === engine || savingEngine) return;
-
-    const previousEngine = engine;
-    setEngine(nextEngine);
-    setSavingEngine(true);
-
-    try {
-      const res = await fetch(API_BASE + '/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchEngine: nextEngine }),
-      });
-      const updated = (await res.json()) as SettingsData;
-      setData(updated);
-    } catch (err) {
-      console.error('Search engine save failed:', err);
-      setEngine(previousEngine);
-    } finally {
-      setSavingEngine(false);
-    }
-  }
 
   async function handleSave() {
     setSaving(true);
     setSaved(false);
 
     try {
-      const body: Record<string, string> = { searchEngine: engine };
+      const body: Record<string, string> = {};
       if (clientId) body.spotifyClientId = clientId;
       if (clientSecret) body.spotifyClientSecret = clientSecret;
 
@@ -198,49 +199,41 @@ export function SettingsView() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-6 py-6 gap-8 max-w-xl">
-      <div className="flex items-center gap-3">
-        <Settings size={20} className="text-muted" />
-        <h1 className="text-base font-semibold text-white">Settings</h1>
+    <div className="flex flex-col h-full overflow-y-auto px-9 py-8 gap-8">
+      <div className="flex flex-col gap-2 max-w-3xl">
+        <div className="flex items-center gap-3">
+          <Settings size={18} className="text-accent" />
+          <p className="section-label text-accent">Settings</p>
+        </div>
+        <h1 className="text-4xl font-bold text-white leading-tight">
+          Make global choices feel immediate.
+        </h1>
       </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-          Search Engine
-        </h2>
-        <div className="flex gap-2">
-          {(['ytdlp', 'spotify'] as const).map((option) => (
-            <button
-              key={option}
-              onClick={() => handleEngineChange(option)}
-              disabled={savingEngine}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                engine === option
-                  ? 'bg-accent/10 border-accent/40 text-accent'
-                  : 'bg-base-800 border-base-600 text-muted hover:text-white hover:border-base-500'
-              } disabled:opacity-60 disabled:cursor-wait`}
-            >
-              {savingEngine && engine === option ? (
-                <span className="inline-flex items-center justify-center gap-2">
-                  <Loader2 size={13} className="animate-spin" />
-                  Saving
-                </span>
-              ) : option === 'ytdlp' ? (
-                'yt-dlp (default)'
-              ) : (
-                'Spotify'
-              )}
-            </button>
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Engine Notes
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Internal behavior for search, queue preparation, and playback resolution.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {engineNotes.map(({ Icon, title, desc }) => (
+            <div key={title} className="rounded-lg border border-base-600/70 bg-base-900 p-4">
+              <div className="w-9 h-9 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent mb-3">
+                <Icon size={17} />
+              </div>
+              <p className="text-sm font-medium text-white mb-1">{title}</p>
+              <p className="text-xs text-muted leading-relaxed">{desc}</p>
+            </div>
           ))}
         </div>
-        <p className="text-xs text-muted leading-relaxed">
-          {engine === 'ytdlp'
-            ? 'Search directly via YouTube using yt-dlp. No API key needed.'
-            : 'Search via Spotify API for cleaner metadata, accurate duration, and artwork.'}
-        </p>
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Spotify API Credentials
@@ -347,7 +340,7 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="bg-base-800/50 rounded-xl p-4 border border-base-600/20">
+      <section className="max-w-3xl bg-base-800 rounded-xl p-4 border border-base-600/70">
         <p className="text-xs text-muted leading-relaxed">
           <span className="text-soft font-medium block mb-1">Note on Spotify Premium</span>
           Spotify's free dev API supports search and metadata. Playback via Spotify SDK requires
@@ -355,7 +348,7 @@ export function SettingsView() {
         </p>
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Cache Learning

@@ -36,6 +36,7 @@ export interface Playlist {
   createdAt: number;
   updatedAt: number;
   trackIds: string[];
+  tracks?: Track[];
 }
 
 export interface QueueItem {

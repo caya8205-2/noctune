@@ -1,12 +1,28 @@
-import { Home, Search, ListMusic, ListOrdered, Plus, Trash2, Settings, Moon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, Home, Search, ListMusic, ListOrdered, Plus, Trash2, Settings } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import { clsx } from 'clsx';
 
 export function Sidebar() {
-  const { activeView, setView } = usePlayerStore();
+  const { activeView, activePlaylistId, setView } = usePlayerStore();
   const qc = useQueryClient();
+  const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setPlaylistMenuOpen(false);
+      }
+    }
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const { data: playlists = [] } = useQuery({
     queryKey: ['playlists'],
@@ -15,13 +31,45 @@ export function Sidebar() {
 
   const createMut = useMutation({
     mutationFn: () => api.createPlaylist('New Playlist'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onSuccess: (playlist) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      setView('playlist', playlist.id);
+    },
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.deletePlaylist(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onSuccess: () => {
+      setDeleteError(null);
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      if (activeView === 'playlist') setView('home');
+    },
+    onError: (err) => setDeleteError((err as Error).message),
   });
+
+  async function handleImportPlaylist(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const url = importUrl.trim();
+    if (!url) return;
+    setImporting(true);
+    try {
+      const result = await api.importPlaylist(url);
+      await qc.invalidateQueries({ queryKey: ['playlists'] });
+      setView('playlist', result.playlist.id);
+      setPlaylistMenuOpen(false);
+      setImportUrl('');
+      setDeleteError(null);
+    } catch (err) {
+      setDeleteError((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function handleDeletePlaylist(id: string, name: string) {
+    if (!window.confirm(`Delete playlist "${name}"?`)) return;
+    deleteMut.mutate(id);
+  }
 
   const navItems = [
     { icon: Home, label: 'Home', view: 'home' as const },
@@ -33,15 +81,17 @@ export function Sidebar() {
   return (
     <div className="flex flex-col h-full bg-base-950 px-3 py-4">
       {/* Logo */}
-      <div className="px-3 mb-6 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-accent text-base-950 flex items-center justify-center shadow-lg shadow-accent/10">
-          <Moon size={17} fill="currentColor" />
+      <div className="px-2 mb-7 flex items-center gap-2">
+        <div className="w-9 h-9 flex items-center justify-center">
+          <img src="/app-icon.png" alt="" className="w-9 h-9 object-contain" />
         </div>
         <div>
-          <h1 className="font-display text-xl text-white leading-none">
-            Noctune<span className="text-accent">.</span>
+          <h1 className="text-lg font-bold text-white leading-none">
+            Noctune
           </h1>
-          <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Local player</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider mt-1 font-semibold">
+            Local player
+          </p>
         </div>
       </div>
 
@@ -52,10 +102,10 @@ export function Sidebar() {
             key={view}
             onClick={() => setView(view)}
             className={clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border',
               activeView === view
-                ? 'bg-base-800 text-white'
-                : 'text-muted hover:text-white hover:bg-base-800/50'
+                ? 'bg-base-700 text-white border-base-600'
+                : 'text-muted border-transparent hover:text-white hover:bg-base-800'
             )}
           >
             <Icon size={17} />
@@ -66,18 +116,56 @@ export function Sidebar() {
 
       {/* Playlists */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between px-3 mb-2">
+        <div className="flex items-center justify-between px-3 mb-2 relative" ref={menuRef}>
           <span className="text-xs font-semibold text-muted uppercase tracking-wider">
             Playlists
           </span>
           <button
-            onClick={() => createMut.mutate()}
+            onClick={() => setPlaylistMenuOpen((open) => !open)}
             className="btn-ghost p-1"
             title="New playlist"
           >
             <Plus size={14} />
           </button>
+
+          {playlistMenuOpen && (
+            <div className="absolute left-[calc(100%+0.75rem)] top-0 z-50 w-64 rounded-lg border border-base-600 bg-base-800 shadow-xl shadow-black/30 p-1.5">
+              <button
+                onClick={() => {
+                  createMut.mutate();
+                  setPlaylistMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-soft hover:text-white hover:bg-base-700 transition-colors"
+              >
+                <Plus size={13} />
+                Local playlist
+              </button>
+              <form onSubmit={handleImportPlaylist} className="mt-1 border-t border-base-700 pt-1">
+                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-soft">
+                  <Download size={13} />
+                  Import from URL
+                </label>
+                <input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="Spotify or YouTube URL"
+                  className="w-full bg-base-900 border border-base-600 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-muted focus:outline-none focus:border-accent"
+                />
+                <button
+                  type="submit"
+                  disabled={importing || !importUrl.trim()}
+                  className="w-full mt-1.5 rounded-md bg-accent text-base-950 text-xs font-semibold py-1.5 disabled:opacity-50"
+                >
+                  {importing ? 'Importing' : 'Import'}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
+
+        {deleteError && (
+          <p className="px-3 mb-2 text-[11px] text-red-400 leading-relaxed">{deleteError}</p>
+        )}
 
         <div className="flex-1 overflow-y-auto flex flex-col gap-0.5">
           {playlists.length === 0 && (
@@ -87,10 +175,10 @@ export function Sidebar() {
             <div
               key={pl.id}
               className={clsx(
-                'group flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-colors text-sm',
-                activeView === 'playlist' && usePlayerStore.getState().activePlaylistId === pl.id
-                  ? 'bg-base-800 text-white'
-                  : 'text-muted hover:text-white hover:bg-base-800/50'
+                'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm border',
+                activeView === 'playlist' && activePlaylistId === pl.id
+                  ? 'bg-base-700 text-white border-base-600'
+                  : 'text-muted border-transparent hover:text-white hover:bg-base-800'
               )}
               onClick={() => setView('playlist', pl.id)}
             >
@@ -98,7 +186,9 @@ export function Sidebar() {
               <span className="flex-1 truncate">{pl.name}</span>
               <button
                 className="opacity-0 group-hover:opacity-100 btn-ghost p-0.5 hover:text-red-400 transition"
-                onClick={(e) => { e.stopPropagation(); deleteMut.mutate(pl.id); }}
+                disabled={deleteMut.isPending}
+                title="Delete playlist"
+                onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
               >
                 <Trash2 size={12} />
               </button>

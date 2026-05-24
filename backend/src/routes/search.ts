@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getCachedByQuery } from '../services/cache.js';
-import { searchTracks } from '../services/ytdlp.js';
+import { getYoutubeTrack, searchTracks } from '../services/ytdlp.js';
 import { getEnvConfig } from '../services/env.js';
-import { searchSpotify } from '../services/spotify.js';
+import { getSpotifyTrackById, searchSpotify } from '../services/spotify.js';
+import { parseMediaUrl } from '../services/urlParser.js';
 
 const SearchQuery = z.object({
   q: z.string().min(1).max(200),
@@ -17,6 +18,21 @@ export async function searchRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Invalid query', issues: parsed.error.issues });
     }
     const { q, limit } = parsed.data;
+    const parsedUrl = parseMediaUrl(q);
+
+    if (parsedUrl?.kind === 'youtube-video') {
+      const track = await getYoutubeTrack(parsedUrl.url, q);
+      return reply.send({ fromCache: false, query: q, tracks: [track] });
+    }
+
+    if (parsedUrl?.kind === 'spotify-track') {
+      const track = await getSpotifyTrackById(parsedUrl.id, q);
+      return reply.send({ fromCache: false, query: q, tracks: [track] });
+    }
+
+    if (parsedUrl?.kind === 'youtube-playlist' || parsedUrl?.kind === 'spotify-playlist') {
+      return reply.send({ fromCache: false, query: q, tracks: [] });
+    }
 
     // Check cache first — if we have an exact query hit, return instantly
     const cached = getCachedByQuery(q);

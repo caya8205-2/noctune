@@ -8,10 +8,13 @@ A local-first desktop music player with Spotify-powered discovery, YouTube strea
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-24-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4-000000?logo=fastify&logoColor=white)](https://fastify.dev/)
+[![Rust](https://img.shields.io/badge/Rust-2-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![SQLite](https://img.shields.io/badge/SQLite-Local-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![yt-dlp](https://img.shields.io/badge/yt--dlp-Playback-FF0066)](https://github.com/yt-dlp/yt-dlp)
+[![Spotify API](https://img.shields.io/badge/Spotify_API-Playback-1DB954)](https://developer.spotify.com/documentation/web-api/)
 
 Noctune uses Spotify for clean metadata and discovery, then maps tracks to YouTube streams through a scoring-based matcher. Playback stays fast by learning from previous plays, refreshing expired audio URLs, and prefetching upcoming tracks before they are needed.
 

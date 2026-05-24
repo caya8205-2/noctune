@@ -4,15 +4,29 @@ const BASE = IS_TAURI ? 'http://127.0.0.1:3131' : '/api';
 export const API_BASE = BASE;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message ?? `HTTP ${res.status}`);
+  const headers = new Headers(options?.headers);
+  if (options?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  return res.json() as Promise<T>;
+
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers,
+  });
+  const text = await res.text();
+
+  if (!res.ok) {
+    let err: { message?: string; error?: string } = {};
+    try {
+      err = text ? JSON.parse(text) : {};
+    } catch {
+      err = { message: text };
+    }
+    throw new Error(err.message ?? err.error ?? res.statusText ?? `HTTP ${res.status}`);
+  }
+
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export const api = {
@@ -20,6 +34,9 @@ export const api = {
     request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
     ),
+
+  home: () =>
+    request<{ playlists: Playlist[]; recentTracks: CachedTrack[]; newReleases: Track[] }>('/home'),
 
   resolve: (videoId: string, query?: string) =>
     request<CachedTrack>(`/player/resolve/${videoId}${query ? `?query=${encodeURIComponent(query)}` : ''}`),
@@ -39,8 +56,14 @@ export const api = {
   getPlaylists: () => request<Playlist[]>('/playlists'),
   createPlaylist: (name: string) =>
     request<Playlist>('/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
+  getPlaylist: (id: string) => request<Playlist>(`/playlists/${id}`),
+  importPlaylist: (url: string, name?: string) =>
+    request<{ ok: boolean; playlist: Playlist; imported: number }>('/playlists/import', {
+      method: 'POST',
+      body: JSON.stringify({ url, name }),
+    }),
   deletePlaylist: (id: string) =>
-    request(`/playlists/${id}`, { method: 'DELETE' }),
+    request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' }),
   addTrack: (playlistId: string, trackId: string) =>
     request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ trackId }) }),
   removeTrack: (playlistId: string, trackId: string) =>
@@ -79,5 +102,6 @@ export interface Playlist {
   createdAt: number;
   updatedAt: number;
   trackIds: string[];
+  tracks?: Track[];
 }
 

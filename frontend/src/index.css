@@ -22,7 +22,7 @@
   }
 
   body {
-    background: #080808;
+    background: #090A0C;
     color: #e8e8e8;
     font-family: 'DM Sans', sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -50,7 +50,7 @@
 
 @layer components {
   .surface-panel {
-    @apply rounded-xl border border-base-600/30 bg-base-800/55 shadow-xl shadow-black/10;
+    @apply rounded-xl border border-base-600/70 bg-base-800 shadow-xl shadow-black/10;
   }
 
   .section-label {
@@ -70,11 +70,11 @@
   }
 
   .track-row {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-base-800/90 cursor-pointer transition-colors duration-100;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100;
   }
 
   .track-row.active {
-    @apply bg-base-700/90 ring-1 ring-accent/15;
+    @apply bg-base-700 ring-1 ring-accent/20 border-accent/20;
   }
 }
 

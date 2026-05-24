@@ -5,20 +5,20 @@ export default {
     extend: {
       colors: {
         base: {
-          950: '#080808',
-          900: '#111111',
-          800: '#1a1a1a',
-          700: '#242424',
-          600: '#2e2e2e',
-          500: '#3a3a3a',
+          950: '#090A0C',
+          900: '#111318',
+          800: '#151920',
+          700: '#20262E',
+          600: '#2B313A',
+          500: '#38414D',
         },
         accent: {
-          DEFAULT: '#C8F135',   // electric lime — primary accent
-          dim: '#9AB82A',
-          glow: 'rgba(200,241,53,0.15)',
+          DEFAULT: '#8EECCB',
+          dim: '#66C7AA',
+          glow: 'rgba(142,236,203,0.16)',
         },
-        muted: '#6b6b6b',
-        soft: '#9a9a9a',
+        muted: '#747B86',
+        soft: '#AEB6C1',
       },
       fontFamily: {
         display: ['"DM Serif Display"', 'serif'],

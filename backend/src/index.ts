@@ -5,6 +5,7 @@ import { playerRoutes } from './routes/player.js';
 import { playlistRoutes } from './routes/playlists.js';
 import { settingsRoutes } from './routes/settings.js';
 import { queueRoutes } from './routes/queue.js';
+import { homeRoutes } from './routes/home.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
@@ -32,7 +33,8 @@ async function bootstrap() {
   // Parse JSON bodies
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
     try {
-      done(null, JSON.parse(body as string));
+      const text = (body as string).trim();
+      done(null, text ? JSON.parse(text) : {});
     } catch (err) {
       done(err as Error, undefined);
     }
@@ -44,6 +46,7 @@ async function bootstrap() {
   await app.register(playlistRoutes);
   await app.register(settingsRoutes);
   await app.register(queueRoutes);
+  await app.register(homeRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({

@@ -3,7 +3,9 @@ import { Sidebar } from './components/ui/Sidebar';
 import { PlayerBar } from './components/player/PlayerBar';
 import { SearchView } from './components/search/SearchView';
 import { HomeView } from './components/player/HomeView';
+import { PlayerView } from './components/player/PlayerView';
 import { QueueView } from './components/playlist/QueueView';
+import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { usePlayerStore } from './store/player';
 import { useAudio } from './hooks/useAudio';
@@ -43,10 +45,10 @@ function AppInner() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-base-950 overflow-hidden">
+    <div className="flex flex-col h-screen bg-base-950 overflow-hidden text-white">
       <div
         data-tauri-drag-region
-        className="h-9 flex items-center gap-3 px-4 bg-base-950 flex-shrink-0 select-none"
+        className="h-9 flex items-center gap-3 px-4 bg-base-950 flex-shrink-0 select-none border-b border-base-800/60"
       >
         {IS_TAURI && (
           <div className="flex items-center gap-1.5 group">
@@ -73,27 +75,24 @@ function AppInner() {
             </button>
           </div>
         )}
-        <span className="text-xs font-semibold text-muted/60 tracking-wide">
+        <span className="text-xs font-semibold text-muted tracking-wide">
           Noctune
         </span>
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <div className="w-52 flex-shrink-0 border-r border-base-800">
+        <div className="w-56 flex-shrink-0 border-r border-base-800">
           <Sidebar />
         </div>
 
-        <div className="flex-1 min-w-0 bg-base-900">
+        <main className="flex-1 min-w-0 bg-base-900">
           {activeView === 'home' && <HomeView />}
+          {activeView === 'player' && <PlayerView />}
           {activeView === 'search' && <SearchView />}
           {activeView === 'queue' && <QueueView />}
           {activeView === 'settings' && <SettingsView />}
-          {activeView === 'playlist' && (
-            <div className="flex items-center justify-center h-full text-muted text-sm">
-              Playlist view coming soon
-            </div>
-          )}
-        </div>
+          {activeView === 'playlist' && <PlaylistView />}
+        </main>
       </div>
 
       <div className="h-20 flex-shrink-0 border-t border-base-800 bg-base-950">

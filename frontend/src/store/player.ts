@@ -20,7 +20,7 @@ interface PlayerState {
   queueIndex: number;     // index of currentTrack in queue
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'search' | 'playlist' | 'queue' | 'settings';
+  activeView: 'home' | 'player' | 'search' | 'playlist' | 'queue' | 'settings';
   activePlaylistId: string | null;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   addToQueue: (track: Track) => void;
+  reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   setView: (view: PlayerState['activeView'], playlistId?: string) => void;
   setLoading: (v: boolean) => void;
@@ -197,6 +198,34 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   addToQueue: (track) =>
     set(s => ({ queue: [...s.queue, track] })),
+
+  reorderQueue: (fromIndex, toIndex) =>
+    set((s) => {
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= s.queue.length ||
+        toIndex >= s.queue.length
+      ) {
+        return s;
+      }
+
+      const nextQueue = [...s.queue];
+      const [moved] = nextQueue.splice(fromIndex, 1);
+      nextQueue.splice(toIndex, 0, moved);
+
+      let nextQueueIndex = s.queueIndex;
+      if (s.queueIndex === fromIndex) {
+        nextQueueIndex = toIndex;
+      } else if (fromIndex < s.queueIndex && toIndex >= s.queueIndex) {
+        nextQueueIndex = s.queueIndex - 1;
+      } else if (fromIndex > s.queueIndex && toIndex <= s.queueIndex) {
+        nextQueueIndex = s.queueIndex + 1;
+      }
+
+      return { queue: nextQueue, queueIndex: nextQueueIndex };
+    }),
 
   clearQueue: () => set({ queue: [], queueIndex: -1 }),
 
