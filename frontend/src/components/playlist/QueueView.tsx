@@ -3,6 +3,7 @@ import { GripVertical, ListOrdered, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
+import { LikeButton } from '../player/LikeButton';
 
 export function QueueView() {
   const { queue, queueIndex, currentTrack, playTrack, clearQueue, reorderQueue } = usePlayerStore();
@@ -89,6 +90,7 @@ export function QueueView() {
               <span className="text-xs font-mono text-muted flex-shrink-0">
                 {formatDuration(track.duration)}
               </span>
+              <LikeButton track={track} className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           );
         })}

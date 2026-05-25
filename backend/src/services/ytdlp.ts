@@ -32,12 +32,18 @@ interface YTPlaylistInfo {
 
 function pickBestAudioFormat(info: YTInfo): { url: string; format: string; quality: string } {
   const formats = info.formats ?? [];
-  // Prefer: audio-only webm/opus > audio-only m4a > any
   const audioOnly = formats
     .filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
     .sort((a, b) => (b.abr ?? 0) - (a.abr ?? 0));
 
-  const best = audioOnly[0] ?? formats[0];
+  // Desktop WebView2 is more reliable with MP4/M4A/AAC than WebM/Opus.
+  const compatible = audioOnly.find((f) => {
+    const ext = f.ext?.toLowerCase();
+    const codec = f.acodec?.toLowerCase() ?? '';
+    return ext === 'm4a' || ext === 'mp4' || codec.includes('aac') || codec.includes('mp4a');
+  });
+
+  const best = compatible ?? audioOnly[0] ?? formats[0];
   if (!best?.url && !info.url) {
     throw new Error(`No playable format found for ${info.id}`);
   }

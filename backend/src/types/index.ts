@@ -33,6 +33,7 @@ export interface CacheStore {
 export interface Playlist {
   id: string;
   name: string;
+  coverDataUrl?: string | null;
   createdAt: number;
   updatedAt: number;
   trackIds: string[];

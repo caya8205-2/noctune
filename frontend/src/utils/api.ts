@@ -54,9 +54,20 @@ export const api = {
     }),
 
   getPlaylists: () => request<Playlist[]>('/playlists'),
+  getLiked: () => request<Playlist>('/library/liked'),
+  toggleLike: (track: Track) =>
+    request<{ liked: boolean; playlist: Playlist }>('/library/liked/toggle', {
+      method: 'POST',
+      body: JSON.stringify(track),
+    }),
   createPlaylist: (name: string) =>
     request<Playlist>('/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
   getPlaylist: (id: string) => request<Playlist>(`/playlists/${id}`),
+  updatePlaylist: (id: string, data: { name?: string; coverDataUrl?: string | null }) =>
+    request<{ ok: boolean; playlist: Playlist }>(`/playlists/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   importPlaylist: (url: string, name?: string) =>
     request<{ ok: boolean; playlist: Playlist; imported: number }>('/playlists/import', {
       method: 'POST',
@@ -66,6 +77,8 @@ export const api = {
     request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' }),
   addTrack: (playlistId: string, trackId: string) =>
     request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ trackId }) }),
+  addTrackToPlaylist: (playlistId: string, track: Track) =>
+    request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify(track) }),
   reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) =>
     request<{ ok: boolean }>('/playlists/' + playlistId + '/tracks/reorder', {
       method: 'PATCH',
@@ -105,6 +118,7 @@ export interface CachedTrack extends Track {
 export interface Playlist {
   id: string;
   name: string;
+  coverDataUrl?: string | null;
   createdAt: number;
   updatedAt: number;
   trackIds: string[];

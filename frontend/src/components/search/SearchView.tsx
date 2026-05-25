@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Clock, Download, Loader2, Music, Play, Search, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Play, Search, XCircle, Zap } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { API_BASE } from '../../utils/api';
+import { LikeButton } from '../player/LikeButton';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -34,7 +35,7 @@ export function SearchView() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const playlistUrl = useMemo(() => isPlaylistUrl(query), [query]);
 
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, addToQueue } = usePlayerStore();
 
   useEffect(() => {
     fetch(API_BASE + '/settings')
@@ -280,6 +281,19 @@ export function SearchView() {
 
               <button
                 className="opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addToQueue(track);
+                }}
+                title="Add to queue"
+              >
+                <ListPlus size={14} />
+              </button>
+
+              <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+
+              <button
+                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                 onClick={() => handlePlay(track)}
                 title="Play"
               >

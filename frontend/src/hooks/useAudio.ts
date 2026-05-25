@@ -4,10 +4,45 @@ import { API_BASE } from '../utils/api';
 
 let activeAudio: HTMLAudioElement | null = null;
 
+function outputVolume(value: number): number {
+  return Math.min(1, Math.max(0, Math.pow(value, 1.65)));
+}
+
+function getAudioContext(): AudioContext | null {
+  return ((window as any).__noctune_audioCtx as AudioContext | undefined) ?? null;
+}
+
+async function resumeAudioContext() {
+  const ctx = getAudioContext();
+  if (ctx?.state === 'suspended') {
+    await ctx.resume();
+  }
+}
+
+async function playAudio(audio: HTMLAudioElement) {
+  await resumeAudioContext();
+  await audio.play();
+}
+
 export function seekAudio(seconds: number) {
   if (!activeAudio) return;
-  activeAudio.currentTime = seconds;
-  usePlayerStore.getState().setProgress(seconds);
+  const state = usePlayerStore.getState();
+  const fallbackDuration = state.currentTrack?.duration ?? state.duration;
+  const duration = Number.isFinite(activeAudio.duration) && activeAudio.duration > 0
+    ? activeAudio.duration
+    : fallbackDuration;
+  const target = Math.max(0, Math.min(seconds, duration || seconds));
+
+  try {
+    if ('fastSeek' in activeAudio && typeof activeAudio.fastSeek === 'function') {
+      activeAudio.fastSeek(target);
+    } else {
+      activeAudio.currentTime = target;
+    }
+    state.setProgress(target);
+  } catch (err) {
+    console.warn('[audio] seek failed:', err);
+  }
 }
 
 /**
@@ -16,6 +51,7 @@ export function seekAudio(seconds: number) {
  */
 export function useAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const suppressNextErrorRef = useRef(false);
 
   const {
     currentTrack,
@@ -49,11 +85,15 @@ export function useAudio() {
     activeAudio = audio;
 
     audio.addEventListener('timeupdate', () => setProgress(audio.currentTime));
-    audio.addEventListener('durationchange', () => setDuration(audio.duration));
+    audio.addEventListener('durationchange', () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
+    });
     audio.addEventListener('ended', () => {
       if (usePlayerStore.getState().repeat === 'one') {
         audio.currentTime = 0;
-        audio.play().catch(() => {});
+        playAudio(audio).catch(() => {});
       } else {
         next();
       }
@@ -62,14 +102,26 @@ export function useAudio() {
     audio.addEventListener('waiting', () => setLoading(true));
     audio.addEventListener('canplay', () => setLoading(false));
     audio.addEventListener('error', (e) => {
-      console.error('[audio] error', e, (e.target as HTMLAudioElement)?.error);
+      const target = e.target as HTMLAudioElement;
+      const error = target.error;
+      if (
+        suppressNextErrorRef.current ||
+        !target.currentSrc ||
+        error?.message?.toLowerCase().includes('empty src')
+      ) {
+        suppressNextErrorRef.current = false;
+        return;
+      }
+      console.error('[audio] error', e, target.error);
       setLoading(false);
       setIsPlaying(false);
     });
 
     return () => {
+      suppressNextErrorRef.current = true;
       audio.pause();
-      audio.src = '';
+      audio.removeAttribute('src');
+      audio.load();
       audioRef.current = null;
       if (activeAudio === audio) activeAudio = null;
     };
@@ -86,11 +138,12 @@ export function useAudio() {
       : API_BASE + '/player/stream/' + currentTrack.id;
 
     if (audio.src !== src) {
+      audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
       audio.src = src;
       audio.load();
     }
     if (isPlaying) {
-      audio.play().catch(err => console.warn('[audio] play blocked:', err));
+      playAudio(audio).catch(err => console.warn('[audio] play blocked:', err));
     }
   }, [currentTrack?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -99,15 +152,16 @@ export function useAudio() {
     const audio = audioRef.current;
     if (!audio) return;
     if (isPlaying) {
-      audio.play().catch(() => {});
+      if (!currentTrack || !audio.currentSrc) return;
+      playAudio(audio).catch(() => {});
     } else {
       audio.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTrack]);
 
   // Sync volume
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    if (audioRef.current) audioRef.current.volume = outputVolume(volume);
   }, [volume]);
 
   // Seek (only when progress changes externally — not from timeupdate)
@@ -115,7 +169,6 @@ export function useAudio() {
     seekAudio(seconds);
   }, [setProgress]);
 
-  return { seek };
   // Sync Media Session API (system media controls)
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
@@ -153,6 +206,7 @@ export function useAudio() {
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
   }, [isPlaying]);
 
+  return { seek };
 }
 
 

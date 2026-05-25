@@ -4,26 +4,63 @@ import {
   createPlaylist,
   getPlaylist,
   getAllPlaylists,
-  renamePlaylist,
+  updatePlaylist,
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
   reorderPlaylistTracks,
   importPlaylist,
+  getOrCreateLikedPlaylist,
+  toggleLikedTrack,
 } from '../services/playlist.js';
 import { parseMediaUrl } from '../services/urlParser.js';
 import { getSpotifyPlaylistTracks } from '../services/spotify.js';
 import { getYoutubePlaylistTracks } from '../services/ytdlp.js';
 
 const CreateBody = z.object({ name: z.string().min(1).max(100) });
-const RenameBody = z.object({ name: z.string().min(1).max(100) });
+const UpdateBody = z.object({
+  name: z.string().min(1).max(100).optional(),
+  coverDataUrl: z
+    .union([
+      z
+        .string()
+        .max(2_500_000)
+        .refine((value) => /^data:image\/(png|jpe?g|webp);base64,/i.test(value), 'Invalid image data'),
+      z.null(),
+    ])
+    .optional(),
+}).refine((value) => value.name !== undefined || value.coverDataUrl !== undefined);
 const TrackBody = z.object({ trackId: z.string().min(1) });
+const TrackMetadataBody = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  artist: z.string().default(''),
+  duration: z.number().default(0),
+  thumbnail: z.string().default(''),
+  query: z.string().default(''),
+  spotifyId: z.string().optional(),
+  spotifyUrl: z.string().optional(),
+  youtubeId: z.string().optional(),
+  youtubeTitle: z.string().optional(),
+  youtubeArtist: z.string().optional(),
+});
 const ImportBody = z.object({
   url: z.string().url(),
   name: z.string().min(1).max(100).optional(),
 });
 
 export async function playlistRoutes(app: FastifyInstance) {
+  app.get('/library/liked', async (_req, reply) => {
+    return reply.send(getOrCreateLikedPlaylist());
+  });
+
+  app.post('/library/liked/toggle', async (req, reply) => {
+    const parsed = TrackMetadataBody.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid body' });
+    const result = toggleLikedTrack(parsed.data);
+    return reply.send(result);
+  });
+
   app.get('/playlists', async (_req, reply) => {
     return reply.send(getAllPlaylists());
   });
@@ -76,10 +113,15 @@ export async function playlistRoutes(app: FastifyInstance) {
   });
 
   app.patch<{ Params: { id: string } }>('/playlists/:id', async (req, reply) => {
-    const parsed = RenameBody.safeParse(req.body);
+    const parsed = UpdateBody.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid body' });
-    renamePlaylist(req.params.id, parsed.data.name);
-    return reply.send({ ok: true });
+    if (req.params.id === 'system-liked-songs') {
+      return reply.status(403).send({ error: 'System playlists cannot be edited' });
+    }
+    updatePlaylist(req.params.id, parsed.data);
+    const playlist = getPlaylist(req.params.id);
+    if (!playlist) return reply.status(404).send({ error: 'Playlist not found' });
+    return reply.send({ ok: true, playlist });
   });
 
   app.delete<{ Params: { id: string } }>('/playlists/:id', async (req, reply) => {
@@ -88,9 +130,13 @@ export async function playlistRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { id: string } }>('/playlists/:id/tracks', async (req, reply) => {
-    const parsed = TrackBody.safeParse(req.body);
+    const parsed = z.union([TrackBody, TrackMetadataBody]).safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid body' });
-    addTrackToPlaylist(req.params.id, parsed.data.trackId);
+    if ('trackId' in parsed.data) {
+      addTrackToPlaylist(req.params.id, parsed.data.trackId);
+    } else {
+      addTrackToPlaylist(req.params.id, parsed.data.spotifyId ? `spotify:${parsed.data.spotifyId}` : parsed.data.id, parsed.data);
+    }
     return reply.status(201).send({ ok: true });
   });
 

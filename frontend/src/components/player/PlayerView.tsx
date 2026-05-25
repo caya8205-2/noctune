@@ -6,10 +6,12 @@ import {
   Music2,
   Radio,
   Zap,
+  ListPlus,
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { Visualizer } from './Visualizer';
+import { LikeButton } from './LikeButton';
 
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
@@ -19,7 +21,7 @@ const sourceMeta = {
 };
 
 export function PlayerView() {
-  const { currentTrack, isPlaying, queue, queueIndex } = usePlayerStore();
+  const { currentTrack, isPlaying, queue, queueIndex, addToQueue } = usePlayerStore();
   const upcomingCount = Math.max(0, queue.length - queueIndex - 1);
   const SourceIcon = currentTrack?.source ? sourceMeta[currentTrack.source]?.Icon : null;
 
@@ -40,23 +42,22 @@ export function PlayerView() {
       <section className="min-h-full flex flex-col items-center">
         {currentTrack ? (
           <>
-            <div className="relative mt-4 flex-shrink-0">
-              <img
-                src={currentTrack.thumbnail}
-                alt={currentTrack.title}
-                className={`w-64 h-64 rounded-full object-cover shadow-2xl shadow-black/40 border border-base-600/60 ${
-                  isPlaying ? 'animate-spin-slow' : ''
-                }`}
-              />
-              <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />
-              <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner" />
+            <div className="relative mt-4 w-80 h-80 flex items-center justify-center flex-shrink-0">
+              <div
+                className="absolute inset-0 flex items-center justify-center animate-spin-slow"
+                style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
+              >
+                <img
+                  src={currentTrack.thumbnail}
+                  alt={currentTrack.title}
+                  className="w-64 h-64 rounded-full object-cover shadow-2xl shadow-black/40 border border-base-600/60"
+                />
+                <Visualizer />
+              </div>
+              <div className="absolute inset-4 rounded-full ring-1 ring-white/10 pointer-events-none" />
+              <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner z-20" />
               {isPlaying && (
-              <>
-                <div className="absolute -inset-1 rounded-full border border-accent/30 animate-pulse-accent" />
-                  <div >
-                    <Visualizer />
-                  </div>
-                </>
+                <div className="absolute inset-7 rounded-full border border-accent/30 animate-pulse-accent pointer-events-none" />
               )}
             </div>
 
@@ -85,6 +86,15 @@ export function PlayerView() {
                     {sourceMeta[currentTrack.source].label}
                   </span>
                 )}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-xs text-soft px-2.5 py-1 rounded-full border border-base-600/40 bg-base-900/60 hover:text-white hover:border-base-500 transition-colors"
+                  onClick={() => addToQueue(currentTrack)}
+                >
+                  <ListPlus size={12} />
+                  Queue
+                </button>
+                <LikeButton track={currentTrack} className="rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60" />
               </div>
             </div>
 

@@ -70,6 +70,35 @@ async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<
   return [...new Set([...directIds, ...trackIds.filter((id): id is string => Boolean(id))])];
 }
 
+function isLikelyWebmStream(contentType: string | null, audioUrl: string): boolean {
+  const content = contentType?.toLowerCase() ?? '';
+  const url = audioUrl.toLowerCase();
+  return content.includes('webm') || url.includes('audio%2fwebm') || url.includes('audio/webm');
+}
+
+async function fetchAudioStream(
+  videoId: string,
+  audioUrl: string,
+  range: string | undefined,
+  refreshIfWebm: boolean
+): Promise<{ res: Response; refreshed: boolean }> {
+  const res = await fetch(audioUrl, {
+    headers: range ? { Range: range } : undefined,
+  });
+
+  if (!refreshIfWebm || !isLikelyWebmStream(res.headers.get('content-type'), audioUrl)) {
+    return { res, refreshed: false };
+  }
+
+  res.body?.cancel().catch(() => {});
+  const refreshedAudio = await resolveAudioUrl(videoId);
+  refreshTrackUrl(videoId, refreshedAudio.url);
+  const refreshedRes = await fetch(refreshedAudio.url, {
+    headers: range ? { Range: range } : undefined,
+  });
+  return { res: refreshedRes, refreshed: true };
+}
+
 export async function playerRoutes(app: FastifyInstance) {
   app.get<{ Params: { videoId: string }; Querystring: { query?: string } }>(
     '/player/resolve/:videoId',
@@ -171,15 +200,33 @@ export async function playerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'No fresh stream, resolve first' });
     }
     try {
-      const ytRes = await fetch(cached.audioUrl);
+      const range = req.headers.range;
+      const { res: ytRes, refreshed } = await fetchAudioStream(videoId, cached.audioUrl, range, true);
       if (!ytRes.ok || !ytRes.body) {
         return reply.status(502).send({ error: 'YouTube stream failed' });
       }
+
+      if (refreshed) {
+        app.log.info({ videoId }, '[player] refreshed WebM stream to compatible audio');
+      }
+
+      const contentLength = ytRes.headers.get('content-length');
+      const contentRange = ytRes.headers.get('content-range');
+      const acceptRanges = ytRes.headers.get('accept-ranges') ?? 'bytes';
+
+      if (ytRes.status === 206) reply.status(206);
       reply
         .header('Content-Type', ytRes.headers.get('content-type') || 'audio/webm')
         .header('Access-Control-Allow-Origin', '*')
+        .header('Accept-Ranges', acceptRanges)
         .header('Cache-Control', 'public, max-age=3600');
+      if (contentLength) reply.header('Content-Length', contentLength);
+      if (contentRange) reply.header('Content-Range', contentRange);
+
       const nodeStream = Readable.fromWeb(ytRes.body as any);
+      nodeStream.on('error', (err) => {
+        app.log.warn({ videoId, err }, '[player] upstream stream closed');
+      });
       return reply.send(nodeStream);
     } catch (err) {
       return reply.status(502).send({ error: 'Stream proxy failed', message: (err as Error).message });

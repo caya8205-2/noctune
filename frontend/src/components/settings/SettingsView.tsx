@@ -4,9 +4,11 @@ import {
   Database,
   Download,
   ExternalLink,
+  HardDrive,
   Eye,
   EyeOff,
   FileUp,
+  Info,
   ListMusic,
   Loader2,
   Settings,
@@ -16,6 +18,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { API_BASE } from '../../utils/api';
+
+const APP_VERSION = 'v1.0.0-beta.2';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -147,7 +151,7 @@ export function SettingsView() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `muzikku-cache-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `noctune-cache-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -213,33 +217,10 @@ export function SettingsView() {
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Engine Notes
-          </h2>
-          <p className="text-xs text-muted leading-relaxed mt-2">
-            Internal behavior for search, queue preparation, and playback resolution.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {engineNotes.map(({ Icon, title, desc }) => (
-            <div key={title} className="rounded-lg border border-base-600/70 bg-base-900 p-4">
-              <div className="w-9 h-9 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent mb-3">
-                <Icon size={17} />
-              </div>
-              <p className="text-sm font-medium text-white mb-1">{title}</p>
-              <p className="text-xs text-muted leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Spotify API Credentials
           </h2>
           {data?.spotify.configured && (
-            <span className="text-xs text-accent flex items-center gap-1">
+            <span className="text-xs text-accent flex items-center gap-1 mt-2">
               <CheckCircle size={11} /> Configured
             </span>
           )}
@@ -340,14 +321,6 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="max-w-3xl bg-base-800 rounded-xl p-4 border border-base-600/70">
-        <p className="text-xs text-muted leading-relaxed">
-          <span className="text-soft font-medium block mb-1">Note on Spotify Premium</span>
-          Spotify's free dev API supports search and metadata. Playback via Spotify SDK requires
-          Premium, so audio still streams through yt-dlp.
-        </p>
-      </section>
-
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -405,6 +378,62 @@ export function SettingsView() {
             Clear
           </button>
         </div>
+      </section>
+
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
+            <HardDrive size={18} />
+          </div>
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              Library Storage
+            </h2>
+            <p className="text-xs text-muted leading-relaxed mt-2">
+              Playlists, covers, liked songs, and learned cache stay on this device.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="surface-panel flex flex-col gap-5 max-w-3xl p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
+            <Info size={18} />
+          </div>
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              About
+            </h2>
+            <p className="text-xs text-muted leading-relaxed mt-2">
+              Noctune is a local-first music player that uses metadata search, cached stream resolution, and queue prefetching to keep playback responsive.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {engineNotes.map(({ Icon, title, desc }) => (
+            <div key={title} className="rounded-lg border border-base-600/70 bg-base-900 p-4">
+              <div className="w-9 h-9 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent mb-3">
+                <Icon size={17} />
+              </div>
+              <p className="text-sm font-medium text-white mb-1">{title}</p>
+              <p className="text-xs text-muted leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
+          <p className="text-xs text-muted leading-relaxed">
+            <span className="text-soft font-medium block mb-1">Spotify playback note</span>
+            Spotify's public dev API supports search and metadata here. Noctune still resolves playable audio through yt-dlp for local playback.
+          </p>
+        </div>
+      </section>
+
+      <section className="max-w-3xl flex items-center justify-between border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
+        <span>Noctune</span>
+        <span className="font-mono">Pre-release {APP_VERSION}</span>
       </section>
     </div>
   );

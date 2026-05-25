@@ -10,6 +10,8 @@ const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
   : path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'noctune.db');
+const LIKED_PLAYLIST_ID = 'system-liked-songs';
+const LIKED_PLAYLIST_NAME = 'Liked Songs';
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -30,6 +32,7 @@ export function initDb(): void {
     CREATE TABLE IF NOT EXISTS playlists (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      cover_data_url TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -47,8 +50,13 @@ export function initDb(): void {
       ON playlist_tracks(playlist_id, position);
   `);
 
-  const columns = db.prepare('PRAGMA table_info(playlist_tracks)').all() as { name: string }[];
-  if (!columns.some((column) => column.name === 'metadata_json')) {
+  const playlistColumns = db.prepare('PRAGMA table_info(playlists)').all() as { name: string }[];
+  if (!playlistColumns.some((column) => column.name === 'cover_data_url')) {
+    db.exec('ALTER TABLE playlists ADD COLUMN cover_data_url TEXT');
+  }
+
+  const trackColumns = db.prepare('PRAGMA table_info(playlist_tracks)').all() as { name: string }[];
+  if (!trackColumns.some((column) => column.name === 'metadata_json')) {
     db.exec('ALTER TABLE playlist_tracks ADD COLUMN metadata_json TEXT');
   }
 
@@ -62,10 +70,14 @@ export function createPlaylist(name: string): Playlist {
   const id = crypto.randomUUID();
   const now = Date.now();
   db.prepare(
-    'INSERT INTO playlists (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)'
-  ).run(id, name, now, now);
+    'INSERT INTO playlists (id, name, cover_data_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, name, null, now, now);
   db.close();
-  return { id, name, createdAt: now, updatedAt: now, trackIds: [] };
+  return { id, name, coverDataUrl: null, createdAt: now, updatedAt: now, trackIds: [] };
+}
+
+function trackKey(track: Track): string {
+  return track.spotifyId ? `spotify:${track.spotifyId}` : track.id;
 }
 
 function parseTrackMetadata(value: string | null): Track | null {
@@ -80,7 +92,7 @@ function parseTrackMetadata(value: string | null): Track | null {
 export function getPlaylist(id: string): Playlist | null {
   const db = getDb();
   const row = db.prepare('SELECT * FROM playlists WHERE id = ?').get(id) as {
-    id: string; name: string; created_at: number; updated_at: number;
+    id: string; name: string; cover_data_url: string | null; created_at: number; updated_at: number;
   } | undefined;
   if (!row) { db.close(); return null; }
 
@@ -92,6 +104,7 @@ export function getPlaylist(id: string): Playlist | null {
   return {
     id: row.id,
     name: row.name,
+    coverDataUrl: row.cover_data_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     trackIds: tracks.map(t => t.track_id),
@@ -102,7 +115,7 @@ export function getPlaylist(id: string): Playlist | null {
 export function getAllPlaylists(): Playlist[] {
   const db = getDb();
   const rows = db.prepare('SELECT * FROM playlists ORDER BY updated_at DESC').all() as {
-    id: string; name: string; created_at: number; updated_at: number;
+    id: string; name: string; cover_data_url: string | null; created_at: number; updated_at: number;
   }[];
   const playlists: Playlist[] = rows.map(row => {
     const tracks = db
@@ -111,6 +124,7 @@ export function getAllPlaylists(): Playlist[] {
     return {
       id: row.id,
       name: row.name,
+      coverDataUrl: row.cover_data_url,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       trackIds: tracks.map(t => t.track_id),
@@ -121,13 +135,73 @@ export function getAllPlaylists(): Playlist[] {
   return playlists;
 }
 
-export function renamePlaylist(id: string, name: string): void {
+export function getOrCreateLikedPlaylist(): Playlist {
+  const existing = getPlaylist(LIKED_PLAYLIST_ID);
+  if (existing) return existing;
+
   const db = getDb();
-  db.prepare('UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?').run(name, Date.now(), id);
+  const now = Date.now();
+  db.prepare(
+    'INSERT OR IGNORE INTO playlists (id, name, cover_data_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(LIKED_PLAYLIST_ID, LIKED_PLAYLIST_NAME, null, now, now);
+  db.close();
+  return getPlaylist(LIKED_PLAYLIST_ID) ?? {
+    id: LIKED_PLAYLIST_ID,
+    name: LIKED_PLAYLIST_NAME,
+    coverDataUrl: null,
+    createdAt: now,
+    updatedAt: now,
+    trackIds: [],
+    tracks: [],
+  };
+}
+
+export function isLikedTrack(trackId: string): boolean {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?')
+    .get(LIKED_PLAYLIST_ID, trackId);
+  db.close();
+  return Boolean(row);
+}
+
+export function toggleLikedTrack(track: Track): { liked: boolean; playlist: Playlist } {
+  const playlist = getOrCreateLikedPlaylist();
+  const id = trackKey(track);
+  if (isLikedTrack(id)) {
+    removeTrackFromPlaylist(playlist.id, id);
+    return { liked: false, playlist: getOrCreateLikedPlaylist() };
+  }
+
+  addTrackToPlaylist(playlist.id, id, { ...track, id });
+  return { liked: true, playlist: getOrCreateLikedPlaylist() };
+}
+
+export function renamePlaylist(id: string, name: string): void {
+  updatePlaylist(id, { name });
+}
+
+export function updatePlaylist(id: string, data: { name?: string; coverDataUrl?: string | null }): void {
+  if (id === LIKED_PLAYLIST_ID) return;
+  const updates: string[] = [];
+  const values: Array<string | number | null> = [];
+  if (typeof data.name === 'string') {
+    updates.push('name = ?');
+    values.push(data.name);
+  }
+  if ('coverDataUrl' in data) {
+    updates.push('cover_data_url = ?');
+    values.push(data.coverDataUrl ?? null);
+  }
+  if (updates.length === 0) return;
+  const db = getDb();
+  values.push(Date.now(), id);
+  db.prepare(`UPDATE playlists SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`).run(...values);
   db.close();
 }
 
 export function deletePlaylist(id: string): void {
+  if (id === LIKED_PLAYLIST_ID) return;
   const db = getDb();
   db.prepare('DELETE FROM playlists WHERE id = ?').run(id);
   db.close();

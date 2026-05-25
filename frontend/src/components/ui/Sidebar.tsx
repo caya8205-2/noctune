@@ -184,14 +184,16 @@ export function Sidebar() {
             >
               <ListMusic size={14} className="flex-shrink-0" />
               <span className="flex-1 truncate">{pl.name}</span>
-              <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost p-0.5 hover:text-red-400 transition"
-                disabled={deleteMut.isPending}
-                title="Delete playlist"
-                onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
-              >
-                <Trash2 size={12} />
-              </button>
+              {pl.id !== 'system-liked-songs' && (
+                <button
+                  className="opacity-0 group-hover:opacity-100 btn-ghost p-0.5 hover:text-red-400 transition"
+                  disabled={deleteMut.isPending}
+                  title="Delete playlist"
+                  onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
             </div>
           ))}
         </div>

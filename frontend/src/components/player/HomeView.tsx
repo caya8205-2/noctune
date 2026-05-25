@@ -1,18 +1,26 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Clock, Disc3, ListOrdered, Music2, Play, Radio, Search, Sparkles } from 'lucide-react';
-import { api, type Track } from '../../utils/api';
+import { Clock, Disc3, Heart, ListOrdered, ListPlus, Music2, Play, Radio, Search, Sparkles } from 'lucide-react';
+import { api, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { LikeButton } from './LikeButton';
 
-function TrackCard({ track, onPlay }: { track: Track; onPlay: (track: Track) => void }) {
+function TrackCard({
+  track,
+  onPlay,
+  onAddToQueue,
+}: {
+  track: Track;
+  onPlay: (track: Track) => void;
+  onAddToQueue: (track: Track) => void;
+}) {
   return (
-    <button
-      onClick={() => onPlay(track)}
+    <div
       className="group text-left rounded-lg border border-base-600/70 bg-base-800 p-3 hover:bg-base-700 transition-colors"
     >
-      <div className="relative mb-3">
+      <button type="button" onClick={() => onPlay(track)} className="relative mb-3 block w-full text-left">
         {track.thumbnail ? (
           <img
             src={track.thumbnail}
@@ -28,14 +36,27 @@ function TrackCard({ track, onPlay }: { track: Track; onPlay: (track: Track) => 
         <span className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-accent text-base-950 flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
           <Play size={14} fill="currentColor" />
         </span>
-      </div>
+      </button>
       <p className="text-sm font-semibold text-white truncate">{track.title}</p>
       <p className="text-xs text-muted truncate mt-1">{track.artist}</p>
-      <div className="flex items-center gap-1.5 text-[11px] text-muted mt-3">
-        <Clock size={11} />
-        <span className="font-mono">{formatDuration(track.duration)}</span>
+      <div className="flex items-center justify-between gap-2 mt-3">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted">
+          <Clock size={11} />
+          <span className="font-mono">{formatDuration(track.duration)}</span>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            className="btn-ghost p-1.5"
+            title="Add to queue"
+            onClick={() => onAddToQueue(track)}
+          >
+            <ListPlus size={14} />
+          </button>
+          <LikeButton track={track} className="p-1.5" />
+        </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -47,8 +68,23 @@ function HomeCardIcon({ icon: Icon }: { icon: LucideIcon }) {
   );
 }
 
+function PlaylistCover({ playlist }: { playlist: Playlist }) {
+  const isLikedPlaylist = playlist.id === 'system-liked-songs';
+  return (
+    <div className="aspect-square w-full rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent overflow-hidden mb-3">
+      {playlist.coverDataUrl ? (
+        <img src={playlist.coverDataUrl} alt="" className="w-full h-full object-cover" />
+      ) : isLikedPlaylist ? (
+        <Heart size={30} strokeWidth={1.5} fill="currentColor" />
+      ) : (
+        <ListOrdered size={30} strokeWidth={1.4} />
+      )}
+    </div>
+  );
+}
+
 export function HomeView() {
-  const { currentTrack, queue, playTrack, setView } = usePlayerStore();
+  const { currentTrack, queue, playTrack, setView, addToQueue } = usePlayerStore();
   const { data, isLoading } = useQuery({
     queryKey: ['home'],
     queryFn: api.home,
@@ -131,13 +167,14 @@ export function HomeView() {
               Open latest
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-6 gap-3">
             {playlists.slice(0, 6).map((playlist) => (
               <button
                 key={playlist.id}
                 onClick={() => setView('playlist', playlist.id)}
-                className="surface-panel p-4 text-left hover:bg-base-700 transition-colors"
+                className="surface-panel p-3 text-left hover:bg-base-700 transition-colors"
               >
+                <PlaylistCover playlist={playlist} />
                 <p className="text-sm font-semibold text-white truncate">{playlist.name}</p>
                 <p className="text-xs text-muted mt-1">{playlist.trackIds.length} tracks</p>
               </button>
@@ -156,7 +193,12 @@ export function HomeView() {
           </div>
           <div className="grid grid-cols-5 gap-3">
             {visibleQueue.map((track) => (
-              <TrackCard key={`${track.id}-${track.spotifyId ?? 'track'}`} track={track} onPlay={handlePlay} />
+              <TrackCard
+                key={`${track.id}-${track.spotifyId ?? 'track'}`}
+                track={track}
+                onPlay={handlePlay}
+                onAddToQueue={addToQueue}
+              />
             ))}
           </div>
         </section>
@@ -170,7 +212,7 @@ export function HomeView() {
         {recentTracks.length > 0 ? (
           <div className="grid grid-cols-4 gap-3">
             {recentTracks.slice(0, 8).map((track) => (
-              <TrackCard key={track.id} track={track} onPlay={handlePlay} />
+              <TrackCard key={track.id} track={track} onPlay={handlePlay} onAddToQueue={addToQueue} />
             ))}
           </div>
         ) : (
@@ -189,7 +231,7 @@ export function HomeView() {
         {newReleases.length > 0 ? (
           <div className="grid grid-cols-4 gap-3">
             {newReleases.map((track) => (
-              <TrackCard key={track.spotifyId ?? track.id} track={track} onPlay={handlePlay} />
+              <TrackCard key={track.spotifyId ?? track.id} track={track} onPlay={handlePlay} onAddToQueue={addToQueue} />
             ))}
           </div>
         ) : (

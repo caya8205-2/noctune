@@ -8,6 +8,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { LikeButton } from './LikeButton';
 
 export function PlayerBar() {
   const seekDragging = useRef(false);
@@ -20,25 +21,26 @@ export function PlayerBar() {
     toggleShuffle, cycleRepeat, setView,
   } = usePlayerStore();
 
-  const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
+  const seekDuration = duration > 0 ? duration : currentTrack?.duration ?? 0;
+  const progressPct = seekDuration > 0 ? (progress / seekDuration) * 100 : 0;
 
   function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
     e.preventDefault();
     const bar = e.currentTarget;
     const rect = bar.getBoundingClientRect();
     const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    seekAudio(pct * duration);
+    seekAudio(pct * seekDuration);
     seekDragging.current = true;
 
     function onMove(ev: MouseEvent) {
       const r = bar.getBoundingClientRect();
       const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
-      seekAudio(v * duration);
+      seekAudio(v * seekDuration);
     }
     function onUp(ev: MouseEvent) {
       const r = bar.getBoundingClientRect();
       const v = clamp((ev.clientX - r.left) / r.width, 0, 1);
-      seekAudio(v * duration);
+      seekAudio(v * seekDuration);
       seekDragging.current = false;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
@@ -76,15 +78,22 @@ export function PlayerBar() {
     <div className="flex flex-col h-full">
       {/* Progress bar */}
       <div
-        className="w-full h-0.5 bg-base-600 cursor-pointer group/progress relative"
+        className="w-full h-3 -mb-2 cursor-pointer group/progress relative"
         onMouseDown={handleSeekDown}
       >
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-0.5 bg-base-600 group-hover/progress:h-1.5 transition-all duration-150" />
         <div
-          className="h-full bg-accent transition-none relative"
+          className="absolute top-1/2 -translate-y-1/2 left-0 h-0.5 bg-accent group-hover/progress:h-1.5 transition-[height] duration-150"
           style={{ width: `${progressPct}%` }}
+        />
+        <div
+          className="absolute top-1/2 w-3.5 h-3.5 rounded-full bg-accent shadow-lg shadow-accent/20
+                     opacity-0 group-hover/progress:opacity-100 transition-opacity duration-150"
+          style={{
+            left: `${progressPct}%`,
+            transform: 'translate(-50%, -50%)',
+          }}
         >
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent
-                          opacity-0 group-hover/progress:opacity-100 translate-x-1/2 transition-opacity" />
         </div>
       </div>
 
@@ -170,7 +179,7 @@ export function PlayerBar() {
         {/* Time + Volume */}
         <div className="flex items-center gap-3 w-72 justify-end">
           <span className="text-xs text-muted font-mono tabular-nums">
-            {formatDuration(progress)} / {formatDuration(duration)}
+            {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>
 
           <button
@@ -180,13 +189,23 @@ export function PlayerBar() {
             {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
 
+          {currentTrack && <LikeButton track={currentTrack} />}
+
           <div
-            className="w-20 h-1 bg-base-600 rounded-full cursor-pointer group/vol relative"
+            className="w-24 h-4 cursor-pointer group/vol relative flex items-center"
             onMouseDown={handleVolDown}
           >
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-base-600 rounded-full" />
             <div
-              className="h-full bg-soft rounded-full group-hover/vol:bg-accent transition-colors"
+              className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-soft rounded-full group-hover/vol:bg-accent transition-colors"
               style={{ width: `${volume * 100}%` }}
+            />
+            <div
+              className="absolute top-1/2 w-3 h-3 rounded-full bg-soft group-hover/vol:bg-accent shadow-md shadow-black/30 transition-colors"
+              style={{
+                left: `${volume * 100}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
             />
           </div>
         </div>
