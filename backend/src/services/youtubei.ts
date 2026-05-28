@@ -47,9 +47,13 @@ function pickThumbnail(thumbnails: Array<{ url?: string; width?: number }> | und
   return medium?.url ?? sorted[0]?.url ?? '';
 }
 
+function isYoutubeVideoId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]{11}$/.test(id);
+}
+
 function toTrack(video: any, query: string): Track | null {
   const id = video.video_id ?? video.id;
-  if (!id) return null;
+  if (!id || !isYoutubeVideoId(id)) return null;
 
   return {
     id,

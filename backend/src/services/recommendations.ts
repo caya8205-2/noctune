@@ -51,6 +51,11 @@ function uniqueKey(track: Track): string {
   return track.spotifyId ?? track.youtubeId ?? track.id;
 }
 
+function isPlayableCandidate(track: Track): boolean {
+  if (track.spotifyId || track.id.startsWith('spotify:')) return true;
+  return /^[a-zA-Z0-9_-]{11}$/.test(track.youtubeId ?? track.id);
+}
+
 function buildQueries(seed: Track): string[] {
   const artist = primaryArtist(seed.artist);
   const compactArtist = normalize(artist);
@@ -140,6 +145,7 @@ export async function getRecommendations(
 
   candidates.forEach((candidate, order) => {
     const key = uniqueKey(candidate);
+    if (!isPlayableCandidate(candidate)) return;
     if (!key || seen.has(key) || excluded.has(candidate.id) || excluded.has(candidate.spotifyId ?? '')) return;
     seen.add(key);
     ranked.push({ track: candidate, score: scoreRecommendation(seed, candidate, order) });

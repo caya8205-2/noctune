@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Clock, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, Music2, Pencil, Play, Save, Trash2, X } from 'lucide-react';
+import { Check, Clock, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Music2, Pencil, Play, Save, Trash2, X } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -218,7 +218,7 @@ export function PlaylistView() {
   const [savingDetails, setSavingDetails] = useState(false);
   const [cropSource, setCropSource] = useState<CropSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { activePlaylistId, playTrack, currentTrack } = usePlayerStore();
+  const { activePlaylistId, playTrack, currentTrack, addToQueue } = usePlayerStore();
   const qc = useQueryClient();
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', activePlaylistId],
@@ -240,12 +240,15 @@ export function PlaylistView() {
   }, [cropSource]);
 
   function handlePlay(track: Track) {
-    playTrack(track, [track], { autoQueue: true });
+    playTrack(track, [track], { autoQueue: true, queueSource: 'playlist' });
   }
 
   function handlePlayAll() {
     if (tracks.length === 0) return;
-    playTrack(tracks[0], tracks);
+    playTrack(
+      { ...tracks[0], queueSource: 'playlist' },
+      tracks.map((track) => ({ ...track, queueSource: 'playlist' }))
+    );
   }
 
   async function handleReorder(fromIndex: number, toIndex: number) {
@@ -466,7 +469,9 @@ export function PlaylistView() {
         )}
 
         {tracks.map((track, i) => {
-          const isActive = currentTrack?.id === track.id || currentTrack?.spotifyId === track.spotifyId;
+          const isActive =
+            currentTrack?.id === track.id ||
+            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
           return (
             <div
               key={track.id + (track.spotifyId ?? '') + i}
@@ -517,6 +522,16 @@ export function PlaylistView() {
                 <Clock size={10} />
                 <span className="font-mono">{formatDuration(track.duration)}</span>
               </div>
+              <button
+                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addToQueue(track, 'playlist');
+                }}
+                title="Add to queue"
+              >
+                <ListPlus size={14} />
+              </button>
               <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
               {editing && !isLikedPlaylist && (
                 <button

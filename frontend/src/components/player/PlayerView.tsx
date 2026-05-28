@@ -23,7 +23,7 @@ const sourceMeta = {
   resolved: { label: 'Resolved', Icon: Radio, className: 'bg-base-700 text-muted border-base-600/40' },
 };
 
-function getActiveLyricIndex(lyrics: LyricsResult | undefined, progress: number): number {
+function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: number): number {
   if (!lyrics?.synced) return -1;
   let active = -1;
   for (let i = 0; i < lyrics.lines.length; i++) {

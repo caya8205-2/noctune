@@ -12,6 +12,7 @@ import {
   importPlaylist,
   getOrCreateLikedPlaylist,
   toggleLikedTrack,
+  playlistNameExists,
 } from '../services/playlist.js';
 import { parseMediaUrl } from '../services/urlParser.js';
 import { getSpotifyPlaylistTracks } from '../services/spotify.js';
@@ -68,8 +69,12 @@ export async function playlistRoutes(app: FastifyInstance) {
   app.post('/playlists', async (req, reply) => {
     const parsed = CreateBody.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid body' });
-    const playlist = createPlaylist(parsed.data.name);
-    return reply.status(201).send(playlist);
+    try {
+      const playlist = createPlaylist(parsed.data.name);
+      return reply.status(201).send(playlist);
+    } catch (err) {
+      return reply.status(409).send({ error: (err as Error).message });
+    }
   });
 
   app.post('/playlists/import', async (req, reply) => {
@@ -96,8 +101,13 @@ export async function playlistRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: 'No tracks found in playlist' });
       }
 
-      const playlist = importPlaylist(parsed.data.name ?? imported.name, imported.tracks);
-      return reply.status(201).send({ ok: true, playlist, imported: imported.tracks.length });
+      const playlistName = parsed.data.name ?? imported.name;
+      if (playlistNameExists(playlistName)) {
+        return reply.status(409).send({ error: 'Playlist already exists' });
+      }
+
+      const result = importPlaylist(playlistName, imported.tracks);
+      return reply.status(201).send({ ok: true, playlist: result.playlist, imported: result.imported });
     } catch (err) {
       return reply.status(502).send({
         error: 'Playlist import failed',
@@ -133,11 +143,12 @@ export async function playlistRoutes(app: FastifyInstance) {
     const parsed = z.union([TrackBody, TrackMetadataBody]).safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid body' });
     if ('trackId' in parsed.data) {
-      addTrackToPlaylist(req.params.id, parsed.data.trackId);
+      const added = addTrackToPlaylist(req.params.id, parsed.data.trackId);
+      return reply.status(added ? 201 : 200).send({ ok: true, added });
     } else {
-      addTrackToPlaylist(req.params.id, parsed.data.spotifyId ? `spotify:${parsed.data.spotifyId}` : parsed.data.id, parsed.data);
+      const added = addTrackToPlaylist(req.params.id, parsed.data.spotifyId ? `spotify:${parsed.data.spotifyId}` : parsed.data.id, parsed.data);
+      return reply.status(added ? 201 : 200).send({ ok: true, added });
     }
-    return reply.status(201).send({ ok: true });
   });
 
   app.patch<{ Params: { id: string } }>('/playlists/:id/tracks/reorder', async (req, reply) => {

@@ -12,6 +12,7 @@ export interface Track {
   youtubeId?: string;   // matched YouTube videoId for Spotify-backed results
   youtubeTitle?: string;
   youtubeArtist?: string;
+  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation';
 }
 
 export interface CachedTrack extends Track {

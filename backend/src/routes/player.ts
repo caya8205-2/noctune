@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import fs from 'fs';
 import {
   getCachedById,
   isUrlFresh,
   recordPlay,
   refreshTrackUrl,
+  setLocalAudioPath,
   upsertTrack,
 } from '../services/cache.js';
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
@@ -18,6 +20,16 @@ import {
   isPrefetching,
   schedulePrefetch,
 } from '../services/prefetch.js';
+import {
+  commitAudioCache,
+  discardAudioCache,
+  enforceAudioCacheLimit,
+  getAudioCachePath,
+  getExistingAudioCachePath,
+  getTempAudioCachePath,
+  touchAudioCache,
+} from '../services/audioFileCache.js';
+import { getEnvConfig } from '../services/env.js';
 
 const PlayParams = z.object({ videoId: z.string().min(5).max(64) });
 
@@ -40,8 +52,12 @@ const QueueBody = z.object({
   message: 'Either videoIds or tracks is required',
 });
 
+function isYoutubeVideoId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]{11}$/.test(id);
+}
+
 async function resolvePlayableVideoId(videoId: string, query: string): Promise<string | null> {
-  if (!videoId.startsWith('spotify:')) return videoId;
+  if (!videoId.startsWith('spotify:')) return isYoutubeVideoId(videoId) ? videoId : null;
   const spotifyId = videoId.replace(/^spotify:/, '');
   const matched = await matchSpotifyTrackToYoutube({
     id: videoId,
@@ -52,9 +68,9 @@ async function resolvePlayableVideoId(videoId: string, query: string): Promise<s
     query,
     spotifyId,
   });
-  if (matched?.id) return matched.id;
+  if (matched?.id && isYoutubeVideoId(matched.id)) return matched.id;
   const [match] = await searchTracks(query, 1);
-  return match?.id ?? null;
+  return match?.id && isYoutubeVideoId(match.id) ? match.id : null;
 }
 
 function normalizeLookup(value: string): string {
@@ -94,12 +110,12 @@ async function avoidUnwantedLiveVersion(
 }
 
 async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<string[]> {
-  const directIds = videoIds.filter((id) => !id.startsWith('spotify:'));
+  const directIds = videoIds.filter((id) => !id.startsWith('spotify:') && isYoutubeVideoId(id));
   const trackIds = await Promise.all(
     tracks.map(async (track) => {
-      if (!track.id.startsWith('spotify:')) return track.id;
+      if (!track.id.startsWith('spotify:')) return isYoutubeVideoId(track.id) ? track.id : null;
       const matched = await matchSpotifyTrackToYoutube(track);
-      return matched?.id ?? null;
+      return matched?.id && isYoutubeVideoId(matched.id) ? matched.id : null;
     })
   );
 
@@ -173,28 +189,87 @@ function parseContentRange(value: string | null): { start: number; end: number; 
   };
 }
 
+function audioFormatFromContentType(contentType: string | null): string {
+  const content = contentType?.toLowerCase() ?? '';
+  return content.includes('webm') ? 'webm' : 'm4a';
+}
+
 function createChunkedAudioStream(
+  videoId: string,
   audioUrl: string,
   firstRes: Response,
   firstRange: { start: number; end: number; total: number },
+  format: string,
   chunkSize = STREAM_CHUNK_SIZE
 ): Readable {
-  async function* streamChunks() {
-    if (firstRes.body) {
-      yield* Readable.fromWeb(firstRes.body as any);
-    }
+  const tempPath = getTempAudioCachePath(videoId);
+  const finalPath = getAudioCachePath(videoId, format);
+  const writer = fs.createWriteStream(tempPath);
 
-    for (let start = firstRange.end + 1; start < firstRange.total; start += chunkSize) {
-      const end = Math.min(start + chunkSize - 1, firstRange.total - 1);
-      const res = await fetch(audioUrl, {
-        headers: { Range: `bytes=${start}-${end}` },
+  async function* streamChunks() {
+    try {
+      if (firstRes.body) {
+        for await (const chunk of Readable.fromWeb(firstRes.body as any)) {
+          writer.write(chunk);
+          yield chunk;
+        }
+      }
+
+      for (let start = firstRange.end + 1; start < firstRange.total; start += chunkSize) {
+        const end = Math.min(start + chunkSize - 1, firstRange.total - 1);
+        const res = await fetch(audioUrl, {
+          headers: { Range: `bytes=${start}-${end}` },
+        });
+        if (!res.ok || !res.body) break;
+        for await (const chunk of Readable.fromWeb(res.body as any)) {
+          writer.write(chunk);
+          yield chunk;
+        }
+      }
+    } finally {
+      writer.end(() => {
+        if (commitAudioCache(tempPath, finalPath)) {
+          setLocalAudioPath(videoId, finalPath);
+          enforceAudioCacheLimit(getEnvConfig().audioCacheLimitMb * 1024 * 1024);
+        } else {
+          discardAudioCache(tempPath);
+        }
       });
-      if (!res.ok || !res.body) break;
-      yield* Readable.fromWeb(res.body as any);
     }
   }
 
   return Readable.from(streamChunks());
+}
+
+function streamLocalAudioFile(filePath: string, range: string | undefined, reply: any) {
+  const stat = fs.statSync(filePath);
+  const total = stat.size;
+  const contentType = filePath.endsWith('.webm') ? 'audio/webm' : 'audio/mp4';
+
+  if (range) {
+    const match = range.match(/^bytes=(\d+)-(\d*)$/i);
+    const start = match ? Number(match[1]) : 0;
+    const end = match?.[2] ? Number(match[2]) : total - 1;
+    const safeEnd = Math.min(end, total - 1);
+
+    reply
+      .status(206)
+      .header('Content-Type', contentType)
+      .header('Accept-Ranges', 'bytes')
+      .header('Content-Length', safeEnd - start + 1)
+      .header('Content-Range', `bytes ${start}-${safeEnd}/${total}`)
+      .header('Cache-Control', 'public, max-age=86400');
+
+    return reply.send(fs.createReadStream(filePath, { start, end: safeEnd }));
+  }
+
+  reply
+    .header('Content-Type', contentType)
+    .header('Accept-Ranges', 'bytes')
+    .header('Content-Length', total)
+    .header('Cache-Control', 'public, max-age=86400');
+
+  return reply.send(fs.createReadStream(filePath));
 }
 
 export async function playerRoutes(app: FastifyInstance) {
@@ -362,6 +437,18 @@ export async function playerRoutes(app: FastifyInstance) {
 
     try {
       const range = req.headers.range;
+      const localAudioPath = cached.localAudioPath && fs.existsSync(cached.localAudioPath)
+        ? cached.localAudioPath
+        : getExistingAudioCachePath(videoId);
+
+      if (localAudioPath) {
+        if (localAudioPath !== cached.localAudioPath) {
+          setLocalAudioPath(videoId, localAudioPath);
+        }
+        touchAudioCache(localAudioPath);
+        return streamLocalAudioFile(localAudioPath, range, reply);
+      }
+
       const { res: ytRes, refreshed, audioUrl } = await fetchAudioStream(
         videoId,
         cached.audioUrl,
@@ -400,7 +487,15 @@ export async function playerRoutes(app: FastifyInstance) {
           .header('Accept-Ranges', acceptRanges)
           .header('Cache-Control', 'public, max-age=3600');
 
-        return reply.send(createChunkedAudioStream(audioUrl, ytRes, rangeInfo));
+        return reply.send(
+          createChunkedAudioStream(
+            videoId,
+            audioUrl,
+            ytRes,
+            rangeInfo,
+            audioFormatFromContentType(ytRes.headers.get('content-type'))
+          )
+        );
       }
 
       if (ytRes.status === 206) reply.status(206);

@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Sidebar } from './components/ui/Sidebar';
 import { PlayerBar } from './components/player/PlayerBar';
+import { TrackDetailsSidebar } from './components/player/TrackDetailsSidebar';
 import { SearchView } from './components/search/SearchView';
 import { HomeView } from './components/player/HomeView';
 import { PlayerView } from './components/player/PlayerView';
+import { HistoryView } from './components/history/HistoryView';
 import { QueueView } from './components/playlist/QueueView';
 import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
@@ -87,14 +89,18 @@ function AppInner() {
           <Sidebar />
         </div>
 
-        <main className="flex-1 min-w-0 bg-base-900">
-          {activeView === 'home' && <HomeView />}
-          {activeView === 'player' && <PlayerView />}
-          {activeView === 'search' && <SearchView />}
-          {activeView === 'queue' && <QueueView />}
-          {activeView === 'settings' && <SettingsView />}
-          {activeView === 'playlist' && <PlaylistView />}
-        </main>
+        <div className="flex flex-1 min-w-0 bg-base-900">
+          <main className="flex-1 min-w-0">
+            {activeView === 'home' && <HomeView />}
+            {activeView === 'player' && <PlayerView />}
+            {activeView === 'search' && <SearchView />}
+            {activeView === 'history' && <HistoryView />}
+            {activeView === 'queue' && <QueueView />}
+            {activeView === 'settings' && <SettingsView />}
+            {activeView === 'playlist' && <PlaylistView />}
+          </main>
+          <TrackDetailsSidebar />
+        </div>
       </div>
 
       <div className="h-20 flex-shrink-0 border-t border-base-800 bg-base-950">

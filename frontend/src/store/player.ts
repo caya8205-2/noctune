@@ -20,11 +20,11 @@ interface PlayerState {
   queueIndex: number;     // index of currentTrack in queue
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'player' | 'search' | 'playlist' | 'queue' | 'settings';
+  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings';
   activePlaylistId: string | null;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
-  playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean }) => Promise<void>;
+  playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean; queueSource?: Track['queueSource'] }) => Promise<void>;
   togglePlay: () => void;
   setVolume: (v: number) => void;
   setProgress: (s: number) => void;
@@ -33,7 +33,7 @@ interface PlayerState {
   prev: () => Promise<void>;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
-  addToQueue: (track: Track) => void;
+  addToQueue: (track: Track, source?: Track['queueSource']) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   setView: (view: PlayerState['activeView'], playlistId?: string) => void;
@@ -90,9 +90,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         youtubeId: track.youtubeId ?? resolved.id,
         youtubeTitle: track.youtubeTitle,
         youtubeArtist: track.youtubeArtist,
+        queueSource: track.queueSource,
       };
+      const source = options?.queueSource ?? track.queueSource ?? 'search';
+      playableTrack.queueSource = source;
+      const seedTrack = { ...track, queueSource: source };
       const shouldAutoQueue = options?.autoQueue ?? false;
-      let playbackQueue = queue;
+      let playbackQueue = queue.map((queuedTrack) => queuedTrack.id === track.id ? seedTrack : queuedTrack);
       let playbackIndex = idx;
 
       if (shouldAutoQueue) {
@@ -104,7 +108,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             excludeIds,
           });
           const recs = await api.recommend(track, excludeIds, 12);
-          playbackQueue = [track, ...recs.tracks];
+          playbackQueue = [
+            seedTrack,
+            ...recs.tracks.map((recommendedTrack) => ({
+              ...recommendedTrack,
+              queueSource: 'autoqueue' as const,
+            })),
+          ];
           playbackIndex = 0;
           console.info('[player] autoqueue done', {
             seed: track.id,
@@ -196,8 +206,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   cycleRepeat: () =>
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
 
-  addToQueue: (track) =>
-    set(s => ({ queue: [...s.queue, track] })),
+  addToQueue: (track, source = 'manual') =>
+    set(s => ({ queue: [...s.queue, { ...track, queueSource: source }] })),
 
   reorderQueue: (fromIndex, toIndex) =>
     set((s) => {

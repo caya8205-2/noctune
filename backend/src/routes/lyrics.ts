@@ -16,7 +16,7 @@ export async function lyricsRoutes(app: FastifyInstance) {
     try {
       const lyrics = await findLyrics(parsed.data.title, parsed.data.artist, parsed.data.duration);
       if (!lyrics || lyrics.lines.length === 0) {
-        return reply.status(404).send({ error: 'Lyrics not found' });
+        return reply.status(204).send();
       }
       return reply.send(lyrics);
     } catch (err) {

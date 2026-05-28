@@ -9,11 +9,13 @@ import {
     importCacheStore,
 } from '../services/cache.js';
 import { clearLyricsCacheStore, getLyricsCacheStats } from '../services/lyrics.js';
+import { clearAudioCache, getAudioCacheStats } from '../services/audioFileCache.js';
 
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
+    audioCacheLimitMb: z.number().min(128).max(10240).optional(),
 });
 
 const TestBody = z.object({
@@ -27,6 +29,12 @@ export async function settingsRoutes(app: FastifyInstance) {
         const config = getEnvConfig();
         return reply.send({
             searchEngine: config.searchEngine,
+            audioCacheLimitMb: config.audioCacheLimitMb,
+            cache: {
+                learning: getCacheStats(),
+                lyrics: getLyricsCacheStats(),
+                audio: getAudioCacheStats(),
+            },
             spotify: {
                 clientId: config.spotifyClientId,
                 // Mask secret — only show last 4 chars if set
@@ -54,6 +62,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         return reply.send({
             ok: true,
             searchEngine: updated.searchEngine,
+            audioCacheLimitMb: updated.audioCacheLimitMb,
             spotify: {
                 clientId: updated.spotifyClientId,
                 clientSecretMasked: updated.spotifyClientSecret
@@ -119,6 +128,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     app.delete('/settings/cache', async (_req, reply) => {
         clearCacheStore();
         clearLyricsCacheStore();
-        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats() });
+        const audio = clearAudioCache();
+        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio });
+    });
+
+    // DELETE /settings/cache/audio — clear only local audio files
+    app.delete('/settings/cache/audio', async (_req, reply) => {
+        const audio = clearAudioCache();
+        return reply.send({ ok: true, audio, stats: getAudioCacheStats() });
     });
 }

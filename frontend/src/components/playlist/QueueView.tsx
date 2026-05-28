@@ -4,6 +4,15 @@ import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
 import { LikeButton } from '../player/LikeButton';
+import type { Track } from '../../utils/api';
+
+function queueSourceLabel(source: Track['queueSource']): string {
+  if (source === 'manual') return 'Manual';
+  if (source === 'playlist') return 'Playlist';
+  if (source === 'autoqueue') return 'Autoqueue';
+  if (source === 'recommendation') return 'Home';
+  return 'Search';
+}
 
 export function QueueView() {
   const { queue, queueIndex, currentTrack, playTrack, clearQueue, reorderQueue } = usePlayerStore();
@@ -38,7 +47,9 @@ export function QueueView() {
 
       <div className="flex-1 overflow-y-auto px-7 pb-6">
         {queue.map((track, i) => {
-          const isActive = currentTrack?.id === track.id || currentTrack?.spotifyId === track.spotifyId;
+          const isActive =
+            currentTrack?.id === track.id ||
+            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
           const isPast = i < queueIndex;
 
           return (
@@ -87,6 +98,9 @@ export function QueueView() {
                 </p>
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
+              <span className="hidden md:inline-flex w-20 justify-center flex-shrink-0 mr-4 rounded-full border border-base-600/60 px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                {queueSourceLabel(track.queueSource)}
+              </span>
               <span className="text-xs font-mono text-muted flex-shrink-0">
                 {formatDuration(track.duration)}
               </span>

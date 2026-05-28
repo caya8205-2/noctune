@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, Home, Search, ListMusic, ListOrdered, Plus, Trash2, Settings } from 'lucide-react';
+import { Clock3, Download, Home, Search, ListMusic, ListOrdered, Loader2, Plus, Trash2, Settings } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
@@ -32,9 +32,12 @@ export function Sidebar() {
   const createMut = useMutation({
     mutationFn: () => api.createPlaylist('New Playlist'),
     onSuccess: (playlist) => {
+      setDeleteError(null);
       qc.invalidateQueries({ queryKey: ['playlists'] });
       setView('playlist', playlist.id);
+      setPlaylistMenuOpen(false);
     },
+    onError: (err) => setDeleteError((err as Error).message),
   });
 
   const deleteMut = useMutation({
@@ -52,6 +55,7 @@ export function Sidebar() {
     const url = importUrl.trim();
     if (!url) return;
     setImporting(true);
+    setDeleteError(null);
     try {
       const result = await api.importPlaylist(url);
       await qc.invalidateQueries({ queryKey: ['playlists'] });
@@ -74,6 +78,7 @@ export function Sidebar() {
   const navItems = [
     { icon: Home, label: 'Home', view: 'home' as const },
     { icon: Search, label: 'Search', view: 'search' as const },
+    { icon: Clock3, label: 'History', view: 'history' as const },
     { icon: ListOrdered, label: 'Queue', view: 'queue' as const },
     { icon: Settings, label: 'Settings', view: 'settings' as const },
   ];
@@ -132,13 +137,14 @@ export function Sidebar() {
             <div className="absolute left-[calc(100%+0.75rem)] top-0 z-50 w-64 rounded-lg border border-base-600 bg-base-800 shadow-xl shadow-black/30 p-1.5">
               <button
                 onClick={() => {
+                  setDeleteError(null);
                   createMut.mutate();
-                  setPlaylistMenuOpen(false);
                 }}
+                disabled={createMut.isPending}
                 className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-soft hover:text-white hover:bg-base-700 transition-colors"
               >
-                <Plus size={13} />
-                Local playlist
+                {createMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                {createMut.isPending ? 'Creating playlist' : 'Local playlist'}
               </button>
               <form onSubmit={handleImportPlaylist} className="mt-1 border-t border-base-700 pt-1">
                 <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-soft">
@@ -148,16 +154,23 @@ export function Sidebar() {
                 <input
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
+                  disabled={importing}
                   placeholder="Spotify or YouTube URL"
                   className="w-full bg-base-900 border border-base-600 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-muted focus:outline-none focus:border-accent"
                 />
                 <button
                   type="submit"
                   disabled={importing || !importUrl.trim()}
-                  className="w-full mt-1.5 rounded-md bg-accent text-base-950 text-xs font-semibold py-1.5 disabled:opacity-50"
+                  className="w-full mt-1.5 rounded-md bg-accent text-base-950 text-xs font-semibold py-1.5 disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  {importing ? 'Importing' : 'Import'}
+                  {importing && <Loader2 size={12} className="animate-spin" />}
+                  {importing ? 'Importing playlist' : 'Import'}
                 </button>
+                {importing && (
+                  <p className="text-[11px] text-muted leading-relaxed mt-1.5 px-1">
+                    Fetching playlist tracks. This can take a moment for larger playlists.
+                  </p>
+                )}
               </form>
             </div>
           )}

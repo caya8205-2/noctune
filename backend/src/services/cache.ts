@@ -166,6 +166,15 @@ export function getTopTracks(limit = 20): CachedTrack[] {
     .slice(0, limit);
 }
 
+/** Get cached tracks sorted by latest play time. */
+export function getRecentTracks(limit = 50): CachedTrack[] {
+  const store = getStore();
+  return Object.values(store.tracks)
+    .filter((track) => Boolean(track.lastPlayed))
+    .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0))
+    .slice(0, limit);
+}
+
 /** Total number of cached tracks. */
 export function getCacheStats(): { total: number; totalQueries: number } {
   const store = getStore();

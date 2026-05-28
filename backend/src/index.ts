@@ -7,6 +7,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { queueRoutes } from './routes/queue.js';
 import { homeRoutes } from './routes/home.js';
 import { lyricsRoutes } from './routes/lyrics.js';
+import { metadataRoutes } from './routes/metadata.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
@@ -51,6 +52,7 @@ async function bootstrap() {
   await app.register(queueRoutes);
   await app.register(homeRoutes);
   await app.register(lyricsRoutes);
+  await app.register(metadataRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({

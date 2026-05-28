@@ -98,7 +98,7 @@ export function SearchView() {
   }
 
   function handlePlay(track: Track) {
-    playTrack(track, results, { autoQueue: true });
+    playTrack(track, results, { autoQueue: true, queueSource: 'search' });
   }
 
   async function handleImportPlaylist() {
@@ -148,10 +148,9 @@ export function SearchView() {
             autoFocus
           />
           {isSearching && (
-            <Loader2
-              size={14}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted animate-spin"
-            />
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted">
+              <Loader2 size={14} className="animate-spin" />
+            </span>
           )}
         </div>
 
@@ -200,7 +199,7 @@ export function SearchView() {
               className="btn-accent px-4 py-2 text-xs"
             >
               {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              Import
+              {importing ? 'Importing' : 'Import'}
             </button>
           </div>
         )}
@@ -219,9 +218,9 @@ export function SearchView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-9 pb-6">
         {!searched && !isSearching && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
+          <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
               <Music size={28} strokeWidth={1.2} />
             </div>
@@ -230,13 +229,15 @@ export function SearchView() {
         )}
 
         {searched && results.length === 0 && !isSearching && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
+          <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
             <p className="text-sm">No results for "{query}"</p>
           </div>
         )}
 
         {results.map((track, i) => {
-          const isActive = currentTrack?.id === track.id || currentTrack?.spotifyId === track.spotifyId;
+          const isActive =
+            currentTrack?.id === track.id ||
+            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
           return (
             <div
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}

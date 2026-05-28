@@ -96,7 +96,7 @@ export function HomeView() {
   const visibleQueue = useMemo(() => queue.slice(0, 5), [queue]);
 
   function handlePlay(track: Track) {
-    playTrack(track, [track], { autoQueue: true });
+    playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
   }
 
   return (

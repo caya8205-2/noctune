@@ -32,6 +32,34 @@ function normalize(value: string): string {
     .trim();
 }
 
+function compactTitle(value: string): string {
+  return value
+    .replace(/[【】]/g, ' ')
+    .replace(/\[[^\]]*]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b(sung|covered|performed)\s+by\b.*$/i, ' ')
+    .replace(/\b(sings?|singing|cover(?:ed)?|lyrics?|official|audio|music video|mv|visualizer)\b/gi, ' ')
+    .replace(/\s*[-/|]\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function titleCandidates(title: string): string[] {
+  const bracketless = title
+    .replace(/[ã€ã€‘]/g, ' ')
+    .replace(/\[[^\]]*]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b(sung|covered|performed)\s+by\b.*$/i, ' ')
+    .trim();
+  const compact = compactTitle(title);
+  const parts = bracketless
+    .split(/\s+(?:by|from)\s+|[-/|]/i)
+    .map((part) => compactTitle(part))
+    .filter((part) => part.length >= 3);
+
+  return [...new Set([title, compact, ...parts])].filter(Boolean);
+}
+
 function cacheKey(title: string, artist: string, duration: number): string {
   return `${normalize(title)}::${normalize(artist)}::${Math.round(duration || 0)}`;
 }
@@ -143,6 +171,13 @@ function scoreCandidate(candidate: LrclibLyrics, title: string, artist: string, 
   return score;
 }
 
+function minimumAcceptableScore(title: string, artist: string, duration: number): number {
+  const titleLooksNoisy = titleCandidates(title).length > 2 || title.length > 60;
+  if (!duration) return titleLooksNoisy ? 85 : 70;
+  if (!artist.trim()) return titleLooksNoisy ? 80 : 60;
+  return titleLooksNoisy ? 75 : 55;
+}
+
 async function searchLrclib(title: string, artist: string): Promise<LrclibLyrics[]> {
   const url = new URL(`${LRCLIB_BASE}/search`);
   url.searchParams.set('track_name', title);
@@ -163,12 +198,32 @@ export async function findLyrics(title: string, artist: string, duration: number
   const cached = getCachedLyrics(key);
   if (cached !== undefined) return cached;
 
-  const candidates = await searchLrclib(title, artist);
-  const best = candidates
-    .filter((candidate) => candidate.syncedLyrics || candidate.plainLyrics || candidate.instrumental)
-    .sort((a, b) => scoreCandidate(b, title, artist, duration) - scoreCandidate(a, title, artist, duration))[0];
+  const seen = new Set<number>();
+  const candidates: LrclibLyrics[] = [];
+  for (const candidateTitle of titleCandidates(title)) {
+    for (const candidateArtist of [artist, '']) {
+      const results = await searchLrclib(candidateTitle, candidateArtist);
+      for (const result of results) {
+        if (seen.has(result.id)) continue;
+        seen.add(result.id);
+        candidates.push(result);
+      }
+      if (candidates.length > 0) break;
+    }
+    if (candidates.length > 0) break;
+  }
 
-  if (!best) {
+  const scored = candidates
+    .filter((candidate) => candidate.syncedLyrics || candidate.plainLyrics || candidate.instrumental)
+    .map((candidate) => ({
+      candidate,
+      score: scoreCandidate(candidate, title, artist, duration),
+    }))
+    .sort((a, b) => b.score - a.score);
+  const bestMatch = scored[0];
+  const best = bestMatch?.candidate;
+
+  if (!best || bestMatch.score < minimumAcceptableScore(title, artist, duration)) {
     setCachedLyrics(key, title, artist, duration, null);
     return null;
   }

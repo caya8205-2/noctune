@@ -67,6 +67,13 @@ export function initDb(): void {
 
 export function createPlaylist(name: string): Playlist {
   const db = getDb();
+  const duplicate = db
+    .prepare('SELECT 1 FROM playlists WHERE lower(name) = lower(?) LIMIT 1')
+    .get(name.trim());
+  if (duplicate) {
+    db.close();
+    throw new Error('Playlist already exists');
+  }
   const id = crypto.randomUUID();
   const now = Date.now();
   db.prepare(
@@ -74,6 +81,15 @@ export function createPlaylist(name: string): Playlist {
   ).run(id, name, null, now, now);
   db.close();
   return { id, name, coverDataUrl: null, createdAt: now, updatedAt: now, trackIds: [] };
+}
+
+export function playlistNameExists(name: string): boolean {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT 1 FROM playlists WHERE lower(name) = lower(?) LIMIT 1')
+    .get(name.trim());
+  db.close();
+  return Boolean(row);
 }
 
 function trackKey(track: Track): string {
@@ -207,24 +223,33 @@ export function deletePlaylist(id: string): void {
   db.close();
 }
 
-export function addTrackToPlaylist(playlistId: string, trackId: string, track?: Track): void {
+export function addTrackToPlaylist(playlistId: string, trackId: string, track?: Track): boolean {
   const db = getDb();
+  const existing = db
+    .prepare('SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?')
+    .get(playlistId, trackId);
+  if (existing) {
+    db.close();
+    return false;
+  }
   const maxPos = (db
     .prepare('SELECT MAX(position) as m FROM playlist_tracks WHERE playlist_id = ?')
     .get(playlistId) as { m: number | null }).m ?? -1;
   db.prepare(
-    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, metadata_json, position, added_at) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO playlist_tracks (playlist_id, track_id, metadata_json, position, added_at) VALUES (?, ?, ?, ?, ?)'
   ).run(playlistId, trackId, track ? JSON.stringify(track) : null, maxPos + 1, Date.now());
   db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').run(Date.now(), playlistId);
   db.close();
+  return true;
 }
 
-export function importPlaylist(name: string, tracks: Track[]): Playlist {
+export function importPlaylist(name: string, tracks: Track[]): { playlist: Playlist; imported: number } {
   const playlist = createPlaylist(name);
+  let imported = 0;
   for (const track of tracks) {
-    addTrackToPlaylist(playlist.id, track.id, track);
+    if (addTrackToPlaylist(playlist.id, track.id, track)) imported += 1;
   }
-  return getPlaylist(playlist.id) ?? playlist;
+  return { playlist: getPlaylist(playlist.id) ?? playlist, imported };
 }
 
 export function reorderPlaylistTracks(playlistId: string, fromIndex: number, toIndex: number): void {

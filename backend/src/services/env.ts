@@ -16,12 +16,14 @@ export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
+    audioCacheLimitMb: number;
 }
 
 const DEFAULTS: EnvConfig = {
     spotifyClientId: '',
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
+    audioCacheLimitMb: 1024,
 };
 
 function ensureDataDir() {
@@ -40,7 +42,8 @@ export function getEnvConfig(): EnvConfig {
     }
     try {
         const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
-        _config = { ...DEFAULTS, ...JSON.parse(raw) } as EnvConfig;
+        const parsed = JSON.parse(raw) as Partial<EnvConfig>;
+        _config = { ...DEFAULTS, ...parsed };
         return _config;
     } catch {
         _config = { ...DEFAULTS };

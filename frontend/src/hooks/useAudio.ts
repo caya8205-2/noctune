@@ -166,10 +166,7 @@ export function useAudio() {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
 
-    // Use local file if available, else stream URL
-    const src = currentTrack.localAudioPath
-      ? `file://${currentTrack.localAudioPath}`
-      : API_BASE + '/player/stream/' + currentTrack.id;
+    const src = API_BASE + '/player/stream/' + currentTrack.id;
 
     if (audio.src !== src) {
       recoveryAttemptRef.current = null;

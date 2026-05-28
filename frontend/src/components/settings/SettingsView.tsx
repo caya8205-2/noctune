@@ -19,10 +19,16 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.2';
+const APP_VERSION = 'v1.0.0-beta.4';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
+  audioCacheLimitMb: number;
+  cache?: {
+    learning: { total: number; totalQueries: number };
+    lyrics: { total: number; hits: number; misses: number };
+    audio: { files: number; bytes: number };
+  };
   spotify: {
     clientId: string;
     clientSecretMasked: string;
@@ -32,9 +38,14 @@ interface SettingsData {
 
 const engineNotes = [
   {
+    Icon: HardDrive,
+    title: 'Local library',
+    desc: 'Playlists, covers, liked songs, and learned playback data stay on this device.',
+  },
+  {
     Icon: Database,
     title: 'Local cache',
-    desc: 'Tracks and resolved audio URLs are kept locally so repeat plays can start faster.',
+    desc: 'Tracks, lyrics, and audio files are cached locally so repeat plays can start faster.',
   },
   {
     Icon: Zap,
@@ -53,6 +64,11 @@ const engineNotes = [
   },
 ];
 
+function formatBytes(bytes = 0): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [clientId, setClientId] = useState('');
@@ -63,16 +79,21 @@ export function SettingsView() {
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
+  const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    fetch(API_BASE + '/settings')
+  async function loadSettings() {
+    return fetch(API_BASE + '/settings')
       .then((r) => r.json())
       .then((d: SettingsData) => {
         setData(d);
         setClientId(d.spotify.clientId);
-      })
-      .catch(console.error);
+        setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
+      });
+  }
+
+  useEffect(() => {
+    loadSettings().catch(console.error);
   }, []);
 
   async function handleSave() {
@@ -178,6 +199,7 @@ export function SettingsView() {
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.message ?? 'Import failed');
+      await loadSettings();
       setCacheMessage({ ok: true, text: 'Cache imported.' });
     } catch (err) {
       setCacheMessage({ ok: false, text: (err as Error).message });
@@ -194,7 +216,46 @@ export function SettingsView() {
     try {
       const res = await fetch(API_BASE + '/settings/cache', { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear cache failed');
+      await loadSettings();
       setCacheMessage({ ok: true, text: 'Cache cleared.' });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleClearAudioCache() {
+    if (!window.confirm('Clear downloaded audio cache?')) return;
+    setCacheBusy(true);
+    setCacheMessage(null);
+
+    try {
+      const res = await fetch(API_BASE + '/settings/cache/audio', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Clear audio cache failed');
+      await loadSettings();
+      setCacheMessage({ ok: true, text: 'Audio cache cleared.' });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleSaveAudioCacheLimit() {
+    setCacheBusy(true);
+    setCacheMessage(null);
+
+    try {
+      const res = await fetch(API_BASE + '/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioCacheLimitMb }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.message ?? 'Save cache limit failed');
+      await loadSettings();
+      setCacheMessage({ ok: true, text: 'Audio cache limit saved.' });
     } catch (err) {
       setCacheMessage({ ok: false, text: (err as Error).message });
     } finally {
@@ -235,6 +296,11 @@ export function SettingsView() {
           <ExternalLink size={12} />
           Get credentials at developer.spotify.com/dashboard
         </a>
+
+        <p className="text-xs text-muted leading-relaxed">
+          Spotify credentials are used for metadata search, playlist import, and release discovery.
+          Playback still uses Noctune's local YouTube resolver.
+        </p>
 
         <div className="flex flex-col gap-3">
           <div>
@@ -324,10 +390,10 @@ export function SettingsView() {
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Cache Learning
+            Cache
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Export, import, or clear learned song metadata and audio URL cache.
+            Export learned metadata, manage lyrics cache, and keep local audio storage under control.
           </p>
         </div>
 
@@ -344,7 +410,49 @@ export function SettingsView() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
+        {data?.cache && (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+              <p className="text-xs text-muted">Tracks</p>
+              <p className="text-sm font-semibold text-white mt-1">{data.cache.learning.total}</p>
+            </div>
+            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+              <p className="text-xs text-muted">Lyrics</p>
+              <p className="text-sm font-semibold text-white mt-1">{data.cache.lyrics.total}</p>
+            </div>
+            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+              <p className="text-xs text-muted">Audio</p>
+              <p className="text-sm font-semibold text-white mt-1">
+                {data.cache.audio.files} / {formatBytes(data.cache.audio.bytes)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3 flex items-end gap-3">
+          <div className="flex-1">
+            <label className="text-xs text-muted mb-1.5 block">Audio cache limit</label>
+            <input
+              type="number"
+              min={128}
+              max={10240}
+              step={128}
+              value={audioCacheLimitMb}
+              onChange={(e) => setAudioCacheLimitMb(Number(e.target.value))}
+              className="input-base font-mono text-xs"
+            />
+          </div>
+          <span className="text-xs text-muted pb-2">MB</span>
+          <button
+            onClick={handleSaveAudioCacheLimit}
+            disabled={cacheBusy}
+            className="btn-accent px-4 py-2 rounded-xl text-sm disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
           <button
             onClick={handleExportCache}
             disabled={cacheBusy}
@@ -370,6 +478,15 @@ export function SettingsView() {
           </label>
 
           <button
+            onClick={handleClearAudioCache}
+            disabled={cacheBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            Audio
+          </button>
+
+          <button
             onClick={handleClearCache}
             disabled={cacheBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
@@ -377,22 +494,6 @@ export function SettingsView() {
             <Trash2 size={14} />
             Clear
           </button>
-        </div>
-      </section>
-
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
-            <HardDrive size={18} />
-          </div>
-          <div>
-            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Library Storage
-            </h2>
-            <p className="text-xs text-muted leading-relaxed mt-2">
-              Playlists, covers, liked songs, and learned cache stay on this device.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -422,13 +523,6 @@ export function SettingsView() {
             </div>
           ))}
         </div>
-
-        <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
-          <p className="text-xs text-muted leading-relaxed">
-            <span className="text-soft font-medium block mb-1">Spotify playback note</span>
-            Spotify's public dev API supports search and metadata here. Noctune still resolves playable audio through yt-dlp for local playback.
-          </p>
-        </div>
       </section>
 
       <section className="max-w-3xl flex items-center justify-between border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
@@ -438,3 +532,4 @@ export function SettingsView() {
     </div>
   );
 }
+

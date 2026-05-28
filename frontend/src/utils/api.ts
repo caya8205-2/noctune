@@ -37,6 +37,10 @@ export const api = {
 
   home: () =>
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[]; newReleases: Track[] }>('/home'),
+  history: () =>
+    request<{ tracks: CachedTrack[] }>('/history'),
+  spotifyMetadata: (spotifyId: string) =>
+    request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
 
   resolve: (videoId: string, query?: string) =>
     request<CachedTrack>(`/player/resolve/${videoId}${query ? `?query=${encodeURIComponent(query)}` : ''}`),
@@ -54,9 +58,9 @@ export const api = {
     }),
 
   lyrics: (track: Track) =>
-    request<LyricsResult>(
+    request<LyricsResult | undefined>(
       `/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}`
-    ),
+    ).then((lyrics) => lyrics ?? null),
 
   getPlaylists: () => request<Playlist[]>('/playlists'),
   getLiked: () => request<Playlist>('/library/liked'),
@@ -81,9 +85,9 @@ export const api = {
   deletePlaylist: (id: string) =>
     request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' }),
   addTrack: (playlistId: string, trackId: string) =>
-    request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ trackId }) }),
+    request<{ ok: boolean; added: boolean }>(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify({ trackId }) }),
   addTrackToPlaylist: (playlistId: string, track: Track) =>
-    request(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify(track) }),
+    request<{ ok: boolean; added: boolean }>(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify(track) }),
   reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) =>
     request<{ ok: boolean }>('/playlists/' + playlistId + '/tracks/reorder', {
       method: 'PATCH',
@@ -108,6 +112,7 @@ export interface Track {
   youtubeId?: string;
   youtubeTitle?: string;
   youtubeArtist?: string;
+  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation';
 }
 
 export interface CachedTrack extends Track {
@@ -145,6 +150,38 @@ export interface LyricsResult {
   instrumental: boolean;
   synced: boolean;
   lines: LyricLine[];
+}
+
+export interface SpotifyTrackMetadata {
+  id: string;
+  title: string;
+  artists: Array<{
+    id: string;
+    name: string;
+    genres: string[];
+    popularity?: number;
+    followers?: number;
+    image?: string;
+    spotifyUrl?: string;
+  }>;
+  album: {
+    id: string;
+    name: string;
+    type?: string;
+    releaseDate?: string;
+    totalTracks?: number;
+    label?: string;
+    image?: string;
+    spotifyUrl?: string;
+  };
+  duration: number;
+  explicit: boolean;
+  popularity?: number;
+  trackNumber?: number;
+  discNumber?: number;
+  isrc?: string;
+  spotifyUrl?: string;
+  cachedAt: number;
 }
 
 
