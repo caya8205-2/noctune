@@ -6,10 +6,13 @@ import { playlistRoutes } from './routes/playlists.js';
 import { settingsRoutes } from './routes/settings.js';
 import { queueRoutes } from './routes/queue.js';
 import { homeRoutes } from './routes/home.js';
+import { lyricsRoutes } from './routes/lyrics.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
 import { getPrefetchStatus } from './services/prefetch.js';
+import { scheduleStartupPrefetch } from './services/startupPrefetch.js';
+import { getAudioResolverStatus } from './services/audioResolver.js';
 
 const PORT = Number(process.env.PORT ?? 3131);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -47,16 +50,19 @@ async function bootstrap() {
   await app.register(settingsRoutes);
   await app.register(queueRoutes);
   await app.register(homeRoutes);
+  await app.register(lyricsRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({
     ok: true,
     cache: getCacheStats(),
     prefetch: getPrefetchStatus(),
+    resolver: getAudioResolverStatus(),
   }));
 
   // Init SQLite schema
   initDb();
+  scheduleStartupPrefetch();
 
   await app.listen({ port: PORT, host: HOST });
   console.log(`\n🎵 Muzikku backend running at http://${HOST}:${PORT}\n`);

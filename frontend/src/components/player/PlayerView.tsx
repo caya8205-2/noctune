@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   Database,
@@ -12,6 +14,7 @@ import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { Visualizer } from './Visualizer';
 import { LikeButton } from './LikeButton';
+import { api, type LyricsResult, type Track } from '../../utils/api';
 
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
@@ -19,6 +22,92 @@ const sourceMeta = {
   cache_refreshed: { label: 'Refreshed', Icon: Activity, className: 'bg-base-700 text-soft border-base-600/40' },
   resolved: { label: 'Resolved', Icon: Radio, className: 'bg-base-700 text-muted border-base-600/40' },
 };
+
+function getActiveLyricIndex(lyrics: LyricsResult | undefined, progress: number): number {
+  if (!lyrics?.synced) return -1;
+  let active = -1;
+  for (let i = 0; i < lyrics.lines.length; i++) {
+    const time = lyrics.lines[i].time;
+    if (time === null || time > progress + 0.12) break;
+    active = i;
+  }
+  return active;
+}
+
+function LyricsPanel({ track }: { track: Track }) {
+  const progress = usePlayerStore((state) => state.progress);
+  const activeLineRef = useRef<HTMLParagraphElement | null>(null);
+  const { data: lyrics, isLoading, isError } = useQuery({
+    queryKey: ['lyrics', track.spotifyId ?? track.id, track.title, track.artist, track.duration],
+    queryFn: () => api.lyrics(track),
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  });
+
+  const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress), [lyrics, progress]);
+
+  useEffect(() => {
+    activeLineRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeIndex]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[220px] rounded-xl border border-base-600/70 bg-base-800/70 px-6 py-5 flex items-center justify-center text-sm text-muted">
+        Loading lyrics from LRCLIB.
+      </div>
+    );
+  }
+
+  if (isError || !lyrics || lyrics.lines.length === 0) {
+    return (
+      <div className="min-h-[220px] rounded-xl border border-base-600/70 bg-base-800/70 px-6 py-5 flex flex-col justify-center">
+        <p className="text-lg leading-relaxed text-soft">Lyrics not found.</p>
+        <p className="text-sm text-muted mt-2 leading-relaxed">
+          LRCLIB does not have synced lyrics for this track yet.
+        </p>
+      </div>
+    );
+  }
+
+  if (lyrics.instrumental) {
+    return (
+      <div className="min-h-[220px] rounded-xl border border-base-600/70 bg-base-800/70 px-6 py-5 flex flex-col justify-center">
+        <p className="text-lg leading-relaxed text-soft">Instrumental track.</p>
+        <p className="text-sm text-muted mt-2 leading-relaxed">
+          LRCLIB marks this track as instrumental.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden">
+      <div className="h-full overflow-y-auto px-6 py-5">
+        <div className="min-h-full flex flex-col justify-center gap-3">
+          {lyrics.lines.map((line, index) => {
+            const isActive = index === activeIndex;
+            const isPassed = lyrics.synced && activeIndex > index;
+            return (
+              <p
+                key={`${line.time ?? index}-${line.text}`}
+                ref={isActive ? activeLineRef : null}
+                className={`text-xl leading-relaxed transition-all duration-200 ${
+                  isActive
+                    ? 'text-white font-semibold scale-[1.02]'
+                    : isPassed
+                      ? 'text-muted/60'
+                      : 'text-soft'
+                }`}
+              >
+                {line.text || '...'}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function PlayerView() {
   const { currentTrack, isPlaying, queue, queueIndex, addToQueue } = usePlayerStore();
@@ -103,14 +192,7 @@ export function PlayerView() {
                 <Mic2 size={15} className="text-accent" />
                 <h2 className="section-label">Lyrics</h2>
               </div>
-              <div className="min-h-[220px] rounded-xl border border-base-600/70 bg-base-800/70 px-6 py-5 flex flex-col justify-center">
-                <p className="text-lg leading-relaxed text-soft">
-                  Lyrics are not connected yet.
-                </p>
-                <p className="text-sm text-muted mt-2 leading-relaxed">
-                  This space is reserved for synced lyrics once the lyrics provider is added.
-                </p>
-              </div>
+              <LyricsPanel track={currentTrack} />
             </section>
           </>
         ) : (

@@ -1,7 +1,7 @@
 import type { Track } from '../types/index.js';
 import { getEnvConfig } from './env.js';
 import { searchSpotify } from './spotify.js';
-import { searchTracks } from './ytdlp.js';
+import { searchTracks } from './audioResolver.js';
 
 interface RecommendationOptions {
   excludeIds?: string[];
@@ -29,6 +29,7 @@ const liveVersionKeywords = [
   'concert',
   'stage',
   'showcase',
+  'tour',
 ];
 
 function normalize(value: string): string {
@@ -89,7 +90,9 @@ function scoreRecommendation(seed: Track, candidate: Track, order: number): numb
   }
 
   for (const keyword of liveVersionKeywords) {
-    if (combined.includes(keyword) && !seedTitle.includes(keyword)) score -= 120;
+    if (combined.includes(keyword) && !seedTitle.includes(keyword)) {
+      score -= keyword === 'tour' ? 260 : 180;
+    }
   }
 
   if (candidate.duration > 0 && seed.duration > 0) {

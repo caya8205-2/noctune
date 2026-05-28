@@ -53,6 +53,11 @@ export const api = {
       body: JSON.stringify({ seed, excludeIds, limit }),
     }),
 
+  lyrics: (track: Track) =>
+    request<LyricsResult>(
+      `/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}`
+    ),
+
   getPlaylists: () => request<Playlist[]>('/playlists'),
   getLiked: () => request<Playlist>('/library/liked'),
   toggleLike: (track: Track) =>
@@ -123,6 +128,23 @@ export interface Playlist {
   updatedAt: number;
   trackIds: string[];
   tracks?: Track[];
+}
+
+export interface LyricLine {
+  time: number | null;
+  text: string;
+}
+
+export interface LyricsResult {
+  provider: 'lrclib';
+  id: number;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  instrumental: boolean;
+  synced: boolean;
+  lines: LyricLine[];
 }
 
 

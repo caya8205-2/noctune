@@ -1,0 +1,129 @@
+import type { AudioStreamInfo, Track } from '../types/index.js';
+import {
+  getYoutubePlaylistTracks as youtubeiGetYoutubePlaylistTracks,
+  getYoutubeTrack as youtubeiGetYoutubeTrack,
+  getYoutubeiStatus,
+  resolveAudioUrl as youtubeiResolveAudioUrl,
+  resolveTrack as youtubeiResolveTrack,
+  searchTracks as youtubeiSearchTracks,
+} from './youtubei.js';
+
+export type AudioResolverName = 'youtubei' | 'ytdlp';
+
+export interface PlaylistImportResult {
+  name: string;
+  tracks: Track[];
+}
+
+export interface ResolvedTrackResult {
+  track: Track;
+  audio: AudioStreamInfo;
+}
+
+export interface AudioResolver {
+  name: AudioResolverName;
+  searchTracks(query: string, limit?: number): Promise<Track[]>;
+  getYoutubeTrack(urlOrVideoId: string, originalQuery?: string): Promise<Track>;
+  getYoutubePlaylistTracks(url: string, limit?: number): Promise<PlaylistImportResult>;
+  resolveAudioUrl(videoId: string): Promise<AudioStreamInfo>;
+  resolveTrack(videoId: string, originalQuery: string): Promise<ResolvedTrackResult>;
+}
+
+const youtubeiResolver: AudioResolver = {
+  name: 'youtubei',
+  searchTracks: youtubeiSearchTracks,
+  getYoutubeTrack: youtubeiGetYoutubeTrack,
+  getYoutubePlaylistTracks: youtubeiGetYoutubePlaylistTracks,
+  resolveAudioUrl: youtubeiResolveAudioUrl,
+  resolveTrack: youtubeiResolveTrack,
+};
+
+let ytdlpResolverPromise: Promise<AudioResolver> | null = null;
+let ytdlpStatus: (() => unknown) | null = null;
+
+async function getYtdlpResolver(): Promise<AudioResolver> {
+  if (!ytdlpResolverPromise) {
+    ytdlpResolverPromise = import('./ytdlp.js').then((module) => {
+      ytdlpStatus = module.getYtdlpStatus;
+      return {
+        name: 'ytdlp',
+        searchTracks: module.searchTracks,
+        getYoutubeTrack: module.getYoutubeTrack,
+        getYoutubePlaylistTracks: module.getYoutubePlaylistTracks,
+        resolveAudioUrl: module.resolveAudioUrl,
+        resolveTrack: module.resolveTrack,
+      };
+    });
+  }
+  return ytdlpResolverPromise;
+}
+
+export function getAudioResolver(): AudioResolver {
+  return youtubeiResolver;
+}
+
+export function getAudioResolverStatus() {
+  const resolver = getAudioResolver();
+  return {
+    name: resolver.name,
+    youtubei: getYoutubeiStatus(),
+    ytdlp: ytdlpStatus ? ytdlpStatus() : { fallback: true, loaded: false },
+  };
+}
+
+async function withYtdlpFallback<T>(
+  operation: keyof AudioResolver,
+  runPrimary: () => Promise<T>,
+  runFallback: () => Promise<T>
+): Promise<T> {
+  try {
+    return await runPrimary();
+  } catch (err) {
+    console.warn(
+      `[audio-resolver] youtubei ${String(operation)} failed, falling back to yt-dlp: ${
+        (err as Error).message
+      }`
+    );
+    return runFallback();
+  }
+}
+
+export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
+  return withYtdlpFallback(
+    'searchTracks',
+    () => getAudioResolver().searchTracks(query, limit),
+    async () => (await getYtdlpResolver()).searchTracks(query, limit)
+  );
+}
+
+export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlOrVideoId): Promise<Track> {
+  return withYtdlpFallback(
+    'getYoutubeTrack',
+    () => getAudioResolver().getYoutubeTrack(urlOrVideoId, originalQuery),
+    async () => (await getYtdlpResolver()).getYoutubeTrack(urlOrVideoId, originalQuery)
+  );
+}
+
+export async function getYoutubePlaylistTracks(url: string, limit = 100): Promise<PlaylistImportResult> {
+  return withYtdlpFallback(
+    'getYoutubePlaylistTracks',
+    () => getAudioResolver().getYoutubePlaylistTracks(url, limit),
+    async () => (await getYtdlpResolver()).getYoutubePlaylistTracks(url, limit)
+  );
+}
+
+export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
+  return withYtdlpFallback(
+    'resolveAudioUrl',
+    () => getAudioResolver().resolveAudioUrl(videoId),
+    async () => (await getYtdlpResolver()).resolveAudioUrl(videoId)
+  );
+}
+
+export async function resolveTrack(videoId: string, originalQuery: string): Promise<ResolvedTrackResult> {
+  return withYtdlpFallback(
+    'resolveTrack',
+    () => getAudioResolver().resolveTrack(videoId, originalQuery),
+    async () => (await getYtdlpResolver()).resolveTrack(videoId, originalQuery)
+  );
+}

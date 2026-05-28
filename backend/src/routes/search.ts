@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getCachedByQuery } from '../services/cache.js';
-import { getYoutubeTrack, searchTracks } from '../services/ytdlp.js';
+import { getYoutubeTrack, searchTracks } from '../services/audioResolver.js';
 import { getEnvConfig } from '../services/env.js';
 import { getSpotifyTrackById, searchSpotify } from '../services/spotify.js';
 import { parseMediaUrl } from '../services/urlParser.js';

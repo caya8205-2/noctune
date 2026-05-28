@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { API_BASE } from '../utils/api';
+import { API_BASE, api } from '../utils/api';
 
 let activeAudio: HTMLAudioElement | null = null;
 
@@ -52,6 +52,7 @@ export function seekAudio(seconds: number) {
 export function useAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const suppressNextErrorRef = useRef(false);
+  const recoveryAttemptRef = useRef<string | null>(null);
 
   const {
     currentTrack,
@@ -115,6 +116,39 @@ export function useAudio() {
       console.error('[audio] error', e, target.error);
       setLoading(false);
       setIsPlaying(false);
+
+      const track = usePlayerStore.getState().currentTrack;
+      if (!track || track.localAudioPath || recoveryAttemptRef.current === track.id) return;
+
+      recoveryAttemptRef.current = track.id;
+      setLoading(true);
+      api.resolve(track.id, track.query)
+        .then((resolved) => {
+          const latestTrack = usePlayerStore.getState().currentTrack;
+          if (!latestTrack || latestTrack.id !== track.id) return;
+          usePlayerStore.setState({
+            currentTrack: {
+              ...resolved,
+              title: latestTrack.title,
+              artist: latestTrack.artist,
+              duration: latestTrack.duration,
+              thumbnail: latestTrack.thumbnail,
+              query: latestTrack.query,
+              spotifyId: latestTrack.spotifyId,
+              spotifyUrl: latestTrack.spotifyUrl,
+              youtubeId: latestTrack.youtubeId ?? resolved.id,
+              youtubeTitle: latestTrack.youtubeTitle,
+              youtubeArtist: latestTrack.youtubeArtist,
+            },
+          });
+          target.src = `${API_BASE}/player/stream/${resolved.id}?retry=${Date.now()}`;
+          target.load();
+          return playAudio(target);
+        })
+        .catch((err) => {
+          console.warn('[audio] recovery failed:', err);
+          setLoading(false);
+        });
     });
 
     return () => {
@@ -138,6 +172,7 @@ export function useAudio() {
       : API_BASE + '/player/stream/' + currentTrack.id;
 
     if (audio.src !== src) {
+      recoveryAttemptRef.current = null;
       audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
       audio.src = src;
       audio.load();

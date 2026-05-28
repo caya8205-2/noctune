@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
 import { getCachedById, isUrlFresh, upsertTrack } from './cache.js';
-import { resolveAudioUrl, resolveTrack } from './ytdlp.js';
+import { resolveAudioUrl, resolveTrack } from './audioResolver.js';
 import type { CachedTrack } from '../types/index.js';
 
 const prefetchQueue = new PQueue({ concurrency: 2 });

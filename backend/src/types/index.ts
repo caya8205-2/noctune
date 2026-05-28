@@ -66,3 +66,36 @@ export interface AudioStreamInfo {
   format: string;
   quality: string;
 }
+
+export interface LyricLine {
+  time: number | null;
+  text: string;
+}
+
+export interface LyricsResult {
+  provider: 'lrclib';
+  id: number;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  instrumental: boolean;
+  synced: boolean;
+  lines: LyricLine[];
+}
+
+export interface LyricsCacheEntry {
+  query: {
+    title: string;
+    artist: string;
+    duration: number;
+  };
+  lyrics: LyricsResult | null;
+  cachedAt: number;
+}
+
+export interface LyricsCacheStore {
+  version: number;
+  updatedAt: number;
+  entries: Record<string, LyricsCacheEntry>;
+}

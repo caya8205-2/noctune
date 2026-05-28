@@ -1,0 +1,191 @@
+import type { AudioStreamInfo, Track } from '../types/index.js';
+import type { PlaylistImportResult, ResolvedTrackResult } from './audioResolver.js';
+
+type YoutubeiModule = typeof import('youtubei.js');
+type InnertubeLike = Awaited<ReturnType<YoutubeiModule['Innertube']['create']>>;
+
+const importYoutubei = new Function('specifier', 'return import(specifier)') as (
+  specifier: string
+) => Promise<YoutubeiModule>;
+
+let innertubePromise: Promise<InnertubeLike> | null = null;
+
+async function getInnertube(): Promise<InnertubeLike> {
+  if (!innertubePromise) {
+    innertubePromise = importYoutubei('youtubei.js').then(({ Innertube }) => Innertube.create());
+  }
+  return innertubePromise;
+}
+
+function extractVideoId(urlOrVideoId: string): string {
+  try {
+    const url = new URL(urlOrVideoId);
+    if (url.hostname.includes('youtu.be')) {
+      return url.pathname.replace(/^\//, '').split('/')[0] || urlOrVideoId;
+    }
+    if (url.pathname.startsWith('/shorts/')) {
+      return url.pathname.split('/')[2] || urlOrVideoId;
+    }
+    return url.searchParams.get('v') || urlOrVideoId;
+  } catch {
+    return urlOrVideoId;
+  }
+}
+
+function extractPlaylistId(url: string): string {
+  try {
+    return new URL(url).searchParams.get('list') || url;
+  } catch {
+    return url;
+  }
+}
+
+function pickThumbnail(thumbnails: Array<{ url?: string; width?: number }> | undefined): string {
+  if (!thumbnails?.length) return '';
+  const sorted = [...thumbnails].sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+  const medium = sorted.find((thumbnail) => (thumbnail.width ?? 0) <= 480);
+  return medium?.url ?? sorted[0]?.url ?? '';
+}
+
+function toTrack(video: any, query: string): Track | null {
+  const id = video.video_id ?? video.id;
+  if (!id) return null;
+
+  return {
+    id,
+    title: video.title?.toString?.() ?? video.title?.text ?? id,
+    artist: video.author?.name ?? video.author ?? 'Unknown',
+    duration: video.duration?.seconds ?? 0,
+    thumbnail: video.best_thumbnail?.url ?? pickThumbnail(video.thumbnails),
+    query,
+  };
+}
+
+function trackFromInfo(info: any, originalQuery: string): Track {
+  const basic = info.basic_info ?? {};
+  const id = basic.id ?? extractVideoId(originalQuery);
+
+  return {
+    id,
+    title: basic.title ?? id,
+    artist: basic.author ?? basic.channel?.name ?? 'Unknown',
+    duration: basic.duration ?? 0,
+    thumbnail: pickThumbnail(basic.thumbnail),
+    query: originalQuery,
+  };
+}
+
+function parseAudioFormat(mimeType: string | undefined): string {
+  const mime = mimeType?.toLowerCase() ?? '';
+  if (mime.includes('mp4') || mime.includes('m4a')) return 'm4a';
+  if (mime.includes('webm')) return 'webm';
+  return 'audio';
+}
+
+export function getYoutubeiStatus() {
+  return {
+    available: true,
+    primaryClient: 'ANDROID_VR',
+  };
+}
+
+export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
+  const youtube = await getInnertube();
+  const search = await youtube.search(query);
+  const results = Array.from((search as any).results ?? []);
+  const tracks = results
+    .map((result) => toTrack(result, query))
+    .filter((track): track is Track => Boolean(track))
+    .slice(0, limit);
+
+  console.log(
+    `[search:youtubei] ${JSON.stringify({
+      query,
+      returned: tracks.length,
+      top: tracks.slice(0, 5).map((track) => ({
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+      })),
+    })}`
+  );
+
+  return tracks;
+}
+
+export async function getYoutubeTrack(
+  urlOrVideoId: string,
+  originalQuery = urlOrVideoId
+): Promise<Track> {
+  const youtube = await getInnertube();
+  const videoId = extractVideoId(urlOrVideoId);
+  const info = await youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any });
+  return trackFromInfo(info, originalQuery);
+}
+
+export async function getYoutubePlaylistTracks(
+  url: string,
+  limit = 100
+): Promise<PlaylistImportResult> {
+  const youtube = await getInnertube();
+  let playlist = await youtube.getPlaylist(extractPlaylistId(url));
+  const tracks: Track[] = [];
+
+  while (tracks.length < limit) {
+    for (const item of Array.from((playlist as any).items ?? [])) {
+      const track = toTrack(item, (item as any).title?.toString?.() ?? url);
+      if (track) tracks.push(track);
+      if (tracks.length >= limit) break;
+    }
+
+    if (tracks.length >= limit || !(playlist as any).has_continuation) break;
+    playlist = await playlist.getContinuation();
+  }
+
+  return {
+    name: (playlist as any).info?.title ?? 'YouTube Playlist',
+    tracks,
+  };
+}
+
+export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
+  const youtube = await getInnertube();
+  const format = await youtube.getStreamingData(videoId, {
+    type: 'audio',
+    quality: 'best',
+    format: 'mp4',
+    client: 'ANDROID_VR' as any,
+  });
+
+  if (!format.url) {
+    throw new Error(`No playable YouTube.js format found for ${videoId}`);
+  }
+
+  return {
+    videoId,
+    url: format.url,
+    expiry: Date.now() + (5 * 60 + 45) * 60 * 1000,
+    format: parseAudioFormat(format.mime_type),
+    quality: format.average_bitrate
+      ? `${Math.round(format.average_bitrate / 1000)}kbps`
+      : format.bitrate
+        ? `${Math.round(format.bitrate / 1000)}kbps`
+        : 'unknown',
+  };
+}
+
+export async function resolveTrack(
+  videoId: string,
+  originalQuery: string
+): Promise<ResolvedTrackResult> {
+  const youtube = await getInnertube();
+  const [info, audio] = await Promise.all([
+    youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any }),
+    resolveAudioUrl(videoId),
+  ]);
+
+  return {
+    track: trackFromInfo(info, originalQuery),
+    audio,
+  };
+}

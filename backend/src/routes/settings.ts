@@ -8,6 +8,7 @@ import {
     getCacheStats,
     importCacheStore,
 } from '../services/cache.js';
+import { clearLyricsCacheStore, getLyricsCacheStats } from '../services/lyrics.js';
 
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
@@ -117,6 +118,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     // DELETE /settings/cache — clear cache learning JSON
     app.delete('/settings/cache', async (_req, reply) => {
         clearCacheStore();
-        return reply.send({ ok: true, cache: getCacheStats() });
+        clearLyricsCacheStore();
+        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats() });
     });
 }

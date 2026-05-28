@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PQueue from 'p-queue';
 import type { Track } from '../types/index.js';
-import { searchTracks } from './ytdlp.js';
+import { searchTracks } from './audioResolver.js';
 import { getDataDir } from './env.js';
 
 interface MatchCacheEntry {
@@ -27,7 +27,7 @@ interface ScoredCandidate {
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
@@ -90,6 +90,7 @@ const liveVersionKeywords = [
   'concert',
   'stage',
   'showcase',
+  'tour',
 ];
 
 function ensureDataDir() {
@@ -104,7 +105,11 @@ function loadStore(): MatchCacheStore {
   }
 
   try {
-    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8')) as MatchCacheStore;
+    const loaded = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8')) as MatchCacheStore;
+    if (loaded.version !== CACHE_VERSION) {
+      return { version: CACHE_VERSION, updatedAt: Date.now(), matches: {} };
+    }
+    return loaded;
   } catch {
     return { version: CACHE_VERSION, updatedAt: Date.now(), matches: {} };
   }
@@ -204,7 +209,7 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const keyword of liveVersionKeywords) {
     if (combined.includes(keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
-      score -= 110;
+      score -= keyword === 'tour' ? 260 : 180;
       reasons.push(`live-version:${keyword}`);
     }
   }

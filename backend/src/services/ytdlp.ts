@@ -1,7 +1,49 @@
 import YTDlpWrap from 'yt-dlp-wrap';
+import fs from 'fs';
+import path from 'path';
 import { Track, AudioStreamInfo } from '../types/index.js';
 
-const ytDlp = new YTDlpWrap();
+function firstExistingPath(paths: string[]): string | undefined {
+  return paths.find((candidate) => {
+    try {
+      return fs.existsSync(candidate);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function resolveYtdlpBinaryPath(): string | undefined {
+  if (process.env.YT_DLP_PATH && fs.existsSync(process.env.YT_DLP_PATH)) {
+    return process.env.YT_DLP_PATH;
+  }
+
+  const exeDir = path.dirname(process.execPath);
+  return firstExistingPath([
+    path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
+    path.join(process.cwd(), 'yt-dlp.exe'),
+    path.join(process.cwd(), 'yt-dlp-x86_64-pc-windows-msvc.exe'),
+    path.join(exeDir, 'yt-dlp.exe'),
+    path.join(exeDir, 'bin', 'yt-dlp.exe'),
+    path.join(exeDir, 'yt-dlp-x86_64-pc-windows-msvc.exe'),
+  ]);
+}
+
+const resolvedBinaryPath = resolveYtdlpBinaryPath();
+const ytDlp = new YTDlpWrap(resolvedBinaryPath);
+
+if (resolvedBinaryPath) {
+  console.log(`[ytdlp] using bundled binary at ${resolvedBinaryPath}`);
+} else {
+  console.warn('[ytdlp] no bundled binary found, falling back to yt-dlp from PATH');
+}
+
+export function getYtdlpStatus() {
+  return {
+    binaryPath: resolvedBinaryPath ?? null,
+    source: resolvedBinaryPath ? 'bundled' : 'path',
+  };
+}
 
 // yt-dlp raw info shape (partial — only what we need)
 interface YTInfo {

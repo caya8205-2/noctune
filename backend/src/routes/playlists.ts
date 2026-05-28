@@ -15,7 +15,7 @@ import {
 } from '../services/playlist.js';
 import { parseMediaUrl } from '../services/urlParser.js';
 import { getSpotifyPlaylistTracks } from '../services/spotify.js';
-import { getYoutubePlaylistTracks } from '../services/ytdlp.js';
+import { getYoutubePlaylistTracks } from '../services/audioResolver.js';
 
 const CreateBody = z.object({ name: z.string().min(1).max(100) });
 const UpdateBody = z.object({

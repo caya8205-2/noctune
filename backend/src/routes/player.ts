@@ -7,7 +7,7 @@ import {
   refreshTrackUrl,
   upsertTrack,
 } from '../services/cache.js';
-import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/ytdlp.js';
+import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
 import { Readable } from 'stream';
 import { matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { Track } from '../types/index.js';
@@ -57,6 +57,42 @@ async function resolvePlayableVideoId(videoId: string, query: string): Promise<s
   return match?.id ?? null;
 }
 
+function normalizeLookup(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hasLiveVersionSignal(value: string): boolean {
+  const normalized = normalizeLookup(value);
+  return ['live', 'concert', 'stage', 'showcase', 'tour'].some((keyword) =>
+    normalized.includes(keyword)
+  );
+}
+
+async function avoidUnwantedLiveVersion(
+  videoId: string,
+  query: string,
+  trackTitle: string
+): Promise<string> {
+  const normalizedQuery = normalizeLookup(query);
+  if (
+    !normalizedQuery ||
+    normalizedQuery === normalizeLookup(videoId) ||
+    hasLiveVersionSignal(query) ||
+    !hasLiveVersionSignal(trackTitle)
+  ) {
+    return videoId;
+  }
+
+  const replacement = (await searchTracks(query, 8)).find(
+    (candidate) => candidate.id !== videoId && !hasLiveVersionSignal(candidate.title)
+  );
+  return replacement?.id ?? videoId;
+}
+
 async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<string[]> {
   const directIds = videoIds.filter((id) => !id.startsWith('spotify:'));
   const trackIds = await Promise.all(
@@ -76,27 +112,89 @@ function isLikelyWebmStream(contentType: string | null, audioUrl: string): boole
   return content.includes('webm') || url.includes('audio%2fwebm') || url.includes('audio/webm');
 }
 
+function isLimitedIosStream(audioUrl: string): boolean {
+  try {
+    return new URL(audioUrl).searchParams.get('c')?.toUpperCase() === 'IOS';
+  } catch {
+    return audioUrl.includes('c=IOS');
+  }
+}
+
+const STREAM_CHUNK_SIZE = 64 * 1024;
+
+function normalizeUpstreamRange(range: string | undefined, chunkSize = STREAM_CHUNK_SIZE): string {
+  if (!range) return `bytes=0-${chunkSize - 1}`;
+
+  const openEnded = range.match(/^bytes=(\d+)-$/i);
+  if (openEnded) {
+    const start = Number(openEnded[1]);
+    return `bytes=${start}-${start + chunkSize - 1}`;
+  }
+
+  return range;
+}
+
 async function fetchAudioStream(
   videoId: string,
   audioUrl: string,
   range: string | undefined,
   refreshIfWebm: boolean
-): Promise<{ res: Response; refreshed: boolean }> {
+): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
+  const upstreamRange = normalizeUpstreamRange(range);
   const res = await fetch(audioUrl, {
-    headers: range ? { Range: range } : undefined,
+    headers: { Range: upstreamRange },
   });
 
-  if (!refreshIfWebm || !isLikelyWebmStream(res.headers.get('content-type'), audioUrl)) {
-    return { res, refreshed: false };
+  const shouldRefresh =
+    !res.ok ||
+    isLimitedIosStream(audioUrl) ||
+    (refreshIfWebm && isLikelyWebmStream(res.headers.get('content-type'), audioUrl));
+
+  if (!shouldRefresh) {
+    return { res, refreshed: false, audioUrl };
   }
 
   res.body?.cancel().catch(() => {});
   const refreshedAudio = await resolveAudioUrl(videoId);
   refreshTrackUrl(videoId, refreshedAudio.url);
   const refreshedRes = await fetch(refreshedAudio.url, {
-    headers: range ? { Range: range } : undefined,
+    headers: { Range: upstreamRange },
   });
-  return { res: refreshedRes, refreshed: true };
+  return { res: refreshedRes, refreshed: true, audioUrl: refreshedAudio.url };
+}
+
+function parseContentRange(value: string | null): { start: number; end: number; total: number } | null {
+  const match = value?.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+  if (!match) return null;
+  return {
+    start: Number(match[1]),
+    end: Number(match[2]),
+    total: Number(match[3]),
+  };
+}
+
+function createChunkedAudioStream(
+  audioUrl: string,
+  firstRes: Response,
+  firstRange: { start: number; end: number; total: number },
+  chunkSize = STREAM_CHUNK_SIZE
+): Readable {
+  async function* streamChunks() {
+    if (firstRes.body) {
+      yield* Readable.fromWeb(firstRes.body as any);
+    }
+
+    for (let start = firstRange.end + 1; start < firstRange.total; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, firstRange.total - 1);
+      const res = await fetch(audioUrl, {
+        headers: { Range: `bytes=${start}-${end}` },
+      });
+      if (!res.ok || !res.body) break;
+      yield* Readable.fromWeb(res.body as any);
+    }
+  }
+
+  return Readable.from(streamChunks());
 }
 
 export async function playerRoutes(app: FastifyInstance) {
@@ -126,6 +224,19 @@ export async function playerRoutes(app: FastifyInstance) {
 
       const prefetched = getPrefetched(playableVideoId);
       if (prefetched && isUrlFresh(prefetched)) {
+        const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, prefetched.title);
+        if (replacementId !== playableVideoId) {
+          consumePrefetch(playableVideoId);
+          app.log.info(
+            { videoId: playableVideoId, replacementId, query, title: prefetched.title },
+            '[player] replacing unwanted live/tour prefetched match'
+          );
+          const { track, audio } = await resolveTrack(replacementId, query);
+          const saved = upsertTrack(query, track, audio.url);
+          recordPlay(replacementId);
+          return reply.send({ ...saved, source: 'resolved' });
+        }
+
         consumePrefetch(playableVideoId);
         recordPlay(playableVideoId);
         app.log.info(
@@ -146,6 +257,18 @@ export async function playerRoutes(app: FastifyInstance) {
 
       const cached = getCachedById(playableVideoId);
       if (cached && isUrlFresh(cached)) {
+        const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, cached.title);
+        if (replacementId !== playableVideoId) {
+          app.log.info(
+            { videoId: playableVideoId, replacementId, query, title: cached.title },
+            '[player] replacing unwanted live/tour cached match'
+          );
+          const { track, audio } = await resolveTrack(replacementId, query);
+          const saved = upsertTrack(query, track, audio.url);
+          recordPlay(replacementId);
+          return reply.send({ ...saved, source: 'resolved' });
+        }
+
         recordPlay(playableVideoId);
         app.log.info(
           { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
@@ -176,6 +299,18 @@ export async function playerRoutes(app: FastifyInstance) {
       try {
         app.log.info({ videoId: playableVideoId }, '[player] cold resolve start');
         const { track, audio } = await resolveTrack(playableVideoId, query);
+        const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, track.title);
+        if (replacementId !== playableVideoId) {
+          app.log.info(
+            { videoId: playableVideoId, replacementId, query, title: track.title },
+            '[player] replacing unwanted live/tour cold match'
+          );
+          const replacement = await resolveTrack(replacementId, query);
+          const saved = upsertTrack(query, replacement.track, replacement.audio.url);
+          recordPlay(replacementId);
+          return reply.send({ ...saved, source: 'resolved' });
+        }
+
         const saved = upsertTrack(query, track, audio.url);
         recordPlay(playableVideoId);
         app.log.info(
@@ -195,24 +330,78 @@ export async function playerRoutes(app: FastifyInstance) {
   // Stream audio through backend (bypass CORS for Web Audio API)
   app.get('/player/stream/:videoId', async (req, reply) => {
     const { videoId } = req.params as { videoId: string };
-    const cached = getCachedById(videoId);
-    if (!cached || !isUrlFresh(cached)) {
+    let cached = getCachedById(videoId);
+    if (!cached) {
+      try {
+        app.log.info({ videoId }, '[player] stream cache miss, resolving on demand');
+        const { track, audio } = await resolveTrack(videoId, videoId);
+        cached = upsertTrack(videoId, track, audio.url);
+      } catch (err) {
+        app.log.warn(err, `[player] stream cache miss resolve failed for ${videoId}`);
+        return reply
+          .status(404)
+          .send({ error: 'No fresh stream, resolve first', message: (err as Error).message });
+      }
+    } else if (!isUrlFresh(cached)) {
+      try {
+        app.log.info({ videoId }, '[player] stream cache stale, refreshing URL');
+        const audio = await resolveAudioUrl(videoId);
+        refreshTrackUrl(videoId, audio.url);
+        cached = getCachedById(videoId);
+      } catch (err) {
+        app.log.warn(err, `[player] stream stale refresh failed for ${videoId}`);
+        return reply
+          .status(404)
+          .send({ error: 'No fresh stream, resolve first', message: (err as Error).message });
+      }
+    }
+
+    if (!cached) {
       return reply.status(404).send({ error: 'No fresh stream, resolve first' });
     }
+
     try {
       const range = req.headers.range;
-      const { res: ytRes, refreshed } = await fetchAudioStream(videoId, cached.audioUrl, range, true);
+      const { res: ytRes, refreshed, audioUrl } = await fetchAudioStream(
+        videoId,
+        cached.audioUrl,
+        range,
+        true
+      );
       if (!ytRes.ok || !ytRes.body) {
-        return reply.status(502).send({ error: 'YouTube stream failed' });
+        app.log.warn(
+          {
+            videoId,
+            upstreamStatus: ytRes.status,
+            upstreamStatusText: ytRes.statusText,
+            refreshed,
+          },
+          '[player] YouTube stream failed after refresh attempt'
+        );
+        return reply
+          .status(502)
+          .send({ error: 'YouTube stream failed', status: ytRes.status, refreshed });
       }
 
       if (refreshed) {
-        app.log.info({ videoId }, '[player] refreshed WebM stream to compatible audio');
+        app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
       }
 
       const contentLength = ytRes.headers.get('content-length');
       const contentRange = ytRes.headers.get('content-range');
       const acceptRanges = ytRes.headers.get('accept-ranges') ?? 'bytes';
+
+      const rangeInfo = parseContentRange(contentRange);
+      if (!range && rangeInfo) {
+        reply
+          .status(200)
+          .header('Content-Type', ytRes.headers.get('content-type') || 'audio/mp4')
+          .header('Access-Control-Allow-Origin', '*')
+          .header('Accept-Ranges', acceptRanges)
+          .header('Cache-Control', 'public, max-age=3600');
+
+        return reply.send(createChunkedAudioStream(audioUrl, ytRes, rangeInfo));
+      }
 
       if (ytRes.status === 206) reply.status(206);
       reply
