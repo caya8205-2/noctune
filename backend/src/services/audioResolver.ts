@@ -84,7 +84,15 @@ async function withYtdlpFallback<T>(
         (err as Error).message
       }`
     );
-    return runFallback();
+    try {
+      return await runFallback();
+    } catch (fallbackErr) {
+      throw new Error(
+        `youtubei ${String(operation)} failed: ${(err as Error).message}; yt-dlp fallback failed: ${
+          (fallbackErr as Error).message
+        }`
+      );
+    }
   }
 }
 

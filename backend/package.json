@@ -14,7 +14,9 @@
     "scripts": "dist/**/*.js",
     "assets": [
       "../node_modules/better-sqlite3/prebuilds/**/*",
-      "../node_modules/better-sqlite3/build/Release/**/*.node"
+      "../node_modules/better-sqlite3/build/Release/**/*.node",
+      "../node_modules/youtubei.js/package.json",
+      "../node_modules/youtubei.js/bundle/browser.js"
     ]
   },
   "dependencies": {

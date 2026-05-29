@@ -1,18 +1,34 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import type { AudioStreamInfo, Track } from '../types/index.js';
 import type { PlaylistImportResult, ResolvedTrackResult } from './audioResolver.js';
 
 type YoutubeiModule = typeof import('youtubei.js');
 type InnertubeLike = Awaited<ReturnType<YoutubeiModule['Innertube']['create']>>;
 
-const importYoutubei = new Function('specifier', 'return import(specifier)') as (
-  specifier: string
-) => Promise<YoutubeiModule>;
+const nodeRequire = createRequire(__filename);
 
+let youtubeiModulePromise: Promise<YoutubeiModule> | null = null;
 let innertubePromise: Promise<InnertubeLike> | null = null;
+
+function loadYoutubeiWebBundle(): YoutubeiModule {
+  const bundlePath = nodeRequire.resolve('youtubei.js/web.bundle');
+  const bundleSource = readFileSync(bundlePath, 'utf8').replace(
+    /export\s*\{[\s\S]*?\};\s*(?:\/\/# sourceMappingURL=.*)?\s*$/,
+    'return { Innertube };'
+  );
+  const loadBundle = new Function(bundleSource) as () => YoutubeiModule;
+  return loadBundle();
+}
+
+async function getYoutubeiModule(): Promise<YoutubeiModule> {
+  youtubeiModulePromise ??= Promise.resolve(loadYoutubeiWebBundle());
+  return youtubeiModulePromise;
+}
 
 async function getInnertube(): Promise<InnertubeLike> {
   if (!innertubePromise) {
-    innertubePromise = importYoutubei('youtubei.js').then(({ Innertube }) => Innertube.create());
+    innertubePromise = getYoutubeiModule().then(({ Innertube }) => Innertube.create());
   }
   return innertubePromise;
 }
