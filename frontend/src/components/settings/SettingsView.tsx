@@ -21,7 +21,7 @@ import {
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.5';
+const APP_VERSION = 'v1.0.0-beta.5.1';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -155,13 +155,13 @@ export function SettingsView() {
         setData((current) =>
           current
             ? {
-                ...current,
-                spotify: {
-                  ...current.spotify,
-                  clientId: clientId || current.spotify.clientId,
-                  configured: true,
-                },
-              }
+              ...current,
+              spotify: {
+                ...current.spotify,
+                clientId: clientId || current.spotify.clientId,
+                configured: true,
+              },
+            }
             : current
         );
         setClientSecret('');
@@ -402,11 +402,10 @@ export function SettingsView() {
 
         {testResult && (
           <div
-            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
-              testResult.ok
+            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${testResult.ok
                 ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
-            }`}
+              }`}
           >
             {testResult.ok ? (
               <>
@@ -523,19 +522,17 @@ export function SettingsView() {
             <span className="block text-xs text-muted mt-1">Show candidate score and reasons in Search while tuning resolver matches.</span>
           </span>
           <span
-            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${
-              debugSearch
+            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${debugSearch
                 ? 'border-accent/50 bg-accent/25'
                 : 'border-base-600 bg-base-800'
-            }`}
+              }`}
             aria-hidden="true"
           >
             <span
-              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${
-                debugSearch
+              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${debugSearch
                   ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
                   : 'translate-x-1 bg-muted'
-              }`}
+                }`}
             />
           </span>
         </button>
@@ -553,11 +550,10 @@ export function SettingsView() {
 
         {cacheMessage && (
           <div
-            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
-              cacheMessage.ok
+            className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${cacheMessage.ok
                 ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
-            }`}
+              }`}
           >
             {cacheMessage.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
             {cacheMessage.text}
