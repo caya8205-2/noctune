@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import PQueue from 'p-queue';
 import {
   getCachedById,
   isUrlFresh,
-  recordPlay,
+  recordPlayWithMetadata,
   refreshTrackUrl,
   setLocalAudioPath,
   upsertTrack,
@@ -30,8 +31,11 @@ import {
   touchAudioCache,
 } from '../services/audioFileCache.js';
 import { getEnvConfig } from '../services/env.js';
+import { markPlaybackFailed } from '../services/playbackBlacklist.js';
 
 const PlayParams = z.object({ videoId: z.string().min(5).max(64) });
+const audioCacheQueue = new PQueue({ concurrency: 2 });
+const audioCacheInFlight = new Set<string>();
 
 const QueueBody = z.object({
   videoIds: z.array(z.string()).min(1).max(10).optional(),
@@ -50,6 +54,40 @@ const QueueBody = z.object({
   })).min(1).max(10).optional(),
 }).refine((body) => body.videoIds?.length || body.tracks?.length, {
   message: 'Either videoIds or tracks is required',
+});
+
+const AudioCacheBody = z.object({
+  videoIds: z.array(z.string()).max(100).optional(),
+  tracks: z.array(z.object({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    artist: z.string().default(''),
+    duration: z.number().default(0),
+    thumbnail: z.string().default(''),
+    query: z.string().default(''),
+    spotifyId: z.string().optional(),
+    spotifyUrl: z.string().optional(),
+    youtubeId: z.string().optional(),
+    youtubeTitle: z.string().optional(),
+    youtubeArtist: z.string().optional(),
+  })).max(100).optional(),
+}).refine((body) => body.videoIds?.length || body.tracks?.length, {
+  message: 'Either videoIds or tracks is required',
+});
+
+const PlayedBody = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  artist: z.string().default(''),
+  duration: z.number().default(0),
+  thumbnail: z.string().default(''),
+  query: z.string().default(''),
+  spotifyId: z.string().optional(),
+  spotifyUrl: z.string().optional(),
+  youtubeId: z.string().optional(),
+  youtubeTitle: z.string().optional(),
+  youtubeArtist: z.string().optional(),
+  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation']).optional(),
 });
 
 function isYoutubeVideoId(id: string): boolean {
@@ -189,6 +227,10 @@ function parseContentRange(value: string | null): { start: number; end: number; 
   };
 }
 
+function isOpenEndedRangeFromStart(range: string | undefined): boolean {
+  return /^bytes=0-$/i.test(range ?? '');
+}
+
 function audioFormatFromContentType(contentType: string | null): string {
   const content = contentType?.toLowerCase() ?? '';
   return content.includes('webm') ? 'webm' : 'm4a';
@@ -207,6 +249,7 @@ function createChunkedAudioStream(
   const writer = fs.createWriteStream(tempPath);
 
   async function* streamChunks() {
+    let completed = false;
     try {
       if (firstRes.body) {
         for await (const chunk of Readable.fromWeb(firstRes.body as any)) {
@@ -226,9 +269,10 @@ function createChunkedAudioStream(
           yield chunk;
         }
       }
+      completed = true;
     } finally {
       writer.end(() => {
-        if (commitAudioCache(tempPath, finalPath)) {
+        if (completed && commitAudioCache(tempPath, finalPath)) {
           setLocalAudioPath(videoId, finalPath);
           enforceAudioCacheLimit(getEnvConfig().audioCacheLimitMb * 1024 * 1024);
         } else {
@@ -239,6 +283,98 @@ function createChunkedAudioStream(
   }
 
   return Readable.from(streamChunks());
+}
+
+function writeAudioChunk(writer: fs.WriteStream, chunk: Buffer | Uint8Array): Promise<void> {
+  return new Promise((resolve, reject) => {
+    writer.once('error', reject);
+    if (writer.write(chunk)) {
+      writer.off('error', reject);
+      resolve();
+      return;
+    }
+    writer.once('drain', () => {
+      writer.off('error', reject);
+      resolve();
+    });
+  });
+}
+
+function finishWriter(writer: fs.WriteStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    writer.once('error', reject);
+    writer.end(resolve);
+  });
+}
+
+async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolean> {
+  if (getExistingAudioCachePath(videoId)) return true;
+
+  const { res, audioUrl: resolvedAudioUrl } = await fetchAudioStream(videoId, audioUrl, undefined, true);
+  if (!res.ok || !res.body) return false;
+
+  const rangeInfo = parseContentRange(res.headers.get('content-range'));
+  const format = audioFormatFromContentType(res.headers.get('content-type'));
+  const tempPath = getTempAudioCachePath(videoId);
+  const finalPath = getAudioCachePath(videoId, format);
+  const writer = fs.createWriteStream(tempPath);
+  let completed = false;
+
+  try {
+    for await (const chunk of Readable.fromWeb(res.body as any)) {
+      await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
+    }
+
+    if (rangeInfo) {
+      for (let start = rangeInfo.end + 1; start < rangeInfo.total; start += STREAM_CHUNK_SIZE) {
+        const end = Math.min(start + STREAM_CHUNK_SIZE - 1, rangeInfo.total - 1);
+        const chunkRes = await fetch(resolvedAudioUrl, {
+          headers: { Range: `bytes=${start}-${end}` },
+        });
+        if (!chunkRes.ok || !chunkRes.body) return false;
+        for await (const chunk of Readable.fromWeb(chunkRes.body as any)) {
+          await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
+        }
+      }
+    }
+
+    completed = true;
+    await finishWriter(writer);
+    if (!commitAudioCache(tempPath, finalPath)) return false;
+    setLocalAudioPath(videoId, finalPath);
+    enforceAudioCacheLimit(getEnvConfig().audioCacheLimitMb * 1024 * 1024);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (!completed) {
+      try {
+        writer.destroy();
+      } catch {}
+      discardAudioCache(tempPath);
+    }
+  }
+}
+
+async function scheduleAudioCache(videoIds: string[], app: FastifyInstance) {
+  for (const videoId of videoIds) {
+    if (audioCacheInFlight.has(videoId) || getExistingAudioCachePath(videoId)) continue;
+    audioCacheInFlight.add(videoId);
+    audioCacheQueue.add(async () => {
+      try {
+        const cached = getCachedById(videoId);
+        const audioUrl = cached && isUrlFresh(cached)
+          ? cached.audioUrl
+          : (await resolveAudioUrl(videoId)).url;
+        const ok = await cacheAudioFile(videoId, audioUrl);
+        app.log.info({ videoId, ok }, '[player] audio cache job done');
+      } catch (err) {
+        app.log.warn({ videoId, err }, '[player] audio cache job failed');
+      } finally {
+        audioCacheInFlight.delete(videoId);
+      }
+    }).catch((err) => app.log.warn({ videoId, err }, '[player] audio cache queue error'));
+  }
 }
 
 function streamLocalAudioFile(filePath: string, range: string | undefined, reply: any) {
@@ -308,12 +444,10 @@ export async function playerRoutes(app: FastifyInstance) {
           );
           const { track, audio } = await resolveTrack(replacementId, query);
           const saved = upsertTrack(query, track, audio.url);
-          recordPlay(replacementId);
           return reply.send({ ...saved, source: 'resolved' });
         }
 
         consumePrefetch(playableVideoId);
-        recordPlay(playableVideoId);
         app.log.info(
           { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
           '[player] prefetch hit'
@@ -340,11 +474,9 @@ export async function playerRoutes(app: FastifyInstance) {
           );
           const { track, audio } = await resolveTrack(replacementId, query);
           const saved = upsertTrack(query, track, audio.url);
-          recordPlay(replacementId);
           return reply.send({ ...saved, source: 'resolved' });
         }
 
-        recordPlay(playableVideoId);
         app.log.info(
           { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
           '[player] cache hit fresh'
@@ -358,7 +490,6 @@ export async function playerRoutes(app: FastifyInstance) {
           const audio = await resolveAudioUrl(playableVideoId);
           refreshTrackUrl(playableVideoId, audio.url);
           const refreshed = getCachedById(playableVideoId)!;
-          recordPlay(playableVideoId);
           app.log.info(
             { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
             '[player] cache URL refreshed'
@@ -382,12 +513,10 @@ export async function playerRoutes(app: FastifyInstance) {
           );
           const replacement = await resolveTrack(replacementId, query);
           const saved = upsertTrack(query, replacement.track, replacement.audio.url);
-          recordPlay(replacementId);
           return reply.send({ ...saved, source: 'resolved' });
         }
 
         const saved = upsertTrack(query, track, audio.url);
-        recordPlay(playableVideoId);
         app.log.info(
           { videoId: playableVideoId, title: track.title, elapsedMs: Date.now() - startedAt },
           '[player] cold resolve done'
@@ -395,12 +524,26 @@ export async function playerRoutes(app: FastifyInstance) {
         return reply.send({ ...saved, source: 'resolved' });
       } catch (err) {
         app.log.error(err, `[player] full resolve failed for ${playableVideoId}`);
+        markPlaybackFailed(playableVideoId);
         return reply
           .status(502)
           .send({ error: 'Could not resolve audio', message: (err as Error).message });
       }
     }
   );
+
+  app.post('/player/played', async (req, reply) => {
+    const parsed = PlayedBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const track = recordPlayWithMetadata(parsed.data);
+    if (!track) {
+      return reply.status(404).send({ error: 'Track is not cached yet' });
+    }
+    return reply.send({ ok: true, track });
+  });
 
   // Stream audio through backend (bypass CORS for Web Audio API)
   app.get('/player/stream/:videoId', async (req, reply) => {
@@ -456,6 +599,7 @@ export async function playerRoutes(app: FastifyInstance) {
         true
       );
       if (!ytRes.ok || !ytRes.body) {
+        markPlaybackFailed(videoId);
         app.log.warn(
           {
             videoId,
@@ -485,6 +629,26 @@ export async function playerRoutes(app: FastifyInstance) {
           .header('Content-Type', ytRes.headers.get('content-type') || 'audio/mp4')
           .header('Access-Control-Allow-Origin', '*')
           .header('Accept-Ranges', acceptRanges)
+          .header('Cache-Control', 'public, max-age=3600');
+
+        return reply.send(
+          createChunkedAudioStream(
+            videoId,
+            audioUrl,
+            ytRes,
+            rangeInfo,
+            audioFormatFromContentType(ytRes.headers.get('content-type'))
+          )
+        );
+      }
+
+      if (isOpenEndedRangeFromStart(range) && rangeInfo?.start === 0) {
+        reply
+          .status(206)
+          .header('Content-Type', ytRes.headers.get('content-type') || 'audio/mp4')
+          .header('Access-Control-Allow-Origin', '*')
+          .header('Accept-Ranges', acceptRanges)
+          .header('Content-Range', `bytes 0-${rangeInfo.total - 1}/${rangeInfo.total}`)
           .header('Cache-Control', 'public, max-age=3600');
 
         return reply.send(
@@ -539,5 +703,49 @@ export async function playerRoutes(app: FastifyInstance) {
       app.log.warn(err, '[player] prefetch scheduling error')
     );
     return reply.send({ scheduled: playableIds.slice(0, 5), message: 'Prefetch queued' });
+  });
+
+  app.post('/player/cache-audio/status', async (req, reply) => {
+    const parsed = AudioCacheBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const { videoIds = [], tracks = [] } = parsed.data;
+    const trackStatuses = await Promise.all(
+      tracks.map(async (track) => {
+        const [playableId] = await resolvePrefetchIds([], [track]);
+        return {
+          id: track.id,
+          playableId: playableId ?? null,
+          cached: playableId ? Boolean(getExistingAudioCachePath(playableId)) : false,
+          inFlight: playableId ? audioCacheInFlight.has(playableId) : false,
+        };
+      })
+    );
+    const playableIds = await resolvePrefetchIds(videoIds, []);
+    const cachedIds = playableIds.filter((id) => Boolean(getExistingAudioCachePath(id)));
+    return reply.send({
+      playableIds,
+      cachedIds,
+      inFlightIds: playableIds.filter((id) => audioCacheInFlight.has(id)),
+      tracks: trackStatuses,
+    });
+  });
+
+  app.post('/player/cache-audio', async (req, reply) => {
+    const parsed = AudioCacheBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const { videoIds = [], tracks = [] } = parsed.data;
+    const playableIds = await resolvePrefetchIds(videoIds, tracks);
+    await scheduleAudioCache(playableIds, app);
+    return reply.send({
+      scheduled: playableIds.filter((id) => !getExistingAudioCachePath(id)),
+      cachedIds: playableIds.filter((id) => Boolean(getExistingAudioCachePath(id))),
+      message: 'Audio cache queued',
+    });
   });
 }

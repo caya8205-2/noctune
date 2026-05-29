@@ -2,6 +2,7 @@ import type { Track } from '../types/index.js';
 import { getEnvConfig } from './env.js';
 import { searchSpotify } from './spotify.js';
 import { searchTracks } from './audioResolver.js';
+import { getPlaybackBlacklist, isPlaybackBlacklisted } from './playbackBlacklist.js';
 
 interface RecommendationOptions {
   excludeIds?: string[];
@@ -11,8 +12,39 @@ interface RecommendationOptions {
 const badKeywords = [
   'reaction',
   'reacts',
+  'react',
   'review',
+  'breakdown',
+  'analysis',
   'cover',
+  'ai cover',
+  'piano cover',
+  'piano version',
+  'piano arrangement',
+  'piano instrumental',
+  'piano solo',
+  'instrumental cover',
+  'guitar cover',
+  'guitar instrumental',
+  'drum cover',
+  'drums cover',
+  'drum cam',
+  'drum playthrough',
+  'drum performance',
+  'violin cover',
+  'orchestra cover',
+  'orchestral cover',
+  'acoustic cover',
+  'backing track',
+  'backtrack',
+  'minus one',
+  'off vocal',
+  'no vocal',
+  'no vocals',
+  'sheet music',
+  'synthesia',
+  'parody',
+  'meme',
   'karaoke',
   'instrumental',
   'tutorial',
@@ -20,6 +52,34 @@ const badKeywords = [
   'sped up',
   'slowed',
   '8d',
+];
+
+const instrumentalCoverKeywords = [
+  'piano cover',
+  'piano version',
+  'piano arrangement',
+  'piano instrumental',
+  'piano solo',
+  'instrumental cover',
+  'guitar cover',
+  'guitar instrumental',
+  'drum cover',
+  'drums cover',
+  'drum cam',
+  'drum playthrough',
+  'drum performance',
+  'violin cover',
+  'orchestra cover',
+  'orchestral cover',
+  'acoustic cover',
+  'backing track',
+  'backtrack',
+  'minus one',
+  'off vocal',
+  'no vocal',
+  'no vocals',
+  'sheet music',
+  'synthesia',
 ];
 
 const liveVersionKeywords = [
@@ -91,7 +151,17 @@ function scoreRecommendation(seed: Track, candidate: Track, order: number): numb
   if (title === seedTitle || title.includes(seedTitle)) score -= 120;
 
   for (const keyword of badKeywords) {
-    if (combined.includes(keyword) && !seedTitle.includes(keyword)) score -= 100;
+    if (combined.includes(keyword) && !seedTitle.includes(keyword)) {
+      score -= instrumentalCoverKeywords.includes(keyword)
+        ? 200
+        : keyword.includes('react') || keyword === 'ai cover'
+          ? 220
+          : 100;
+    }
+  }
+
+  for (const keyword of ['sings', 'singing', 'sung by']) {
+    if (combined.includes(keyword) && !seedTitle.includes(keyword)) score -= 140;
   }
 
   for (const keyword of liveVersionKeywords) {
@@ -139,6 +209,7 @@ export async function getRecommendations(
 ): Promise<Track[]> {
   const limit = options.limit ?? 12;
   const excluded = new Set([seed.id, seed.youtubeId, seed.spotifyId, ...(options.excludeIds ?? [])].filter(Boolean));
+  for (const id of getPlaybackBlacklist()) excluded.add(id);
   const candidates = await searchRecommendationCandidates(seed, Math.max(limit, 10));
   const seen = new Set<string>();
   const ranked: Array<{ track: Track; score: number }> = [];
@@ -146,6 +217,7 @@ export async function getRecommendations(
   candidates.forEach((candidate, order) => {
     const key = uniqueKey(candidate);
     if (!isPlayableCandidate(candidate)) return;
+    if (isPlaybackBlacklisted(candidate.youtubeId ?? candidate.id)) return;
     if (!key || seen.has(key) || excluded.has(candidate.id) || excluded.has(candidate.spotifyId ?? '')) return;
     seen.add(key);
     ranked.push({ track: candidate, score: scoreRecommendation(seed, candidate, order) });

@@ -34,22 +34,51 @@ export const api = {
     request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
     ),
+  debugMatch: (track: Track, limit = 10) =>
+    request<DebugMatchResult>(
+      `/search/debug-match?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}&spotifyId=${encodeURIComponent(track.spotifyId ?? '')}&thumbnail=${encodeURIComponent(track.thumbnail ?? '')}&limit=${limit}`
+    ),
 
   home: () =>
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[]; newReleases: Track[] }>('/home'),
   history: () =>
     request<{ tracks: CachedTrack[] }>('/history'),
+  clearHistory: () =>
+    request<{ ok: boolean; history: { updated: number } }>('/history', { method: 'DELETE' }),
+  removeHistoryItem: (id: string) =>
+    request<{ ok: boolean; removed: boolean }>(`/history/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  status: () =>
+    request<BackendStatus>('/status'),
   spotifyMetadata: (spotifyId: string) =>
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
 
   resolve: (videoId: string, query?: string) =>
     request<CachedTrack>(`/player/resolve/${videoId}${query ? `?query=${encodeURIComponent(query)}` : ''}`),
+  recordPlayed: (track: Track) =>
+    request<{ ok: boolean; track: CachedTrack }>('/player/played', {
+      method: 'POST',
+      body: JSON.stringify(track),
+    }),
 
   prefetch: (videoIds: string[]) =>
     request('/player/prefetch', { method: 'POST', body: JSON.stringify({ videoIds }) }),
 
   prefetchTracks: (tracks: Track[]) =>
     request('/player/prefetch', { method: 'POST', body: JSON.stringify({ tracks }) }),
+  audioCacheStatus: (tracks: Track[]) =>
+    request<AudioCacheStatus>('/player/cache-audio/status', {
+      method: 'POST',
+      body: JSON.stringify({ tracks }),
+    }),
+  cacheAudioTracks: (tracks: Track[]) =>
+    request<{ scheduled: string[]; cachedIds: string[]; message: string }>('/player/cache-audio', {
+      method: 'POST',
+      body: JSON.stringify({ tracks }),
+    }),
+  clearResolverBlacklist: () =>
+    request<{ ok: boolean; blacklist: { cleared: number } }>('/settings/resolver-blacklist', { method: 'DELETE' }),
+  clearResolverMatchCache: () =>
+    request<{ ok: boolean; matchCache: { cleared: number } }>('/settings/resolver-match-cache', { method: 'DELETE' }),
 
   recommend: (seed: Track, excludeIds: string[] = [], limit = 12) =>
     request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
@@ -113,6 +142,7 @@ export interface Track {
   youtubeTitle?: string;
   youtubeArtist?: string;
   queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation';
+  playbackError?: string;
 }
 
 export interface CachedTrack extends Track {
@@ -182,6 +212,44 @@ export interface SpotifyTrackMetadata {
   isrc?: string;
   spotifyUrl?: string;
   cachedAt: number;
+}
+
+export interface AudioCacheStatus {
+  playableIds: string[];
+  cachedIds: string[];
+  inFlightIds: string[];
+  tracks: Array<{
+    id: string;
+    playableId: string | null;
+    cached: boolean;
+    inFlight: boolean;
+  }>;
+}
+
+export interface BackendStatus {
+  ok: boolean;
+  cache: { total: number; totalQueries: number };
+  prefetch: { queueSize: number; pending: number; inFlight: string[]; prefetched: string[] };
+  resolver: { name: string; youtubei?: unknown; ytdlp?: unknown };
+  playbackBlacklist?: { failedIds: number };
+  matchCache?: { total: number };
+}
+
+export interface DebugMatchResult {
+  query: string;
+  cached: {
+    spotifyId: string;
+    youtubeId: string;
+    youtubeTitle: string;
+    youtubeArtist: string;
+    score: number;
+    matchedAt: number;
+  } | null;
+  candidates: Array<{
+    track: Track;
+    score: number;
+    reasons: string[];
+  }>;
 }
 
 

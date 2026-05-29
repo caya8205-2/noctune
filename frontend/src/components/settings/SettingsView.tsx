@@ -11,6 +11,7 @@ import {
   Info,
   ListMusic,
   Loader2,
+  ShieldAlert,
   Settings,
   Sparkles,
   Trash2,
@@ -18,8 +19,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { API_BASE } from '../../utils/api';
+import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.4';
+const APP_VERSION = 'v1.0.0-beta.5';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -33,6 +35,10 @@ interface SettingsData {
     clientId: string;
     clientSecretMasked: string;
     configured: boolean;
+  };
+  resolver?: {
+    failedIds: number;
+    matchCache?: { total: number };
   };
 }
 
@@ -69,6 +75,8 @@ function formatBytes(bytes = 0): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
+
 export function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [clientId, setClientId] = useState('');
@@ -81,6 +89,9 @@ export function SettingsView() {
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [debugSearch, setDebugSearch] = useState(false);
 
   async function loadSettings() {
     return fetch(API_BASE + '/settings')
@@ -94,6 +105,8 @@ export function SettingsView() {
 
   useEffect(() => {
     loadSettings().catch(console.error);
+    api.status().then(setDiagnostics).catch(console.error);
+    setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
   async function handleSave() {
@@ -263,6 +276,52 @@ export function SettingsView() {
     }
   }
 
+  async function handleRefreshDiagnostics() {
+    setDiagnosticsBusy(true);
+    try {
+      const status = await api.status();
+      setDiagnostics(status);
+      await loadSettings();
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  }
+
+  async function handleClearResolverBlacklist() {
+    setDiagnosticsBusy(true);
+    setCacheMessage(null);
+    try {
+      const result = await api.clearResolverBlacklist();
+      await handleRefreshDiagnostics();
+      setCacheMessage({ ok: true, text: `Cleared ${result.blacklist.cleared} failed resolver entr${result.blacklist.cleared === 1 ? 'y' : 'ies'}.` });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  }
+
+  async function handleClearResolverMatchCache() {
+    setDiagnosticsBusy(true);
+    setCacheMessage(null);
+    try {
+      const result = await api.clearResolverMatchCache();
+      await handleRefreshDiagnostics();
+      setCacheMessage({ ok: true, text: `Cleared ${result.matchCache.cleared} Spotify match entr${result.matchCache.cleared === 1 ? 'y' : 'ies'}.` });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  }
+
+  function handleDebugSearchChange(enabled: boolean) {
+    setDebugSearch(enabled);
+    localStorage.setItem(DEBUG_SEARCH_KEY, enabled ? '1' : '0');
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto px-9 py-8 gap-8">
       <div className="flex flex-col gap-2 max-w-3xl">
@@ -390,6 +449,101 @@ export function SettingsView() {
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Diagnostics
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Quick local health snapshot for resolver, prefetch, and temporary failed-stream blacklist.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Resolver</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {diagnostics?.resolver?.name ?? 'Unknown'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Prefetched</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {diagnostics?.prefetch?.prefetched?.length ?? 0}
+            </p>
+          </div>
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Failed IDs</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {diagnostics?.playbackBlacklist?.failedIds ?? data?.resolver?.failedIds ?? 0}
+            </p>
+          </div>
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Matches</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {diagnostics?.matchCache?.total ?? data?.resolver?.matchCache?.total ?? 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={handleRefreshDiagnostics}
+            disabled={diagnosticsBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            {diagnosticsBusy ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} />}
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={handleClearResolverBlacklist}
+            disabled={diagnosticsBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            <ShieldAlert size={14} />
+            Clear failed IDs
+          </button>
+          <button
+            type="button"
+            onClick={handleClearResolverMatchCache}
+            disabled={diagnosticsBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            Clear matches
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleDebugSearchChange(!debugSearch)}
+          className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+        >
+          <span>
+            <span className="block text-sm font-medium text-white">Search scoring debug</span>
+            <span className="block text-xs text-muted mt-1">Show candidate score and reasons in Search while tuning resolver matches.</span>
+          </span>
+          <span
+            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${
+              debugSearch
+                ? 'border-accent/50 bg-accent/25'
+                : 'border-base-600 bg-base-800'
+            }`}
+            aria-hidden="true"
+          >
+            <span
+              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${
+                debugSearch
+                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                  : 'translate-x-1 bg-muted'
+              }`}
+            />
+          </span>
+        </button>
+      </section>
+
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Cache
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
@@ -414,17 +568,20 @@ export function SettingsView() {
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
               <p className="text-xs text-muted">Tracks</p>
-              <p className="text-sm font-semibold text-white mt-1">{data.cache.learning.total}</p>
+              <p className="text-sm font-semibold text-white mt-1">{data.cache.learning.total} cached</p>
+              <p className="text-[11px] text-muted mt-1">{data.cache.learning.totalQueries} queries</p>
             </div>
             <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
               <p className="text-xs text-muted">Lyrics</p>
-              <p className="text-sm font-semibold text-white mt-1">{data.cache.lyrics.total}</p>
+              <p className="text-sm font-semibold text-white mt-1">{data.cache.lyrics.total} cached</p>
+              <p className="text-[11px] text-muted mt-1">{data.cache.lyrics.hits} hits / {data.cache.lyrics.misses} misses</p>
             </div>
             <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
               <p className="text-xs text-muted">Audio</p>
               <p className="text-sm font-semibold text-white mt-1">
-                {data.cache.audio.files} / {formatBytes(data.cache.audio.bytes)}
+                {data.cache.audio.files} files
               </p>
+              <p className="text-[11px] text-muted mt-1">{formatBytes(data.cache.audio.bytes)}</p>
             </div>
           </div>
         )}

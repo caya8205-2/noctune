@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { GripVertical, ListOrdered, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
 import { LikeButton } from '../player/LikeButton';
-import type { Track } from '../../utils/api';
+import { api, type Track } from '../../utils/api';
 
 function queueSourceLabel(source: Track['queueSource']): string {
   if (source === 'manual') return 'Manual';
@@ -15,8 +16,28 @@ function queueSourceLabel(source: Track['queueSource']): string {
 }
 
 export function QueueView() {
-  const { queue, queueIndex, currentTrack, playTrack, clearQueue, reorderQueue } = usePlayerStore();
+  const {
+    queue,
+    queueIndex,
+    currentTrack,
+    playbackNotice,
+    playTrack,
+    clearQueue,
+    removePlayedTracks,
+    shuffleQueue,
+    reorderQueue,
+    removeFromQueue,
+    dismissPlaybackNotice,
+  } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [hideFailed, setHideFailed] = useState(false);
+  const { data: audioCache } = useQuery({
+    queryKey: ['audio-cache-status', queue.map((track) => track.id).join('|')],
+    queryFn: () => api.audioCacheStatus(queue),
+    enabled: queue.length > 0,
+    refetchInterval: 10_000,
+  });
+  const cacheByTrackId = new Map((audioCache?.tracks ?? []).map((status) => [status.id, status]));
 
   if (queue.length === 0) {
     return (
@@ -38,19 +59,53 @@ export function QueueView() {
         <div>
           <p className="section-label text-accent">Queue</p>
           <h1 className="text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
-          <p className="text-xs text-muted mt-2">{queue.length} tracks in rotation</p>
+          <p className="text-xs text-muted mt-2">
+            {queue.length} tracks in rotation
+            {queueIndex > 0 ? `, ${queueIndex} played` : ''}
+          </p>
         </div>
-        <button onClick={clearQueue} className="btn-ghost text-xs gap-1.5 px-2">
-          <X size={12} /> Clear
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2" title="Shuffle upcoming tracks">
+            <Shuffle size={12} /> Shuffle
+          </button>
+          <button
+            onClick={() => setHideFailed((value) => !value)}
+            className={clsx('btn-ghost text-xs gap-1.5 px-2', hideFailed && 'text-accent')}
+            title="Hide failed tracks"
+          >
+            <EyeOff size={12} /> Failed
+          </button>
+          <button
+            onClick={removePlayedTracks}
+            disabled={queueIndex <= 0}
+            className="btn-ghost text-xs gap-1.5 px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Remove tracks that already played"
+          >
+            <X size={12} /> Played
+          </button>
+          <button onClick={clearQueue} className="btn-ghost text-xs gap-1.5 px-2">
+            <X size={12} /> Clear
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-7 pb-6">
+        {playbackNotice && (
+          <div className="max-w-3xl mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-3 text-xs text-red-200">
+            <span>{playbackNotice}</span>
+            <button className="btn-ghost p-1 hover:text-white" onClick={dismissPlaybackNotice} title="Dismiss">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {queue.map((track, i) => {
+          if (hideFailed && track.playbackError) return null;
           const isActive =
             currentTrack?.id === track.id ||
             Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
           const isPast = i < queueIndex;
+          const cacheStatus = cacheByTrackId.get(track.id);
 
           return (
             <div
@@ -67,6 +122,7 @@ export function QueueView() {
               className={clsx(
                 'group max-w-3xl flex items-center px-4 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100',
                 isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
+                track.playbackError && 'border-red-500/20 bg-red-500/5',
                 isPast && 'opacity-40',
                 dragIndex === i && 'opacity-50'
               )}
@@ -91,20 +147,48 @@ export function QueueView() {
                 <p
                   className={clsx(
                     'text-sm truncate',
-                    isActive ? 'text-accent font-medium' : 'text-white'
+                    isActive ? 'text-accent font-medium' : track.playbackError ? 'text-red-300' : 'text-white'
                   )}
                 >
                   {track.title}
                 </p>
-                <p className="text-xs text-muted truncate">{track.artist}</p>
+                <p className="text-xs text-muted truncate">
+                  {track.playbackError ? track.playbackError : track.artist}
+                </p>
               </div>
-              <span className="hidden md:inline-flex w-20 justify-center flex-shrink-0 mr-4 rounded-full border border-base-600/60 px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+              {track.playbackError ? (
+                <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
+                  <AlertTriangle size={10} className="mr-1" />
+                  Failed
+                </span>
+              ) : cacheStatus?.cached || cacheStatus?.inFlight ? (
+                <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-accent/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-accent">
+                  {cacheStatus.cached ? (
+                    <CheckCircle2 size={10} className="mr-1" />
+                  ) : (
+                    <Loader2 size={10} className="mr-1 animate-spin" />
+                  )}
+                  {cacheStatus.cached ? 'Cached' : 'Caching'}
+                </span>
+              ) : (
+              <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-base-600/60 px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted">
                 {queueSourceLabel(track.queueSource)}
               </span>
+              )}
               <span className="text-xs font-mono text-muted flex-shrink-0">
                 {formatDuration(track.duration)}
               </span>
               <LikeButton track={track} className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <button
+                className="btn-ghost p-1.5 ml-1 text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  removeFromQueue(i);
+                }}
+                title="Remove from queue"
+              >
+                <X size={13} />
+              </button>
             </div>
           );
         })}

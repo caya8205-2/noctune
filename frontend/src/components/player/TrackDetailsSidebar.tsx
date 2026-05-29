@@ -36,7 +36,7 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
 
   return (
     <>
-      <div className="rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
+      <div className="shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
         <img
           src={metadata.album.image ?? track.thumbnail}
           alt=""
@@ -105,7 +105,7 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
 function LocalDetails({ track }: { track: CachedTrack }) {
   return (
     <>
-      <div className="rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
+      <div className="shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
         {track.thumbnail ? (
           <img
             src={track.thumbnail}
@@ -156,20 +156,22 @@ export function TrackDetailsSidebar() {
   }
 
   return (
-    <aside className="hidden xl:flex w-72 flex-shrink-0 border-l border-base-800 bg-base-950/70 p-4 flex-col gap-4 overflow-y-auto">
-      {data ? (
-        <SpotifyDetails track={currentTrack} metadata={data} />
-      ) : (
-        <>
-          <LocalDetails track={currentTrack} />
-          {spotifyId && isLoading && (
-            <p className="text-xs text-muted">Loading Spotify metadata.</p>
-          )}
-          {spotifyId && isError && (
-            <p className="text-xs text-red-400">Spotify metadata unavailable.</p>
-          )}
-        </>
-      )}
+    <aside className="hidden xl:block w-72 flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto">
+      <div className="flex flex-col gap-4 p-4">
+        {data ? (
+          <SpotifyDetails track={currentTrack} metadata={data} />
+        ) : (
+          <>
+            <LocalDetails track={currentTrack} />
+            {spotifyId && isLoading && (
+              <p className="text-xs text-muted">Loading Spotify metadata.</p>
+            )}
+            {spotifyId && isError && (
+              <p className="text-xs text-red-400">Spotify metadata unavailable.</p>
+            )}
+          </>
+        )}
+      </div>
     </aside>
   );
 }

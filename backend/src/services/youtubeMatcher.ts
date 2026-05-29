@@ -4,6 +4,7 @@ import PQueue from 'p-queue';
 import type { Track } from '../types/index.js';
 import { searchTracks } from './audioResolver.js';
 import { getDataDir } from './env.js';
+import { isPlaybackBlacklisted } from './playbackBlacklist.js';
 
 interface MatchCacheEntry {
   spotifyId: string;
@@ -20,14 +21,14 @@ interface MatchCacheStore {
   matches: Record<string, MatchCacheEntry>;
 }
 
-interface ScoredCandidate {
+export interface ScoredCandidate {
   track: Track;
   score: number;
   reasons: string[];
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
@@ -60,6 +61,34 @@ const negativeKeywords = [
   'clips',
   'shorts',
   'cover',
+  'ai cover',
+  'piano cover',
+  'piano version',
+  'piano arrangement',
+  'piano instrumental',
+  'piano solo',
+  'instrumental cover',
+  'guitar cover',
+  'guitar instrumental',
+  'drum cover',
+  'drums cover',
+  'drum cam',
+  'drum playthrough',
+  'drum performance',
+  'violin cover',
+  'orchestra cover',
+  'orchestral cover',
+  'acoustic cover',
+  'backing track',
+  'backtrack',
+  'minus one',
+  'off vocal',
+  'no vocal',
+  'no vocals',
+  'sheet music',
+  'synthesia',
+  'parody',
+  'meme',
   'karaoke',
   'instrumental',
   'sped up',
@@ -68,6 +97,34 @@ const negativeKeywords = [
   'tutorial',
   'performance',
   '8d',
+];
+
+const instrumentalCoverKeywords = [
+  'piano cover',
+  'piano version',
+  'piano arrangement',
+  'piano instrumental',
+  'piano solo',
+  'instrumental cover',
+  'guitar cover',
+  'guitar instrumental',
+  'drum cover',
+  'drums cover',
+  'drum cam',
+  'drum playthrough',
+  'drum performance',
+  'violin cover',
+  'orchestra cover',
+  'orchestral cover',
+  'acoustic cover',
+  'backing track',
+  'backtrack',
+  'minus one',
+  'off vocal',
+  'no vocal',
+  'no vocals',
+  'sheet music',
+  'synthesia',
 ];
 
 const fanUploadKeywords = [
@@ -81,6 +138,8 @@ const fanUploadKeywords = [
   '翻譯',
   '字幕',
   'sings',
+  'singing',
+  'sung by',
 ];
 
 const liveVersionKeywords = [
@@ -126,6 +185,17 @@ let store: MatchCacheStore | null = null;
 function getStore(): MatchCacheStore {
   store ??= loadStore();
   return store;
+}
+
+export function getMatchCacheStats(): { total: number } {
+  return { total: Object.keys(getStore().matches).length };
+}
+
+export function clearMatchCache(): { cleared: number } {
+  const cleared = Object.keys(getStore().matches).length;
+  store = { version: CACHE_VERSION, updatedAt: Date.now(), matches: {} };
+  saveStore(store);
+  return { cleared };
 }
 
 function normalize(value: string): string {
@@ -189,7 +259,12 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const keyword of negativeKeywords) {
     if (combined.includes(keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
-      score -= keyword.includes('react') || keyword === 'reaction' ? 250 : 120;
+      const penalty = instrumentalCoverKeywords.includes(keyword)
+        ? 240
+        : keyword.includes('react') || keyword === 'reaction'
+          ? 250
+          : 120;
+      score -= penalty;
       reasons.push(`negative:${keyword}`);
     }
   }
@@ -202,7 +277,7 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const keyword of fanUploadKeywords) {
     if (combined.includes(keyword) && !hasOfficialSignal) {
-      score -= 65;
+      score -= keyword.includes('sing') ? 120 : 65;
       reasons.push(`fan-upload:${keyword}`);
     }
   }
@@ -235,6 +310,7 @@ function fromCache(spotifyTrack: Track): Track | null {
   if (!spotifyTrack.spotifyId) return null;
   const cached = getStore().matches[spotifyTrack.spotifyId];
   if (!cached) return null;
+  if (isPlaybackBlacklisted(cached.youtubeId)) return null;
 
   console.log(
     `[matcher] cache hit ${JSON.stringify({
@@ -251,6 +327,11 @@ function fromCache(spotifyTrack: Track): Track | null {
     youtubeTitle: cached.youtubeTitle,
     youtubeArtist: cached.youtubeArtist,
   };
+}
+
+function getCachedMatch(spotifyTrack: Track): MatchCacheEntry | null {
+  if (!spotifyTrack.spotifyId) return null;
+  return getStore().matches[spotifyTrack.spotifyId] ?? null;
 }
 
 function writeCache(spotifyTrack: Track, candidate: ScoredCandidate) {
@@ -277,6 +358,7 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     const startedAt = Date.now();
     const candidates = await searchTracks(query, 12);
     const ranked = candidates
+      .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
       .map((candidate) => scoreCandidate(spotifyTrack, candidate))
       .sort((a, b) => b.score - a.score);
     const best = ranked[0];
@@ -308,6 +390,28 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
   });
 
   return result ?? null;
+}
+
+export async function debugSpotifyYoutubeMatch(
+  spotifyTrack: Track,
+  limit = 10
+): Promise<{
+  query: string;
+  cached: MatchCacheEntry | null;
+  candidates: ScoredCandidate[];
+}> {
+  const query = `${spotifyTrack.title} - ${spotifyTrack.artist}`;
+  const candidates = await searchTracks(query, limit);
+  const ranked = candidates
+    .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
+    .map((candidate) => scoreCandidate(spotifyTrack, candidate))
+    .sort((a, b) => b.score - a.score);
+
+  return {
+    query,
+    cached: getCachedMatch(spotifyTrack),
+    candidates: ranked,
+  };
 }
 
 export async function matchSpotifyTracksToYoutube(tracks: Track[]): Promise<Track[]> {

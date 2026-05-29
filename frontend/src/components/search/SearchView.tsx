@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Play, Search, XCircle, Zap } from 'lucide-react';
-import { api, type Track } from '../../utils/api';
+import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Play, Search, Wrench, XCircle, Zap } from 'lucide-react';
+import { api, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { API_BASE } from '../../utils/api';
@@ -9,6 +9,9 @@ import { LikeButton } from '../player/LikeButton';
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
 }
+
+const RECENT_SEARCHES_KEY = 'noctune:recent-searches';
+const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
 
 function isPlaylistUrl(value: string): boolean {
   try {
@@ -24,6 +27,7 @@ function isPlaylistUrl(value: string): boolean {
 
 export function SearchView() {
   const [query, setQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [results, setResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [fromCache, setFromCache] = useState(false);
@@ -32,6 +36,9 @@ export function SearchView() {
   const [savingEngine, setSavingEngine] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [debugSearch, setDebugSearch] = useState(false);
+  const [debugBusyId, setDebugBusyId] = useState<string | null>(null);
+  const [debugResult, setDebugResult] = useState<{ source: Track; result: DebugMatchResult } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const playlistUrl = useMemo(() => isPlaylistUrl(query), [query]);
 
@@ -42,6 +49,12 @@ export function SearchView() {
       .then((r) => r.json())
       .then((data: SettingsData) => setEngine(data.searchEngine))
       .catch(console.error);
+    try {
+      setRecentSearches(JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? '[]'));
+    } catch {
+      setRecentSearches([]);
+    }
+    setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
   async function handleEngineChange(nextEngine: 'ytdlp' | 'spotify') {
@@ -65,17 +78,24 @@ export function SearchView() {
   }
 
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
+    const cleanQuery = q.trim();
+    if (!cleanQuery) {
       setResults([]);
       setSearched(false);
       return;
     }
     setIsSearching(true);
     try {
-      const res = await api.search(q.trim());
+      const res = await api.search(cleanQuery);
       setResults(res.tracks);
+      setDebugResult(null);
       setFromCache(res.fromCache);
       setSearched(true);
+      setRecentSearches((current) => {
+        const next = [cleanQuery, ...current.filter((item) => item.toLowerCase() !== cleanQuery.toLowerCase())].slice(0, 6);
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+        return next;
+      });
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -88,6 +108,12 @@ export function SearchView() {
     setQuery(val);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSearch(val), 400);
+  }
+
+  function runRecentSearch(value: string) {
+    setQuery(value);
+    clearTimeout(debounceRef.current);
+    void doSearch(value);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -118,6 +144,18 @@ export function SearchView() {
       });
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleDebugMatch(track: Track) {
+    setDebugBusyId(track.id);
+    try {
+      const result = await api.debugMatch(track, 10);
+      setDebugResult({ source: track, result });
+    } catch (err) {
+      console.error('Debug match failed:', err);
+    } finally {
+      setDebugBusyId(null);
     }
   }
 
@@ -180,10 +218,32 @@ export function SearchView() {
           </p>
         </div>
 
-        {searched && fromCache && (
-          <div className="flex items-center gap-1.5 mt-2 text-xs text-accent">
-            <Zap size={11} />
-            <span>Instant from cache</span>
+        <div className="max-w-3xl mt-2 min-h-5">
+          {searched && fromCache ? (
+            <div className="flex items-center gap-1.5 text-xs text-accent">
+              <Zap size={11} />
+              <span>Instant from cache</span>
+            </div>
+          ) : recentSearches.length > 0 && !searched && !query.trim() ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted">Recent</span>
+              {recentSearches.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => runRecentSearch(item)}
+                  className="rounded-lg border border-base-600 bg-base-800 px-2.5 py-1 text-xs text-muted hover:text-white hover:border-base-500 transition-colors"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {debugSearch && (
+          <div className="max-w-3xl mt-2 rounded-lg border border-base-600/70 bg-base-900 px-3 py-2 text-xs text-muted">
+            Debug mode is on. Use the debug button on Spotify results to inspect YouTube candidate scoring.
           </div>
         )}
 
@@ -219,6 +279,42 @@ export function SearchView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-9 pb-6">
+        {debugSearch && debugResult && (
+          <div className="max-w-3xl mb-4 rounded-lg border border-accent/25 bg-base-900 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="section-label text-accent">Scoring debug</p>
+                <p className="text-sm font-semibold text-white truncate mt-1">
+                  {debugResult.source.title}
+                </p>
+                <p className="text-xs text-muted truncate mt-1">{debugResult.result.query}</p>
+              </div>
+              {debugResult.result.cached && (
+                <span className="rounded-full border border-base-600 px-2 py-1 text-[10px] uppercase tracking-wide text-muted">
+                  Cached {debugResult.result.cached.score}
+                </span>
+              )}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {debugResult.result.candidates.slice(0, 5).map((candidate, index) => (
+                <div key={candidate.track.id} className="rounded-lg border border-base-600/60 bg-base-950 px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-5 text-xs text-muted">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-white truncate">{candidate.track.title}</p>
+                      <p className="text-[11px] text-muted truncate">{candidate.track.artist}</p>
+                    </div>
+                    <span className="font-mono text-xs text-accent">{candidate.score}</span>
+                  </div>
+                  <p className="mt-1 pl-8 text-[11px] text-muted truncate">
+                    {candidate.reasons.length > 0 ? candidate.reasons.join(', ') : 'no scoring reasons'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!searched && !isSearching && (
           <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -231,6 +327,15 @@ export function SearchView() {
         {searched && results.length === 0 && !isSearching && (
           <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
             <p className="text-sm">No results for "{query}"</p>
+            {engine && (
+              <button
+                type="button"
+                onClick={() => handleEngineChange(engine === 'ytdlp' ? 'spotify' : 'ytdlp')}
+                className="btn-accent px-4 py-2 text-xs"
+              >
+                Try {engine === 'ytdlp' ? 'Spotify' : 'YouTube'} search
+              </button>
+            )}
           </div>
         )}
 
@@ -292,6 +397,19 @@ export function SearchView() {
               </button>
 
               <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+
+              {debugSearch && track.spotifyId && (
+                <button
+                  className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDebugMatch(track);
+                  }}
+                  title="Debug YouTube match"
+                >
+                  {debugBusyId === track.id ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+                </button>
+              )}
 
               <button
                 className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"

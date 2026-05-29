@@ -10,6 +10,8 @@ import {
 } from '../services/cache.js';
 import { clearLyricsCacheStore, getLyricsCacheStats } from '../services/lyrics.js';
 import { clearAudioCache, getAudioCacheStats } from '../services/audioFileCache.js';
+import { clearPlaybackBlacklist, getPlaybackBlacklist } from '../services/playbackBlacklist.js';
+import { clearMatchCache, getMatchCacheStats } from '../services/youtubeMatcher.js';
 
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
@@ -34,6 +36,10 @@ export async function settingsRoutes(app: FastifyInstance) {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),
                 audio: getAudioCacheStats(),
+            },
+            resolver: {
+                failedIds: getPlaybackBlacklist().length,
+                matchCache: getMatchCacheStats(),
             },
             spotify: {
                 clientId: config.spotifyClientId,
@@ -136,5 +142,15 @@ export async function settingsRoutes(app: FastifyInstance) {
     app.delete('/settings/cache/audio', async (_req, reply) => {
         const audio = clearAudioCache();
         return reply.send({ ok: true, audio, stats: getAudioCacheStats() });
+    });
+
+    // DELETE /settings/resolver-blacklist — clear temporary failed playback IDs
+    app.delete('/settings/resolver-blacklist', async (_req, reply) => {
+        return reply.send({ ok: true, blacklist: clearPlaybackBlacklist() });
+    });
+
+    // DELETE /settings/resolver-match-cache — clear Spotify -> YouTube mapping cache
+    app.delete('/settings/resolver-match-cache', async (_req, reply) => {
+        return reply.send({ ok: true, matchCache: clearMatchCache() });
     });
 }

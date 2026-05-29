@@ -14,6 +14,8 @@ import { getEnvConfig } from './services/env.js';
 import { getPrefetchStatus } from './services/prefetch.js';
 import { scheduleStartupPrefetch } from './services/startupPrefetch.js';
 import { getAudioResolverStatus } from './services/audioResolver.js';
+import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
+import { getMatchCacheStats } from './services/youtubeMatcher.js';
 
 const PORT = Number(process.env.PORT ?? 3131);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -60,6 +62,10 @@ async function bootstrap() {
     cache: getCacheStats(),
     prefetch: getPrefetchStatus(),
     resolver: getAudioResolverStatus(),
+    playbackBlacklist: {
+      failedIds: getPlaybackBlacklist().length,
+    },
+    matchCache: getMatchCacheStats(),
   }));
 
   // Init SQLite schema

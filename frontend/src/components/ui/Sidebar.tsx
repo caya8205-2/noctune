@@ -5,6 +5,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import { clsx } from 'clsx';
 
+function playlistImportErrorMessage(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes('already exists')) return 'A playlist with this name already exists.';
+  if (lower.includes('no tracks')) return 'No tracks found. Private or personalized playlists may not be importable.';
+  if (lower.includes('spotify') && (lower.includes('401') || lower.includes('403'))) {
+    return 'Spotify could not access this playlist. Public user playlists work best.';
+  }
+  if (lower.includes('youtube') || lower.includes('playlist')) {
+    return message;
+  }
+  return message || 'Playlist import failed.';
+}
+
 export function Sidebar() {
   const { activeView, activePlaylistId, setView } = usePlayerStore();
   const qc = useQueryClient();
@@ -64,7 +77,7 @@ export function Sidebar() {
       setImportUrl('');
       setDeleteError(null);
     } catch (err) {
-      setDeleteError((err as Error).message);
+      setDeleteError(playlistImportErrorMessage((err as Error).message));
     } finally {
       setImporting(false);
     }

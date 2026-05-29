@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Clock, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Music2, Pencil, Play, Save, Trash2, X } from 'lucide-react';
+import { Check, Clock, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -10,6 +10,7 @@ import { LikeButton } from '../player/LikeButton';
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
 const CROP_VIEWPORT_SIZE = 320;
 const COVER_OUTPUT_SIZE = 640;
+type PlaylistSort = 'custom' | 'title' | 'artist' | 'duration';
 
 function playlistTrackId(track: Track): string {
   return track.spotifyId ? `spotify:${track.spotifyId}` : track.id;
@@ -217,6 +218,10 @@ export function PlaylistView() {
   const [draftName, setDraftName] = useState('');
   const [savingDetails, setSavingDetails] = useState(false);
   const [cropSource, setCropSource] = useState<CropSource | null>(null);
+  const [cachingAudio, setCachingAudio] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
+  const [trackFilter, setTrackFilter] = useState('');
+  const [sortMode, setSortMode] = useState<PlaylistSort>('custom');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { activePlaylistId, playTrack, currentTrack, addToQueue } = usePlayerStore();
   const qc = useQueryClient();
@@ -228,9 +233,24 @@ export function PlaylistView() {
 
   const tracks = playlist?.tracks ?? [];
   const isLikedPlaylist = activePlaylistId === LIKED_PLAYLIST_ID;
+  const visibleTracks = tracks
+    .map((track, originalIndex) => ({ track, originalIndex }))
+    .filter(({ track }) => {
+      const keyword = trackFilter.trim().toLowerCase();
+      if (!keyword) return true;
+      return `${track.title} ${track.artist}`.toLowerCase().includes(keyword);
+    })
+    .sort((a, b) => {
+      if (sortMode === 'title') return a.track.title.localeCompare(b.track.title);
+      if (sortMode === 'artist') return a.track.artist.localeCompare(b.track.artist);
+      if (sortMode === 'duration') return a.track.duration - b.track.duration;
+      return a.originalIndex - b.originalIndex;
+    });
 
   useEffect(() => {
     setDraftName(playlist?.name ?? '');
+    setTrackFilter('');
+    setSortMode('custom');
   }, [playlist?.id, playlist?.name]);
 
   useEffect(() => {
@@ -240,7 +260,11 @@ export function PlaylistView() {
   }, [cropSource]);
 
   function handlePlay(track: Track) {
-    playTrack(track, [track], { autoQueue: true, queueSource: 'playlist' });
+    playTrack(
+      { ...track, queueSource: 'playlist' },
+      tracks.map((playlistTrack) => ({ ...playlistTrack, queueSource: 'playlist' })),
+      { queueSource: 'playlist' }
+    );
   }
 
   function handlePlayAll() {
@@ -249,6 +273,24 @@ export function PlaylistView() {
       { ...tracks[0], queueSource: 'playlist' },
       tracks.map((track) => ({ ...track, queueSource: 'playlist' }))
     );
+  }
+
+  async function handleCachePlaylist() {
+    if (tracks.length === 0) return;
+    setCachingAudio(true);
+    setCacheMessage(null);
+    try {
+      const result = await api.cacheAudioTracks(tracks);
+      setCacheMessage(
+        result.scheduled.length > 0
+          ? `Caching ${result.scheduled.length} tracks in background.`
+          : 'All playable tracks are already cached.'
+      );
+    } catch (err) {
+      setCacheMessage((err as Error).message);
+    } finally {
+      setCachingAudio(false);
+    }
   }
 
   async function handleReorder(fromIndex: number, toIndex: number) {
@@ -437,6 +479,15 @@ export function PlaylistView() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleCachePlaylist}
+            disabled={tracks.length === 0 || cachingAudio}
+            className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
+            Cache playlist
+          </button>
+          <button
+            type="button"
             onClick={() => setEditing((value) => !value)}
             className={clsx(
               'btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40',
@@ -458,6 +509,14 @@ export function PlaylistView() {
         </div>
       </div>
 
+      {cacheMessage && (
+        <div className="px-9 pb-3 -mt-2">
+          <p className="max-w-3xl rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
+            {cacheMessage}
+          </p>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto px-7 pb-6">
         {!isLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
@@ -468,38 +527,69 @@ export function PlaylistView() {
           </div>
         )}
 
-        {tracks.map((track, i) => {
+        {tracks.length > 0 && (
+          <div className="max-w-3xl mb-3 flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                value={trackFilter}
+                onChange={(event) => setTrackFilter(event.target.value)}
+                placeholder="Filter this playlist"
+                className="input-base h-10 pl-8 text-xs"
+              />
+            </div>
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as PlaylistSort)}
+              className="input-base h-10 sm:w-44 text-xs"
+            >
+              <option value="custom">Custom order</option>
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+              <option value="duration">Duration</option>
+            </select>
+          </div>
+        )}
+
+        {tracks.length > 0 && visibleTracks.length === 0 && (
+          <div className="max-w-3xl rounded-lg border border-base-600/50 bg-base-900 px-4 py-3 text-sm text-muted">
+            No tracks match "{trackFilter}".
+          </div>
+        )}
+
+        {visibleTracks.map(({ track, originalIndex }, visibleIndex) => {
           const isActive =
             currentTrack?.id === track.id ||
             Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+          const canReorder = editing && sortMode === 'custom' && !trackFilter.trim();
           return (
             <div
-              key={track.id + (track.spotifyId ?? '') + i}
-              draggable={editing}
-              onDragStart={() => setDragIndex(i)}
+              key={track.id + (track.spotifyId ?? '') + originalIndex}
+              draggable={canReorder}
+              onDragStart={() => setDragIndex(originalIndex)}
               onDragOver={(e) => {
-                if (editing) e.preventDefault();
+                if (canReorder) e.preventDefault();
               }}
               onDrop={(e) => {
                 e.preventDefault();
-                if (editing && dragIndex !== null) handleReorder(dragIndex, i);
+                if (canReorder && dragIndex !== null) handleReorder(dragIndex, originalIndex);
               }}
               onDragEnd={() => setDragIndex(null)}
               className={clsx(
                 'group max-w-3xl flex items-center px-3 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 transition-colors duration-100',
-                editing ? 'cursor-grab' : 'cursor-pointer',
+                canReorder ? 'cursor-grab' : 'cursor-pointer',
                 isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
-                dragIndex === i && 'opacity-50'
+                dragIndex === originalIndex && 'opacity-50'
               )}
               onDoubleClick={() => handlePlay(track)}
             >
               <div className={clsx(
                 'w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted transition-opacity',
-                editing ? 'opacity-100 cursor-grab' : 'opacity-30'
+                canReorder ? 'opacity-100 cursor-grab' : 'opacity-30'
               )}>
                 <GripVertical size={14} />
               </div>
-              <span className="w-5 text-xs text-muted text-center flex-shrink-0">{i + 1}</span>
+              <span className="w-5 text-xs text-muted text-center flex-shrink-0">{visibleIndex + 1}</span>
               {track.thumbnail ? (
                 <img
                   src={track.thumbnail}

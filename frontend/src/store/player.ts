@@ -22,6 +22,8 @@ interface PlayerState {
   // ── UI ──────────────────────────────────────────────────────────────────────
   activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings';
   activePlaylistId: string | null;
+  showTrackDetails: boolean;
+  playbackNotice: string | null;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean; queueSource?: Track['queueSource'] }) => Promise<void>;
@@ -34,8 +36,14 @@ interface PlayerState {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   addToQueue: (track: Track, source?: Track['queueSource']) => void;
+  removeFromQueue: (index: number) => void;
+  removePlayedTracks: () => void;
+  shuffleQueue: () => void;
+  markTrackUnavailable: (trackId: string, message?: string) => void;
+  dismissPlaybackNotice: () => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
+  toggleTrackDetails: () => void;
   setView: (view: PlayerState['activeView'], playlistId?: string) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
@@ -54,6 +62,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queueIndex: -1,
   activeView: 'home',
   activePlaylistId: null,
+  showTrackDetails: true,
+  playbackNotice: null,
 
   setLoading: (v) => set({ isLoading: v }),
   setIsPlaying: (v) => set({ isPlaying: v }),
@@ -158,7 +168,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
     } catch (err) {
       console.error('[player] playTrack failed:', err);
-      set({ isLoading: false });
+      set((s) => {
+        const failedIndex = s.queue.findIndex((queuedTrack) => queuedTrack.id === track.id);
+        return {
+          isLoading: false,
+          queueIndex: failedIndex >= 0 ? failedIndex : s.queueIndex,
+          queue: s.queue.map((queuedTrack) =>
+            queuedTrack.id === track.id
+              ? { ...queuedTrack, playbackError: 'Unavailable' }
+              : queuedTrack
+          ),
+        };
+      });
+      const state = get();
+      const failedIndex = state.queue.findIndex((queuedTrack) => queuedTrack.id === track.id);
+      const hasNext = failedIndex >= 0 && failedIndex < state.queue.length - 1;
+      if (hasNext) {
+        set({ playbackNotice: `Skipped "${track.title}" because it is unavailable.` });
+        window.setTimeout(() => {
+          get().next();
+        }, 150);
+      }
     }
   },
 
@@ -168,8 +198,29 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const { queue, queueIndex, shuffle, repeat } = get();
     if (queue.length === 0) return;
     let nextIdx: number;
+    let attempts = 0;
+    const pickNextIndex = () => {
+      if (repeat === 'one') {
+        if (queue[queueIndex]?.playbackError) {
+          const candidate = queueIndex + 1;
+          return candidate >= queue.length ? -1 : candidate;
+        }
+        return queueIndex;
+      }
+      if (shuffle) {
+        return Math.floor(Math.random() * queue.length);
+      }
+      const candidate = nextIdx + 1;
+      if (candidate >= queue.length) {
+        return repeat === 'all' ? 0 : -1;
+      }
+      return candidate;
+    };
     if (repeat === 'one') {
-      nextIdx = queueIndex;
+      nextIdx = queue[queueIndex]?.playbackError
+        ? queueIndex + 1
+        : queueIndex;
+      if (nextIdx >= queue.length) return;
     } else if (shuffle) {
       nextIdx = Math.floor(Math.random() * queue.length);
     } else {
@@ -178,6 +229,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         if (repeat === 'all') nextIdx = 0;
         else return;
       }
+    }
+    while (queue[nextIdx]?.playbackError && attempts < queue.length) {
+      attempts += 1;
+      nextIdx = pickNextIndex();
+      if (nextIdx < 0) return;
     }
     console.info('[player] next selected', {
       fromIndex: queueIndex,
@@ -209,6 +265,65 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   addToQueue: (track, source = 'manual') =>
     set(s => ({ queue: [...s.queue, { ...track, queueSource: source }] })),
 
+  removeFromQueue: (index) =>
+    set((s) => {
+      if (index < 0 || index >= s.queue.length) return s;
+      const nextQueue = s.queue.filter((_, i) => i !== index);
+      let nextQueueIndex = s.queueIndex;
+      if (index < s.queueIndex) nextQueueIndex = s.queueIndex - 1;
+      if (index === s.queueIndex) nextQueueIndex = Math.min(index, nextQueue.length - 1);
+      if (nextQueue.length === 0) nextQueueIndex = -1;
+      return { queue: nextQueue, queueIndex: nextQueueIndex };
+    }),
+
+  removePlayedTracks: () =>
+    set((s) => {
+      if (s.queueIndex <= 0) return s;
+      return {
+        queue: s.queue.slice(s.queueIndex),
+        queueIndex: 0,
+      };
+    }),
+
+  shuffleQueue: () =>
+    set((s) => {
+      if (s.queue.length <= 2) return s;
+      const current = s.queue[s.queueIndex];
+      const upcoming = s.queue
+        .filter((_, index) => index !== s.queueIndex && index > s.queueIndex)
+        .sort(() => Math.random() - 0.5);
+      const previous = s.queue.filter((_, index) => index < s.queueIndex);
+      if (!current) return { queue: [...previous, ...upcoming], queueIndex: previous.length };
+      return {
+        queue: [...previous, current, ...upcoming],
+        queueIndex: previous.length,
+      };
+    }),
+
+  markTrackUnavailable: (trackId, message = 'Unavailable') => {
+    let failedTitle = '';
+    set((s) => ({
+      isLoading: false,
+      queue: s.queue.map((track) =>
+        track.id === trackId
+          ? (failedTitle = track.title, { ...track, playbackError: message })
+          : track
+      ),
+    }));
+    const state = get();
+    if (state.currentTrack?.id === trackId) {
+      const currentIndex = state.queue.findIndex((track) => track.id === trackId);
+      if (currentIndex >= 0 && currentIndex < state.queue.length - 1) {
+        set({ playbackNotice: `Skipped "${failedTitle || state.currentTrack.title}" because playback failed.` });
+        window.setTimeout(() => {
+          get().next();
+        }, 150);
+      }
+    }
+  },
+
+  dismissPlaybackNotice: () => set({ playbackNotice: null }),
+
   reorderQueue: (fromIndex, toIndex) =>
     set((s) => {
       if (
@@ -238,6 +353,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }),
 
   clearQueue: () => set({ queue: [], queueIndex: -1 }),
+
+  toggleTrackDetails: () => set((s) => ({ showTrackDetails: !s.showTrackDetails })),
 
   setView: (view, playlistId) =>
     set({ activeView: view, activePlaylistId: playlistId ?? null }),

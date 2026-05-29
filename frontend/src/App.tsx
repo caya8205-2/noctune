@@ -20,7 +20,7 @@ const qc = new QueryClient({
 function AppInner() {
   useAudio();
   useKeyboardShortcuts();
-  const { activeView } = usePlayerStore();
+  const { activeView, showTrackDetails } = usePlayerStore();
 
   const IS_TAURI =
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -89,8 +89,8 @@ function AppInner() {
           <Sidebar />
         </div>
 
-        <div className="flex flex-1 min-w-0 bg-base-900">
-          <main className="flex-1 min-w-0">
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden bg-base-900">
+          <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
             {activeView === 'home' && <HomeView />}
             {activeView === 'player' && <PlayerView />}
             {activeView === 'search' && <SearchView />}
@@ -99,7 +99,7 @@ function AppInner() {
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'playlist' && <PlaylistView />}
           </main>
-          <TrackDetailsSidebar />
+          {showTrackDetails && <TrackDetailsSidebar />}
         </div>
       </div>
 

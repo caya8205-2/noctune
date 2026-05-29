@@ -6,6 +6,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
   Loader2,
+  Info,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { LikeButton } from './LikeButton';
@@ -18,7 +19,7 @@ export function PlayerBar() {
     volume, progress, duration,
     shuffle, repeat,
     togglePlay, setVolume, next, prev,
-    toggleShuffle, cycleRepeat, setView,
+    toggleShuffle, cycleRepeat, setView, showTrackDetails, toggleTrackDetails,
   } = usePlayerStore();
 
   const seekDuration = duration > 0 ? duration : currentTrack?.duration ?? 0;
@@ -190,6 +191,14 @@ export function PlayerBar() {
           </button>
 
           {currentTrack && <LikeButton track={currentTrack} />}
+
+          <button
+            onClick={toggleTrackDetails}
+            className={clsx('btn-ghost', showTrackDetails && 'text-accent')}
+            title={showTrackDetails ? 'Hide track details' : 'Show track details'}
+          >
+            <Info size={16} />
+          </button>
 
           <div
             className="w-24 h-4 cursor-pointer group/vol relative flex items-center"

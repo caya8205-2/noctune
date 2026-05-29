@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getRecentTracks } from '../services/cache.js';
+import { clearPlaybackHistory, getRecentTracks, removePlaybackHistoryItem } from '../services/cache.js';
 import { getAllPlaylists } from '../services/playlist.js';
 import { getSpotifyNewReleaseTracks } from '../services/spotify.js';
 import type { Track } from '../types/index.js';
@@ -26,5 +26,14 @@ export async function homeRoutes(app: FastifyInstance) {
 
   app.get('/history', async (_req, reply) => {
     return reply.send({ tracks: getRecentTracks(100) });
+  });
+
+  app.delete('/history', async (_req, reply) => {
+    return reply.send({ ok: true, history: clearPlaybackHistory() });
+  });
+
+  app.delete<{ Params: { id: string } }>('/history/:id', async (req, reply) => {
+    const removed = removePlaybackHistoryItem(req.params.id);
+    return reply.send({ ok: true, removed });
   });
 }

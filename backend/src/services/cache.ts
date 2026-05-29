@@ -97,7 +97,7 @@ export function isUrlFresh(track: CachedTrack): boolean {
   return Date.now() < track.audioUrlExpiry;
 }
 
-/** Store or update a track after resolving from yt-dlp. */
+/** Store or update a track after resolving audio metadata. Playback history is updated only by recordPlay(). */
 export function upsertTrack(
   query: string,
   track: Track,
@@ -114,8 +114,8 @@ export function upsertTrack(
     audioUrlExpiry: Date.now() + URL_TTL_MS,
     localAudioPath,
     cachedAt: existing?.cachedAt ?? Date.now(),
-    playCount: existing ? existing.playCount + 1 : 1,
-    lastPlayed: Date.now(),
+    playCount: existing?.playCount ?? 0,
+    lastPlayed: existing?.lastPlayed,
   };
 
   store.tracks[track.id] = cached;
@@ -158,6 +158,34 @@ export function recordPlay(videoId: string): void {
   saveStore(store);
 }
 
+/** Increment play count and refresh display metadata used by history. */
+export function recordPlayWithMetadata(track: Track): CachedTrack | null {
+  const store = getStore();
+  const existing = store.tracks[track.id];
+  if (!existing) return null;
+
+  const updated: CachedTrack = {
+    ...existing,
+    title: track.title || existing.title,
+    artist: track.artist || existing.artist,
+    duration: track.duration || existing.duration,
+    thumbnail: track.thumbnail || existing.thumbnail,
+    query: track.query || existing.query,
+    spotifyId: track.spotifyId ?? existing.spotifyId,
+    spotifyUrl: track.spotifyUrl ?? existing.spotifyUrl,
+    youtubeId: track.youtubeId ?? existing.youtubeId,
+    youtubeTitle: track.youtubeTitle ?? existing.youtubeTitle,
+    youtubeArtist: track.youtubeArtist ?? existing.youtubeArtist,
+    queueSource: track.queueSource ?? existing.queueSource,
+    playCount: (existing.playCount ?? 0) + 1,
+    lastPlayed: Date.now(),
+  };
+
+  store.tracks[track.id] = updated;
+  saveStore(store);
+  return updated;
+}
+
 /** Get all cached tracks sorted by play count (for "frequently played" features). */
 export function getTopTracks(limit = 20): CachedTrack[] {
   const store = getStore();
@@ -173,6 +201,30 @@ export function getRecentTracks(limit = 50): CachedTrack[] {
     .filter((track) => Boolean(track.lastPlayed))
     .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0))
     .slice(0, limit);
+}
+
+export function clearPlaybackHistory(): { updated: number } {
+  const store = getStore();
+  let updated = 0;
+  for (const track of Object.values(store.tracks)) {
+    if (track.lastPlayed || track.playCount) {
+      track.lastPlayed = undefined;
+      track.playCount = 0;
+      updated += 1;
+    }
+  }
+  saveStore(store);
+  return { updated };
+}
+
+export function removePlaybackHistoryItem(videoId: string): boolean {
+  const store = getStore();
+  const track = store.tracks[videoId];
+  if (!track || (!track.lastPlayed && !track.playCount)) return false;
+  track.lastPlayed = undefined;
+  track.playCount = 0;
+  saveStore(store);
+  return true;
 }
 
 /** Total number of cached tracks. */

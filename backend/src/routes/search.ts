@@ -5,13 +5,43 @@ import { getYoutubeTrack, searchTracks } from '../services/audioResolver.js';
 import { getEnvConfig } from '../services/env.js';
 import { getSpotifyTrackById, searchSpotify } from '../services/spotify.js';
 import { parseMediaUrl } from '../services/urlParser.js';
+import { debugSpotifyYoutubeMatch } from '../services/youtubeMatcher.js';
 
 const SearchQuery = z.object({
   q: z.string().min(1).max(200),
   limit: z.coerce.number().min(1).max(20).default(10),
 });
 
+const DebugMatchQuery = z.object({
+  title: z.string().min(1).max(200),
+  artist: z.string().max(200).default(''),
+  duration: z.coerce.number().min(0).default(0),
+  spotifyId: z.string().optional(),
+  thumbnail: z.string().optional(),
+  limit: z.coerce.number().min(1).max(20).default(10),
+});
+
 export async function searchRoutes(app: FastifyInstance) {
+  app.get('/search/debug-match', async (req, reply) => {
+    const parsed = DebugMatchQuery.safeParse(req.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid query', issues: parsed.error.issues });
+    }
+
+    const { title, artist, duration, spotifyId, thumbnail = '', limit } = parsed.data;
+    const result = await debugSpotifyYoutubeMatch({
+      id: spotifyId ? `spotify:${spotifyId}` : `${title}-${artist}`,
+      title,
+      artist,
+      duration,
+      thumbnail,
+      query: `${title} ${artist}`,
+      spotifyId,
+    }, limit);
+
+    return reply.send(result);
+  });
+
   app.get('/search', async (req, reply) => {
     const parsed = SearchQuery.safeParse(req.query);
     if (!parsed.success) {

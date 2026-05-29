@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { Clock3, ListPlus, Music2, Play } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Clock3, ListPlus, Music2, Play, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
@@ -21,6 +21,7 @@ function playedLabel(value?: number): string {
 
 export function HistoryView() {
   const { currentTrack, isPlaying, playTrack, addToQueue } = usePlayerStore();
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
     queryFn: api.history,
@@ -29,6 +30,18 @@ export function HistoryView() {
 
   function handlePlay(track: Track) {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
+  }
+
+  async function handleClearHistory() {
+    await api.clearHistory();
+    qc.invalidateQueries({ queryKey: ['history'] });
+    qc.invalidateQueries({ queryKey: ['home'] });
+  }
+
+  async function handleRemoveHistoryItem(track: Track) {
+    await api.removeHistoryItem(track.id);
+    qc.invalidateQueries({ queryKey: ['history'] });
+    qc.invalidateQueries({ queryKey: ['home'] });
   }
 
   return (
@@ -41,6 +54,11 @@ export function HistoryView() {
             {isLoading ? 'Loading playback history' : `${tracks.length} tracks from local playback`}
           </p>
         </div>
+        {tracks.length > 0 && (
+          <button onClick={handleClearHistory} className="btn-ghost text-xs gap-1.5 px-2">
+            <X size={12} /> Clear
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-7 pb-6">
@@ -124,6 +142,17 @@ export function HistoryView() {
               </button>
 
               <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+
+              <button
+                className="opacity-0 group-hover:opacity-100 btn-ghost text-muted hover:text-red-400 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemoveHistoryItem(track);
+                }}
+                title="Remove from history"
+              >
+                <X size={14} />
+              </button>
 
               <button
                 className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
