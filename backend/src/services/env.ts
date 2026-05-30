@@ -26,6 +26,18 @@ const DEFAULTS: EnvConfig = {
     audioCacheLimitMb: 1024,
 };
 
+function withProcessEnv(config: EnvConfig): EnvConfig {
+    const envSearchEngine = process.env.SEARCH_ENGINE;
+    return {
+        ...config,
+        spotifyClientId: process.env.SPOTIFY_CLIENT_ID || config.spotifyClientId,
+        spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET || config.spotifyClientSecret,
+        searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
+            ? envSearchEngine
+            : config.searchEngine,
+    };
+}
+
 function ensureDataDir() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -37,25 +49,25 @@ export function getEnvConfig(): EnvConfig {
     if (_config) return _config;
     ensureDataDir();
     if (!fs.existsSync(CONFIG_FILE)) {
-        _config = { ...DEFAULTS };
+        _config = withProcessEnv({ ...DEFAULTS });
         return _config;
     }
     try {
         const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<EnvConfig>;
-        _config = { ...DEFAULTS, ...parsed };
+        _config = withProcessEnv({ ...DEFAULTS, ...parsed });
         return _config;
     } catch {
-        _config = { ...DEFAULTS };
+        _config = withProcessEnv({ ...DEFAULTS });
         return _config;
     }
 }
 
 export function saveEnvConfig(partial: Partial<EnvConfig>): EnvConfig {
     const current = getEnvConfig();
-    _config = { ...current, ...partial };
+    _config = withProcessEnv({ ...current, ...partial });
     ensureDataDir();
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(_config, null, 2), 'utf-8');
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...current, ...partial }, null, 2), 'utf-8');
     return _config;
 }
 
