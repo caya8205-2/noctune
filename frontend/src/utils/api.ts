@@ -1,7 +1,8 @@
 // In production Tauri builds the Vite proxy doesn't exist, so we call the backend directly.
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const WEB_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
-const BASE = IS_TAURI ? 'http://127.0.0.1:3131' : WEB_API_BASE;
+const normalizeBase = (base: string) => base.replace(/\/+$/, '');
+const BASE = normalizeBase(IS_TAURI ? 'http://127.0.0.1:3131' : WEB_API_BASE);
 export const API_BASE = BASE;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
