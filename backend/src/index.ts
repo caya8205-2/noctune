@@ -16,6 +16,7 @@ import { scheduleStartupPrefetch } from './services/startupPrefetch.js';
 import { getAudioResolverStatus } from './services/audioResolver.js';
 import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
 import { getMatchCacheStats } from './services/youtubeMatcher.js';
+import { isDemoMode, scheduleDemoStateReset } from './services/demoMode.js';
 
 const PORT = Number(process.env.PORT ?? 3131);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -66,10 +67,12 @@ async function bootstrap() {
       failedIds: getPlaybackBlacklist().length,
     },
     matchCache: getMatchCacheStats(),
+    demoMode: isDemoMode(),
   }));
 
   // Init SQLite schema
   initDb();
+  scheduleDemoStateReset((result, message) => app.log.info(result, message));
   scheduleStartupPrefetch();
 
   await app.listen({ port: PORT, host: HOST });

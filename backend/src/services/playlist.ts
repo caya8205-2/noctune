@@ -223,6 +223,16 @@ export function deletePlaylist(id: string): void {
   db.close();
 }
 
+export function clearPlaylistStore(): { playlists: number; tracks: number } {
+  const db = getDb();
+  const playlistCount = (db.prepare('SELECT COUNT(*) as count FROM playlists').get() as { count: number }).count;
+  const trackCount = (db.prepare('SELECT COUNT(*) as count FROM playlist_tracks').get() as { count: number }).count;
+  db.prepare('DELETE FROM playlist_tracks').run();
+  db.prepare('DELETE FROM playlists').run();
+  db.close();
+  return { playlists: playlistCount, tracks: trackCount };
+}
+
 export function addTrackToPlaylist(playlistId: string, trackId: string, track?: Track): boolean {
   const db = getDb();
   const existing = db
