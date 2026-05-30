@@ -1,5 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { config as loadEnv } from 'dotenv';
 import { searchRoutes } from './routes/search.js';
 import { playerRoutes } from './routes/player.js';
 import { playlistRoutes } from './routes/playlists.js';
@@ -8,6 +11,7 @@ import { queueRoutes } from './routes/queue.js';
 import { homeRoutes } from './routes/home.js';
 import { lyricsRoutes } from './routes/lyrics.js';
 import { metadataRoutes } from './routes/metadata.js';
+import { rpcRoutes } from './routes/rpc.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
@@ -17,6 +21,17 @@ import { getAudioResolverStatus } from './services/audioResolver.js';
 import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
 import { getMatchCacheStats } from './services/youtubeMatcher.js';
 import { isDemoMode, scheduleDemoStateReset } from './services/demoMode.js';
+import { getDiscordRpcStatus } from './services/discordRpc.js';
+
+for (const envPath of [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'backend/.env'),
+  path.resolve(process.cwd(), '..', '.env'),
+]) {
+  if (existsSync(envPath)) {
+    loadEnv({ path: envPath, override: false });
+  }
+}
 
 const PORT = Number(process.env.PORT ?? 3131);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -56,6 +71,7 @@ async function bootstrap() {
   await app.register(homeRoutes);
   await app.register(lyricsRoutes);
   await app.register(metadataRoutes);
+  await app.register(rpcRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({
@@ -67,6 +83,7 @@ async function bootstrap() {
       failedIds: getPlaybackBlacklist().length,
     },
     matchCache: getMatchCacheStats(),
+    discordRpc: getDiscordRpcStatus(),
     demoMode: isDemoMode(),
   }));
 

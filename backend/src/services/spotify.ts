@@ -87,6 +87,7 @@ export interface SpotifyTrackMetadata {
 
 interface SpotifyAlbum {
     id: string;
+    name: string;
     images: Array<{ url: string; width: number; height: number }>;
     artists: Array<{ name: string }>;
 }
@@ -236,6 +237,7 @@ function spotifyTrackToTrack(st: SpotifyTrack, query: string): Track {
         id: `spotify:${st.id}`, // prefixed so we know it came from Spotify
         title: st.name,
         artist: st.artists.map((a) => a.name).join(', '),
+        album: st.album.name,
         duration: Math.round(st.duration_ms / 1000),
         thumbnail: image?.url ?? '',
         query,
@@ -258,6 +260,7 @@ function spotifyAlbumTrackToTrack(
         id: `spotify:${st.id}`,
         title: st.name,
         artist: st.artists.map((a) => a.name).join(', ') || album.artists.map((a) => a.name).join(', '),
+        album: album.name,
         duration: Math.round(st.duration_ms / 1000),
         thumbnail: image?.url ?? '',
         query,

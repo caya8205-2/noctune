@@ -4,6 +4,7 @@ export interface Track {
   id: string;           // playable YouTube videoId
   title: string;
   artist: string;
+  album?: string;
   duration: number;     // seconds
   thumbnail: string;
   query: string;        // original search query that found this track

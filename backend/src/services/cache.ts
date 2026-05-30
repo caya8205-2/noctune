@@ -168,6 +168,7 @@ export function recordPlayWithMetadata(track: Track): CachedTrack | null {
     ...existing,
     title: track.title || existing.title,
     artist: track.artist || existing.artist,
+    album: track.album ?? existing.album,
     duration: track.duration || existing.duration,
     thumbnail: track.thumbnail || existing.thumbnail,
     query: track.query || existing.query,

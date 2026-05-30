@@ -92,6 +92,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         ...resolved,
         title: track.title,
         artist: track.artist,
+        album: track.album,
         duration: track.duration,
         thumbnail: track.thumbnail,
         query: track.query,

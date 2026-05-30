@@ -223,7 +223,7 @@ export function SettingsView() {
   }
 
   async function handleClearCache() {
-    if (!window.confirm('Clear all learned song cache?')) return;
+    if (!window.confirm('Clear all cache data?')) return;
     setCacheBusy(true);
     setCacheMessage(null);
 
@@ -231,7 +231,41 @@ export function SettingsView() {
       const res = await fetch(API_BASE + '/settings/cache', { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear cache failed');
       await loadSettings();
-      setCacheMessage({ ok: true, text: 'Cache cleared.' });
+      setCacheMessage({ ok: true, text: 'All cache cleared.' });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleClearTrackCache() {
+    if (!window.confirm('Clear cached track metadata?')) return;
+    setCacheBusy(true);
+    setCacheMessage(null);
+
+    try {
+      const res = await fetch(API_BASE + '/settings/cache/tracks', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Clear track cache failed');
+      await loadSettings();
+      setCacheMessage({ ok: true, text: 'Track cache cleared.' });
+    } catch (err) {
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleClearLyricsCache() {
+    if (!window.confirm('Clear cached lyrics?')) return;
+    setCacheBusy(true);
+    setCacheMessage(null);
+
+    try {
+      const res = await fetch(API_BASE + '/settings/cache/lyrics', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Clear lyrics cache failed');
+      await loadSettings();
+      setCacheMessage({ ok: true, text: 'Lyrics cache cleared.' });
     } catch (err) {
       setCacheMessage({ ok: false, text: (err as Error).message });
     } finally {
@@ -608,7 +642,7 @@ export function SettingsView() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
             onClick={handleExportCache}
             disabled={cacheBusy}
@@ -632,6 +666,26 @@ export function SettingsView() {
               }}
             />
           </label>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <button
+            onClick={handleClearTrackCache}
+            disabled={cacheBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            Tracks
+          </button>
+
+          <button
+            onClick={handleClearLyricsCache}
+            disabled={cacheBusy}
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            Lyrics
+          </button>
 
           <button
             onClick={handleClearAudioCache}
@@ -648,7 +702,7 @@ export function SettingsView() {
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
           >
             <Trash2 size={14} />
-            Clear
+            Clear all
           </button>
         </div>
       </section>

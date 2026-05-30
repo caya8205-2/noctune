@@ -138,6 +138,18 @@ export async function settingsRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio });
     });
 
+    // DELETE /settings/cache/tracks — clear only learned track metadata
+    app.delete('/settings/cache/tracks', async (_req, reply) => {
+        clearCacheStore();
+        return reply.send({ ok: true, cache: getCacheStats() });
+    });
+
+    // DELETE /settings/cache/lyrics — clear only lyrics lookup cache
+    app.delete('/settings/cache/lyrics', async (_req, reply) => {
+        clearLyricsCacheStore();
+        return reply.send({ ok: true, lyrics: getLyricsCacheStats() });
+    });
+
     // DELETE /settings/cache/audio — clear only local audio files
     app.delete('/settings/cache/audio', async (_req, reply) => {
         const audio = clearAudioCache();

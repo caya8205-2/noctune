@@ -3,6 +3,7 @@ import { usePlayerStore } from '../store/player';
 import { API_BASE, api } from '../utils/api';
 
 let activeAudio: HTMLAudioElement | null = null;
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 function outputVolume(value: number): number {
   return Math.min(1, Math.max(0, Math.pow(value, 1.65)));
@@ -242,6 +243,25 @@ export function useAudio() {
       seekAudio(Math.max(0, s.progress - 10));
     });
   }, [currentTrack]);
+
+  // Sync Discord Rich Presence through the local desktop backend.
+  useEffect(() => {
+    if (!IS_TAURI) return;
+
+    function syncDiscordActivity() {
+      const state = usePlayerStore.getState();
+      api.updateDiscordActivity({
+        track: state.currentTrack,
+        isPlaying: state.isPlaying,
+        progress: state.progress,
+        duration: state.duration || state.currentTrack?.duration || 0,
+      }).catch(() => {});
+    }
+
+    syncDiscordActivity();
+    const interval = window.setInterval(syncDiscordActivity, 15_000);
+    return () => window.clearInterval(interval);
+  }, [currentTrack?.id, isPlaying]);
 
   // Update playback state
   useEffect(() => {

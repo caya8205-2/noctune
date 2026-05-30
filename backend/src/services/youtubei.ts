@@ -7,6 +7,7 @@ type YoutubeiModule = typeof import('youtubei.js');
 type InnertubeLike = Awaited<ReturnType<YoutubeiModule['Innertube']['create']>>;
 
 const nodeRequire = createRequire(__filename);
+const YOUTUBEI_CLIENTS = ['ANDROID', 'IOS', 'WEB', 'MWEB', 'TV_SIMPLY', 'ANDROID_VR'] as const;
 
 let youtubeiModulePromise: Promise<YoutubeiModule> | null = null;
 let innertubePromise: Promise<InnertubeLike> | null = null;
@@ -105,8 +106,51 @@ function parseAudioFormat(mimeType: string | undefined): string {
 export function getYoutubeiStatus() {
   return {
     available: true,
-    primaryClient: 'ANDROID_VR',
+    primaryClient: YOUTUBEI_CLIENTS[0],
+    fallbackClients: YOUTUBEI_CLIENTS.slice(1),
   };
+}
+
+async function getBasicInfoWithFallback(videoId: string) {
+  const youtube = await getInnertube();
+  const failures: string[] = [];
+
+  for (const client of YOUTUBEI_CLIENTS) {
+    try {
+      const info = await youtube.getBasicInfo(videoId, { client: client as any });
+      return { info, client };
+    } catch (err) {
+      failures.push(`${client}: ${(err as Error).message}`);
+    }
+  }
+
+  throw new Error(`No YouTube.js client could load metadata for ${videoId}. ${failures.join(' | ')}`);
+}
+
+async function getStreamingDataWithFallback(videoId: string) {
+  const youtube = await getInnertube();
+  const failures: string[] = [];
+
+  for (const client of YOUTUBEI_CLIENTS) {
+    try {
+      const format = await youtube.getStreamingData(videoId, {
+        type: 'audio',
+        quality: 'best',
+        format: 'mp4',
+        client: client as any,
+      });
+
+      if (!format.url) {
+        throw new Error('No playable URL returned');
+      }
+
+      return { format: { ...format, url: format.url }, client };
+    } catch (err) {
+      failures.push(`${client}: ${(err as Error).message}`);
+    }
+  }
+
+  throw new Error(`No YouTube.js client could resolve audio for ${videoId}. ${failures.join(' | ')}`);
 }
 
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
@@ -137,9 +181,8 @@ export async function getYoutubeTrack(
   urlOrVideoId: string,
   originalQuery = urlOrVideoId
 ): Promise<Track> {
-  const youtube = await getInnertube();
   const videoId = extractVideoId(urlOrVideoId);
-  const info = await youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any });
+  const { info } = await getBasicInfoWithFallback(videoId);
   return trackFromInfo(info, originalQuery);
 }
 
@@ -169,17 +212,7 @@ export async function getYoutubePlaylistTracks(
 }
 
 export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
-  const youtube = await getInnertube();
-  const format = await youtube.getStreamingData(videoId, {
-    type: 'audio',
-    quality: 'best',
-    format: 'mp4',
-    client: 'ANDROID_VR' as any,
-  });
-
-  if (!format.url) {
-    throw new Error(`No playable YouTube.js format found for ${videoId}`);
-  }
+  const { format } = await getStreamingDataWithFallback(videoId);
 
   return {
     videoId,
@@ -198,9 +231,8 @@ export async function resolveTrack(
   videoId: string,
   originalQuery: string
 ): Promise<ResolvedTrackResult> {
-  const youtube = await getInnertube();
-  const [info, audio] = await Promise.all([
-    youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any }),
+  const [{ info }, audio] = await Promise.all([
+    getBasicInfoWithFallback(videoId),
     resolveAudioUrl(videoId),
   ]);
 

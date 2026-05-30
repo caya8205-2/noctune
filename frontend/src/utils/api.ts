@@ -51,6 +51,18 @@ export const api = {
     request<{ ok: boolean; removed: boolean }>(`/history/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   status: () =>
     request<BackendStatus>('/status'),
+  updateDiscordActivity: (activity: {
+    track: Track | null;
+    isPlaying: boolean;
+    progress: number;
+    duration: number;
+  }) =>
+    request<{ ok: boolean; enabled: boolean; ready: boolean }>('/rpc/activity', {
+      method: 'POST',
+      body: JSON.stringify(activity),
+    }),
+  clearDiscordActivity: () =>
+    request<{ ok: boolean }>('/rpc/activity', { method: 'DELETE' }),
   spotifyMetadata: (spotifyId: string) =>
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
 
@@ -135,6 +147,7 @@ export interface Track {
   id: string;
   title: string;
   artist: string;
+  album?: string;
   duration: number;
   thumbnail: string;
   query: string;
@@ -235,6 +248,7 @@ export interface BackendStatus {
   resolver: { name: string; youtubei?: unknown; ytdlp?: unknown };
   playbackBlacklist?: { failedIds: number };
   matchCache?: { total: number };
+  discordRpc?: { enabled: boolean; ready: boolean };
 }
 
 export interface DebugMatchResult {
