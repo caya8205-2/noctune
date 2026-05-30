@@ -139,7 +139,7 @@ export async function getYoutubeTrack(
 ): Promise<Track> {
   const youtube = await getInnertube();
   const videoId = extractVideoId(urlOrVideoId);
-  const info = await youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any });
+  const info = await youtube.getBasicInfo(videoId, { client: 'ANDROID' as any });
   return trackFromInfo(info, originalQuery);
 }
 
@@ -174,7 +174,7 @@ export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo>
     type: 'audio',
     quality: 'best',
     format: 'mp4',
-    client: 'ANDROID_VR' as any,
+    client: 'ANDROID' as any,
   });
 
   if (!format.url) {
@@ -200,7 +200,7 @@ export async function resolveTrack(
 ): Promise<ResolvedTrackResult> {
   const youtube = await getInnertube();
   const [info, audio] = await Promise.all([
-    youtube.getBasicInfo(videoId, { client: 'ANDROID_VR' as any }),
+    youtube.getBasicInfo(videoId, { client: 'ANDROID' as any }),
     resolveAudioUrl(videoId),
   ]);
 
