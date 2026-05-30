@@ -76,6 +76,15 @@
   .track-row.active {
     @apply bg-base-700 ring-1 ring-accent/20 border-accent/20;
   }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Tauri window drag region */

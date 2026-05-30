@@ -21,7 +21,7 @@ import {
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.5.1';
+const APP_VERSION = 'v1.0.0-beta.5.2';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -324,13 +324,13 @@ export function SettingsView() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-9 py-8 gap-8">
+    <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
       <div className="flex flex-col gap-2 max-w-3xl">
         <div className="flex items-center gap-3">
           <Settings size={18} className="text-accent" />
           <p className="section-label text-accent">Settings</p>
         </div>
-        <h1 className="text-4xl font-bold text-white leading-tight">
+        <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
           Make global choices feel immediate.
         </h1>
       </div>
@@ -405,8 +405,8 @@ export function SettingsView() {
           {testResult && (
             <div
               className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${testResult.ok
-                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                : 'bg-red-500/10 text-red-400 border border-red-500/20'
                 }`}
             >
               {testResult.ok ? (
@@ -458,7 +458,7 @@ export function SettingsView() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
             <p className="text-xs text-muted">Resolver</p>
             <p className="text-sm font-semibold text-white mt-1">
@@ -485,7 +485,7 @@ export function SettingsView() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button
             type="button"
             onClick={handleRefreshDiagnostics}
@@ -526,15 +526,15 @@ export function SettingsView() {
           </span>
           <span
             className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${debugSearch
-                ? 'border-accent/50 bg-accent/25'
-                : 'border-base-600 bg-base-800'
+              ? 'border-accent/50 bg-accent/25'
+              : 'border-base-600 bg-base-800'
               }`}
             aria-hidden="true"
           >
             <span
               className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${debugSearch
-                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
-                  : 'translate-x-1 bg-muted'
+                ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                : 'translate-x-1 bg-muted'
                 }`}
             />
           </span>
@@ -554,8 +554,8 @@ export function SettingsView() {
         {cacheMessage && (
           <div
             className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${cacheMessage.ok
-                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
               }`}
           >
             {cacheMessage.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
@@ -564,7 +564,7 @@ export function SettingsView() {
         )}
 
         {data?.cache && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
               <p className="text-xs text-muted">Tracks</p>
               <p className="text-sm font-semibold text-white mt-1">{data.cache.learning.total} cached</p>
@@ -608,7 +608,7 @@ export function SettingsView() {
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <button
             onClick={handleExportCache}
             disabled={cacheBusy}
@@ -681,7 +681,7 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="max-w-3xl flex items-center justify-between border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
+      <section className="max-w-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
         <span>Noctune</span>
         <span className="font-mono">Pre-release {APP_VERSION}</span>
       </section>

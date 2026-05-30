@@ -17,9 +17,7 @@ function TrackCard({
   onAddToQueue: (track: Track) => void;
 }) {
   return (
-    <div
-      className="group text-left rounded-lg border border-base-600/70 bg-base-800 p-3 hover:bg-base-700 transition-colors"
-    >
+    <div className="group text-left rounded-lg border border-base-600/70 bg-base-800 p-3 hover:bg-base-700 transition-colors min-w-36 sm:min-w-0">
       <button type="button" onClick={() => onPlay(track)} className="relative mb-3 block w-full text-left">
         {track.thumbnail ? (
           <img
@@ -33,7 +31,7 @@ function TrackCard({
             <Music2 size={28} strokeWidth={1.4} />
           </div>
         )}
-        <span className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-accent text-base-950 flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
+        <span className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-accent text-base-950 flex items-center justify-center opacity-100 sm:opacity-0 sm:translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
           <Play size={14} fill="currentColor" />
         </span>
       </button>
@@ -44,7 +42,7 @@ function TrackCard({
           <Clock size={11} />
           <span className="font-mono">{formatDuration(track.duration)}</span>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             className="btn-ghost p-1.5"
@@ -100,11 +98,11 @@ export function HomeView() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-9 py-8 gap-8">
+    <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
       <section className="flex flex-col gap-8">
         <div className="max-w-3xl">
           <p className="section-label text-accent mb-3">Home</p>
-          <h1 className="text-4xl font-bold text-white leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
             Start from your library.
           </h1>
           <p className="text-sm text-muted leading-relaxed mt-3 max-w-2xl">
@@ -112,7 +110,7 @@ export function HomeView() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {currentTrack && (
             <button
               onClick={() => setView('player')}
@@ -167,12 +165,12 @@ export function HomeView() {
               Open latest
             </button>
           </div>
-          <div className="grid grid-cols-6 gap-3">
+          <div className="-mx-4 flex gap-3 overflow-x-auto scrollbar-hidden px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 sm:overflow-visible sm:px-0 sm:pb-0">
             {playlists.slice(0, 6).map((playlist) => (
               <button
                 key={playlist.id}
                 onClick={() => setView('playlist', playlist.id)}
-                className="surface-panel p-3 text-left hover:bg-base-700 transition-colors"
+                className="surface-panel min-w-28 sm:min-w-0 p-3 text-left hover:bg-base-700 transition-colors"
               >
                 <PlaylistCover playlist={playlist} />
                 <p className="text-sm font-semibold text-white truncate">{playlist.name}</p>
@@ -191,7 +189,7 @@ export function HomeView() {
               View queue
             </button>
           </div>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="-mx-4 flex gap-3 overflow-x-auto scrollbar-hidden px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 sm:overflow-visible sm:px-0 sm:pb-0">
             {visibleQueue.map((track) => (
               <TrackCard
                 key={`${track.id}-${track.spotifyId ?? 'track'}`}
@@ -210,7 +208,7 @@ export function HomeView() {
           {isLoading && <span className="text-xs text-muted">Loading</span>}
         </div>
         {recentTracks.length > 0 ? (
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
             {recentTracks.slice(0, 8).map((track) => (
               <TrackCard key={track.id} track={track} onPlay={handlePlay} onAddToQueue={addToQueue} />
             ))}
@@ -229,7 +227,7 @@ export function HomeView() {
           <h2 className="section-label">New releases</h2>
         </div>
         {newReleases.length > 0 ? (
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
             {newReleases.map((track) => (
               <TrackCard key={track.spotifyId ?? track.id} track={track} onPlay={handlePlay} onAddToQueue={addToQueue} />
             ))}

@@ -25,6 +25,10 @@ function isPlaylistUrl(value: string): boolean {
   }
 }
 
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 639px)').matches;
+}
+
 export function SearchView() {
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -161,11 +165,11 @@ export function SearchView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-9 pt-8 pb-5">
+      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
         <div className="flex items-end justify-between gap-4 mb-5">
           <div>
             <p className="section-label mb-2 text-accent">Search</p>
-            <h1 className="text-4xl font-bold text-white leading-tight">Find a seed track.</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">Find a seed track.</h1>
           </div>
           {searched && (
             <span className="text-xs text-muted">
@@ -192,7 +196,7 @@ export function SearchView() {
           )}
         </div>
 
-        <div className="flex items-center justify-between max-w-3xl mt-3 gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between max-w-3xl mt-3 gap-3">
           <div className="flex gap-2">
             {(['ytdlp', 'spotify'] as const).map((option) => (
               <button
@@ -209,7 +213,7 @@ export function SearchView() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted sm:text-right">
             {!engine
               ? 'Loading search engine'
               : engine === 'ytdlp'
@@ -248,7 +252,7 @@ export function SearchView() {
         )}
 
         {playlistUrl && (
-          <div className="max-w-3xl mt-3 rounded-lg border border-base-600/70 bg-base-800 p-3 flex items-center justify-between gap-3">
+          <div className="max-w-3xl mt-3 rounded-lg border border-base-600/70 bg-base-800 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">Playlist URL detected</p>
               <p className="text-xs text-muted mt-0.5">Import it into a local Noctune playlist.</p>
@@ -278,7 +282,7 @@ export function SearchView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-9 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 pb-6 sm:px-6 lg:px-9">
         {debugSearch && debugResult && (
           <div className="max-w-3xl mb-4 rounded-lg border border-accent/25 bg-base-900 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -348,6 +352,9 @@ export function SearchView() {
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
               className={`track-row group animate-fade-in max-w-3xl ${isActive ? 'active' : ''}`}
               style={{ animationDelay: `${i * 30}ms` }}
+              onClick={() => {
+                if (isMobileViewport()) handlePlay(track);
+              }}
               onDoubleClick={() => handlePlay(track)}
             >
               <div className="w-6 flex-shrink-0 flex items-center justify-center">
@@ -380,13 +387,8 @@ export function SearchView() {
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
 
-              <div className="flex items-center gap-1 text-xs text-muted flex-shrink-0">
-                <Clock size={10} />
-                <span className="font-mono">{formatDuration(track.duration)}</span>
-              </div>
-
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation();
                   addToQueue(track);
@@ -396,11 +398,11 @@ export function SearchView() {
                 <ListPlus size={14} />
               </button>
 
-              <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
 
               {debugSearch && track.spotifyId && (
                 <button
-                  className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                  className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDebugMatch(track);
@@ -412,12 +414,17 @@ export function SearchView() {
               )}
 
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                 onClick={() => handlePlay(track)}
                 title="Play"
               >
                 <Play size={14} fill="currentColor" />
               </button>
+
+              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
+                <Clock size={10} />
+                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+              </div>
             </div>
           );
         })}

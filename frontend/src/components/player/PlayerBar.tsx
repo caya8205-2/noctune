@@ -98,13 +98,13 @@ export function PlayerBar() {
         </div>
       </div>
 
-      <div className="flex items-center px-6 flex-1 gap-4">
+      <div className="flex items-center px-3 sm:px-6 flex-1 gap-2 sm:gap-4">
         {/* Track info */}
         <button
           type="button"
           onClick={() => currentTrack && setView('player')}
           disabled={!currentTrack}
-          className="flex items-center gap-3 w-72 min-w-0 text-left rounded-lg -ml-2 px-2 py-1.5 hover:bg-base-800 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+          className="flex items-center gap-3 flex-1 sm:w-72 sm:flex-none min-w-0 text-left rounded-lg -ml-1 sm:-ml-2 px-1 sm:px-2 py-1.5 hover:bg-base-800 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
           title={currentTrack ? 'Open full player' : undefined}
         >
           {currentTrack ? (
@@ -113,7 +113,7 @@ export function PlayerBar() {
                 <img
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
-                  className="w-11 h-11 rounded-lg object-cover border border-base-600/60"
+                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover border border-base-600/60"
                   onError={(e) => (e.currentTarget.style.display = 'none')}
                 />
                 {isLoading && (
@@ -123,7 +123,7 @@ export function PlayerBar() {
                   </div>
                 )}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-white truncate leading-tight">
                   {currentTrack.title}
                 </p>
@@ -139,7 +139,7 @@ export function PlayerBar() {
         </button>
 
         {/* Controls */}
-        <div className="flex-1 flex items-center justify-center gap-2">
+        <div className="hidden sm:flex flex-1 items-center justify-center gap-2">
           <button
             onClick={toggleShuffle}
             className={clsx('btn-ghost', shuffle && 'text-accent')}
@@ -177,8 +177,25 @@ export function PlayerBar() {
           </button>
         </div>
 
+        <div className="sm:hidden flex items-center justify-end gap-1">
+          <button onClick={prev} className="btn-ghost p-2">
+            <SkipBack size={20} />
+          </button>
+          <button onClick={togglePlay} disabled={!currentTrack} className="w-12 h-12 rounded-full bg-accent text-base-950 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-accent/10">
+            {isLoading
+              ? <Loader2 size={16} className="animate-spin" />
+              : isPlaying
+                ? <Pause size={16} fill="currentColor" />
+                : <Play size={16} fill="currentColor" className="ml-0.5" />
+            }
+          </button>
+          <button onClick={next} className="btn-ghost p-2">
+            <SkipForward size={20} />
+          </button>
+        </div>
+
         {/* Time + Volume */}
-        <div className="flex items-center gap-3 w-72 justify-end">
+        <div className="hidden sm:flex items-center gap-3 w-72 justify-end">
           <span className="text-xs text-muted font-mono tabular-nums">
             {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>

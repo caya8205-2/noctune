@@ -136,7 +136,7 @@ function LocalDetails({ track }: { track: CachedTrack }) {
   );
 }
 
-export function TrackDetailsSidebar() {
+export function TrackDetailsContent() {
   const { currentTrack } = usePlayerStore();
   const spotifyId = currentTrack?.spotifyId;
   const { data, isLoading, isError } = useQuery({
@@ -145,6 +145,37 @@ export function TrackDetailsSidebar() {
     enabled: Boolean(spotifyId),
     staleTime: 1000 * 60 * 60,
   });
+
+  if (!currentTrack) {
+    return (
+      <div className="flex flex-col justify-center text-center text-muted">
+        <Music2 size={28} className="mx-auto mb-3" strokeWidth={1.3} />
+        <p className="text-sm">Track details will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {data ? (
+        <SpotifyDetails track={currentTrack} metadata={data} />
+      ) : (
+        <>
+          <LocalDetails track={currentTrack} />
+          {spotifyId && isLoading && (
+            <p className="text-xs text-muted">Loading Spotify metadata.</p>
+          )}
+          {spotifyId && isError && (
+            <p className="text-xs text-red-400">Spotify metadata unavailable.</p>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+export function TrackDetailsSidebar() {
+  const { currentTrack } = usePlayerStore();
 
   if (!currentTrack) {
     return (
@@ -158,19 +189,7 @@ export function TrackDetailsSidebar() {
   return (
     <aside className="hidden xl:block w-72 flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto">
       <div className="flex flex-col gap-4 p-4">
-        {data ? (
-          <SpotifyDetails track={currentTrack} metadata={data} />
-        ) : (
-          <>
-            <LocalDetails track={currentTrack} />
-            {spotifyId && isLoading && (
-              <p className="text-xs text-muted">Loading Spotify metadata.</p>
-            )}
-            {spotifyId && isError && (
-              <p className="text-xs text-red-400">Spotify metadata unavailable.</p>
-            )}
-          </>
-        )}
+        <TrackDetailsContent />
       </div>
     </aside>
   );

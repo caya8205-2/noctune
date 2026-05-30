@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import { clsx } from 'clsx';
 
+type SidebarView = 'home' | 'search' | 'history' | 'queue' | 'settings' | 'playlist';
+
 function playlistImportErrorMessage(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes('already exists')) return 'A playlist with this name already exists.';
@@ -18,7 +20,7 @@ function playlistImportErrorMessage(message: string): string {
   return message || 'Playlist import failed.';
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { activeView, activePlaylistId, setView } = usePlayerStore();
   const qc = useQueryClient();
   const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false);
@@ -96,6 +98,11 @@ export function Sidebar() {
     { icon: Settings, label: 'Settings', view: 'settings' as const },
   ];
 
+  function navigate(view: SidebarView, playlistId?: string) {
+    setView(view, playlistId);
+    onNavigate?.();
+  }
+
   return (
     <div className="flex flex-col h-full bg-base-950 px-3 py-4">
       {/* Logo */}
@@ -118,7 +125,7 @@ export function Sidebar() {
         {navItems.map(({ icon: Icon, label, view }) => (
           <button
             key={view}
-            onClick={() => setView(view)}
+            onClick={() => navigate(view)}
             className={clsx(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border',
               activeView === view
@@ -147,7 +154,7 @@ export function Sidebar() {
           </button>
 
           {playlistMenuOpen && (
-            <div className="absolute left-[calc(100%+0.75rem)] top-0 z-50 w-64 rounded-lg border border-base-600 bg-base-800 shadow-xl shadow-black/30 p-1.5">
+            <div className="absolute right-0 top-full mt-2 md:left-[calc(100%+0.75rem)] md:right-auto md:top-0 md:mt-0 z-50 w-64 rounded-lg border border-base-600 bg-base-800 shadow-xl shadow-black/30 p-1.5">
               <button
                 onClick={() => {
                   setDeleteError(null);
@@ -206,7 +213,7 @@ export function Sidebar() {
                   ? 'bg-base-700 text-white border-base-600'
                   : 'text-muted border-transparent hover:text-white hover:bg-base-800'
               )}
-              onClick={() => setView('playlist', pl.id)}
+              onClick={() => navigate('playlist', pl.id)}
             >
               <ListMusic size={14} className="flex-shrink-0" />
               <span className="flex-1 truncate">{pl.name}</span>

@@ -19,6 +19,10 @@ function playedLabel(value?: number): string {
   return new Date(value).toLocaleDateString();
 }
 
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 639px)').matches;
+}
+
 export function HistoryView() {
   const { currentTrack, isPlaying, playTrack, addToQueue } = usePlayerStore();
   const qc = useQueryClient();
@@ -46,10 +50,10 @@ export function HistoryView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-9 pt-8 pb-5 flex items-end justify-between gap-4">
+      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <p className="section-label text-accent">History</p>
-          <h1 className="text-4xl font-bold text-white leading-tight mt-2">Recently played.</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Recently played.</h1>
           <p className="text-xs text-muted mt-2">
             {isLoading ? 'Loading playback history' : `${tracks.length} tracks from local playback`}
           </p>
@@ -61,7 +65,7 @@ export function HistoryView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
         {!isLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -83,6 +87,9 @@ export function HistoryView() {
                 isActive && 'active'
               )}
               style={{ animationDelay: `${i * 20}ms` }}
+              onClick={() => {
+                if (isMobileViewport()) handlePlay(track);
+              }}
               onDoubleClick={() => handlePlay(track)}
             >
               <div className="w-6 flex-shrink-0 flex items-center justify-center">
@@ -121,17 +128,8 @@ export function HistoryView() {
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
 
-              <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">
-                {playedLabel(track.lastPlayed)}
-              </span>
-
-              <div className="flex items-center gap-1 text-xs text-muted flex-shrink-0">
-                <Clock3 size={10} />
-                <span className="font-mono">{formatDuration(track.duration)}</span>
-              </div>
-
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation();
                   addToQueue(track, 'recommendation');
@@ -141,10 +139,10 @@ export function HistoryView() {
                 <ListPlus size={14} />
               </button>
 
-              <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
 
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost text-muted hover:text-red-400 transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost text-muted hover:text-red-400 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleRemoveHistoryItem(track);
@@ -155,12 +153,21 @@ export function HistoryView() {
               </button>
 
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                 onClick={() => handlePlay(track)}
                 title="Play"
               >
                 <Play size={14} fill="currentColor" />
               </button>
+
+              <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">
+                {playedLabel(track.lastPlayed)}
+              </span>
+
+              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
+                <Clock3 size={10} />
+                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+              </div>
             </div>
           );
         })}

@@ -15,6 +15,10 @@ function queueSourceLabel(source: Track['queueSource']): string {
   return 'Search';
 }
 
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 639px)').matches;
+}
+
 export function QueueView() {
   const {
     queue,
@@ -55,10 +59,10 @@ export function QueueView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-9 pt-8 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4">
         <div>
           <p className="section-label text-accent">Queue</p>
-          <h1 className="text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
           <p className="text-xs text-muted mt-2">
             {queue.length} tracks in rotation
             {queueIndex > 0 ? `, ${queueIndex} played` : ''}
@@ -89,7 +93,7 @@ export function QueueView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
         {playbackNotice && (
           <div className="max-w-3xl mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-3 text-xs text-red-200">
             <span>{playbackNotice}</span>
@@ -126,6 +130,9 @@ export function QueueView() {
                 isPast && 'opacity-40',
                 dragIndex === i && 'opacity-50'
               )}
+              onClick={() => {
+                if (isMobileViewport()) playTrack(track, queue);
+              }}
               onDoubleClick={() => playTrack(track, queue)}
             >
               <div
@@ -175,12 +182,9 @@ export function QueueView() {
                 {queueSourceLabel(track.queueSource)}
               </span>
               )}
-              <span className="text-xs font-mono text-muted flex-shrink-0">
-                {formatDuration(track.duration)}
-              </span>
-              <LikeButton track={track} className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <LikeButton track={track} className="hidden sm:flex ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
               <button
-                className="btn-ghost p-1.5 ml-1 text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="hidden sm:flex btn-ghost p-1.5 ml-1 text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(event) => {
                   event.stopPropagation();
                   removeFromQueue(i);
@@ -189,6 +193,9 @@ export function QueueView() {
               >
                 <X size={13} />
               </button>
+              <span className="ml-2 block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
+                {formatDuration(track.duration)}
+              </span>
             </div>
           );
         })}

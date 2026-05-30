@@ -83,6 +83,10 @@ function readCropSource(file: File): Promise<CropSource> {
   });
 }
 
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 639px)').matches;
+}
+
 function CoverCropModal({
   source,
   saving,
@@ -405,7 +409,7 @@ export function PlaylistView() {
           onApply={handleApplyCover}
         />
       )}
-      <div className="px-9 pt-8 pb-5 flex items-end justify-between gap-4">
+      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="flex items-end gap-5 min-w-0">
           <div className="w-28 h-28 rounded-xl bg-base-800 border border-base-600/60 flex items-center justify-center text-muted overflow-hidden flex-shrink-0">
             {playlist?.coverDataUrl ? (
@@ -423,7 +427,7 @@ export function PlaylistView() {
                 <input
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
-                  className="min-w-0 max-w-xl bg-base-900 border border-base-600 rounded-lg px-3 py-2 text-3xl font-bold text-white focus:outline-none focus:border-accent"
+                  className="min-w-0 max-w-xl bg-base-900 border border-base-600 rounded-lg px-3 py-2 text-2xl sm:text-3xl font-bold text-white focus:outline-none focus:border-accent"
                   placeholder="Playlist name"
                 />
                 <button
@@ -436,7 +440,7 @@ export function PlaylistView() {
                 </button>
               </form>
             ) : (
-              <h1 className="text-4xl font-bold text-white leading-tight mt-2 truncate">
+              <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2 truncate">
                 {playlist?.name ?? 'Playlist'}
               </h1>
             )}
@@ -510,14 +514,14 @@ export function PlaylistView() {
       </div>
 
       {cacheMessage && (
-        <div className="px-9 pb-3 -mt-2">
+        <div className="px-4 sm:px-6 lg:px-9 pb-3 -mt-2">
           <p className="max-w-3xl rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
             {cacheMessage}
           </p>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
         {!isLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -581,6 +585,9 @@ export function PlaylistView() {
                 isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
                 dragIndex === originalIndex && 'opacity-50'
               )}
+              onClick={() => {
+                if (isMobileViewport() && !editing) handlePlay(track);
+              }}
               onDoubleClick={() => handlePlay(track)}
             >
               <div className={clsx(
@@ -608,12 +615,8 @@ export function PlaylistView() {
                 </p>
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted flex-shrink-0 mr-2">
-                <Clock size={10} />
-                <span className="font-mono">{formatDuration(track.duration)}</span>
-              </div>
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation();
                   addToQueue(track, 'playlist');
@@ -622,10 +625,10 @@ export function PlaylistView() {
               >
                 <ListPlus size={14} />
               </button>
-              <LikeButton track={track} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
               {editing && !isLikedPlaylist && (
                 <button
-                  className="btn-ghost p-1.5 text-muted hover:text-red-400 transition-colors"
+                  className="hidden sm:flex btn-ghost p-1.5 text-muted hover:text-red-400 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRemove(track);
@@ -636,12 +639,16 @@ export function PlaylistView() {
                 </button>
               )}
               <button
-                className="opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
+                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                 onClick={() => handlePlay(track)}
                 title="Play"
               >
                 <Play size={14} fill="currentColor" />
               </button>
+              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
+                <Clock size={10} />
+                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+              </div>
             </div>
           );
         })}
