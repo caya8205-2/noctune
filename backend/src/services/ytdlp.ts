@@ -20,9 +20,13 @@ function resolveYtdlpBinaryPath(): string | undefined {
 
   const exeDir = path.dirname(process.execPath);
   return firstExistingPath([
-    path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
+    path.join(process.cwd(), 'bin', 'yt-dlp'),          // <── Linux binary
+    path.join(process.cwd(), 'yt-dlp'),
+    path.join(process.cwd(), 'bin', 'yt-dlp.exe'),     // keep Windows fallback just in case
     path.join(process.cwd(), 'yt-dlp.exe'),
     path.join(process.cwd(), 'yt-dlp-x86_64-pc-windows-msvc.exe'),
+    path.join(exeDir, 'yt-dlp'),
+    path.join(exeDir, 'bin', 'yt-dlp'),
     path.join(exeDir, 'yt-dlp.exe'),
     path.join(exeDir, 'bin', 'yt-dlp.exe'),
     path.join(exeDir, 'yt-dlp-x86_64-pc-windows-msvc.exe'),
