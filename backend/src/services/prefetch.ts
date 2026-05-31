@@ -116,6 +116,18 @@ export function consumePrefetch(videoId: string): void {
   prefetched.delete(videoId);
 }
 
+export function clearPrefetchCache(): { prefetched: number; inFlight: number; queued: number } {
+  const snapshot = {
+    prefetched: prefetched.size,
+    inFlight: inFlight.size,
+    queued: prefetchQueue.size,
+  };
+  prefetched.clear();
+  prefetchQueue.clear();
+  logPrefetch('cleared memory cache', snapshot);
+  return snapshot;
+}
+
 export function getPrefetchStatus() {
   return {
     queueSize: prefetchQueue.size,

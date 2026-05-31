@@ -20,6 +20,13 @@ function playlistImportErrorMessage(message: string): string {
   return message || 'Playlist import failed.';
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { activeView, activePlaylistId, setView } = usePlayerStore();
   const qc = useQueryClient();
@@ -27,6 +34,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -37,6 +45,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     }
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const { data: playlists = [] } = useQuery({
@@ -105,19 +118,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex flex-col h-full bg-base-950 px-3 py-4">
-      {/* Logo */}
-      <div className="px-2 mb-7 flex items-center gap-2">
-        <div className="w-9 h-9 flex items-center justify-center">
-          <img src="/app-icon.png" alt="" className="w-9 h-9 object-contain" />
+      {/* Greeting */}
+      <div className="px-2 mb-7">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse flex-shrink-0" />
+          <span className="text-[10px] text-muted uppercase tracking-widest font-medium">
+            {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </span>
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-white leading-none">
-            Noctune
-          </h1>
-          <p className="text-[10px] text-muted uppercase tracking-wider mt-1 font-semibold">
-            Local player
-          </p>
-        </div>
+        <p className="text-[11px] text-soft tabular-nums font-medium mb-1.5">
+          {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+        </p>
+        <h2 className="text-[17px] font-bold text-white leading-snug">
+          {getGreeting()}
+        </h2>
       </div>
 
       {/* Main nav */}

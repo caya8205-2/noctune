@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Clock, Disc3, Heart, ListOrdered, ListPlus, Music2, Play, Radio, Search, Sparkles } from 'lucide-react';
+import { Clock, Disc3, Heart, ListOrdered, ListPlus, Music2, Radio, Search, Sparkles } from 'lucide-react';
 import { api, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -17,8 +17,11 @@ function TrackCard({
   onAddToQueue: (track: Track) => void;
 }) {
   return (
-    <div className="group text-left rounded-lg border border-base-600/70 bg-base-800 p-3 hover:bg-base-700 transition-colors min-w-36 sm:min-w-0">
-      <button type="button" onClick={() => onPlay(track)} className="relative mb-3 block w-full text-left">
+    <div
+      className="group text-left rounded-lg border border-base-600/70 bg-base-800 p-3 hover:bg-base-700 transition-colors min-w-36 sm:min-w-0 cursor-pointer"
+      onClick={() => onPlay(track)}
+    >
+      <div className="relative mb-3 block w-full text-left">
         {track.thumbnail ? (
           <img
             src={track.thumbnail}
@@ -31,10 +34,7 @@ function TrackCard({
             <Music2 size={28} strokeWidth={1.4} />
           </div>
         )}
-        <span className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-accent text-base-950 flex items-center justify-center opacity-100 sm:opacity-0 sm:translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
-          <Play size={14} fill="currentColor" />
-        </span>
-      </button>
+      </div>
       <p className="text-sm font-semibold text-white truncate">{track.title}</p>
       <p className="text-xs text-muted truncate mt-1">{track.artist}</p>
       <div className="flex items-center justify-between gap-2 mt-3">
@@ -47,7 +47,10 @@ function TrackCard({
             type="button"
             className="btn-ghost p-1.5"
             title="Add to queue"
-            onClick={() => onAddToQueue(track)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddToQueue(track);
+            }}
           >
             <ListPlus size={14} />
           </button>

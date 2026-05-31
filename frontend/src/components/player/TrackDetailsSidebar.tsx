@@ -179,7 +179,7 @@ export function TrackDetailsSidebar() {
 
   if (!currentTrack) {
     return (
-      <aside className="hidden xl:flex w-72 flex-shrink-0 border-l border-base-800 bg-base-950/70 p-4 flex-col justify-center text-center text-muted">
+      <aside className="hidden lg:flex w-72 flex-shrink-0 border-l border-base-800 bg-base-950/70 p-4 flex-col justify-center text-center text-muted">
         <Music2 size={28} className="mx-auto mb-3" strokeWidth={1.3} />
         <p className="text-sm">Track details will appear here.</p>
       </aside>
@@ -187,7 +187,7 @@ export function TrackDetailsSidebar() {
   }
 
   return (
-    <aside className="hidden xl:block w-72 flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto">
+    <aside className="hidden lg:block w-72 flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto">
       <div className="flex flex-col gap-4 p-4">
         <TrackDetailsContent />
       </div>

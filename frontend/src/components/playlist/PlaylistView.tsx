@@ -83,10 +83,6 @@ function readCropSource(file: File): Promise<CropSource> {
   });
 }
 
-function isMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 639px)').matches;
-}
-
 function CoverCropModal({
   source,
   saving,
@@ -586,9 +582,8 @@ export function PlaylistView() {
                 dragIndex === originalIndex && 'opacity-50'
               )}
               onClick={() => {
-                if (isMobileViewport() && !editing) handlePlay(track);
+                if (!editing) handlePlay(track);
               }}
-              onDoubleClick={() => handlePlay(track)}
             >
               <div className={clsx(
                 'w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted transition-opacity',
@@ -638,13 +633,6 @@ export function PlaylistView() {
                   <Trash2 size={14} />
                 </button>
               )}
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
-                onClick={() => handlePlay(track)}
-                title="Play"
-              >
-                <Play size={14} fill="currentColor" />
-              </button>
               <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
                 <Clock size={10} />
                 <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>

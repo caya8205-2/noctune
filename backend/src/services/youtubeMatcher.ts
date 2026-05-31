@@ -28,15 +28,20 @@ export interface ScoredCandidate {
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
+  'official',
+  'official mv',
   'official audio',
   'official video',
   'official music video',
   'official lyric video',
+  'music video',
   'lyric video',
+  'mv',
+  'original',
   'audio',
 ];
 
@@ -78,7 +83,10 @@ const negativeKeywords = [
   'violin cover',
   'orchestra cover',
   'orchestral cover',
+  'acoustic',
   'acoustic cover',
+  'acoustic version',
+  'acoustic arrangement',
   'backing track',
   'backtrack',
   'minus one',
@@ -116,7 +124,10 @@ const instrumentalCoverKeywords = [
   'violin cover',
   'orchestra cover',
   'orchestral cover',
+  'acoustic',
   'acoustic cover',
+  'acoustic version',
+  'acoustic arrangement',
   'backing track',
   'backtrack',
   'minus one',
@@ -213,7 +224,21 @@ function words(value: string): string[] {
 }
 
 function keywordAllowed(keyword: string, spotifyTitle: string): boolean {
-  return normalize(spotifyTitle).includes(keyword);
+  return hasKeyword(normalize(spotifyTitle), keyword);
+}
+
+function splitArtistNames(value: string): string[] {
+  return value
+    .split(/,|&|\band\b|\bfeat\b|\bfeaturing\b|\sx\s/gi)
+    .map((part) => normalize(part))
+    .filter((part) => part.length > 1);
+}
+
+function hasKeyword(text: string, keyword: string): boolean {
+  if (keyword.length <= 3 || !keyword.includes(' ')) {
+    return text.split(' ').includes(keyword);
+  }
+  return text.includes(keyword);
 }
 
 function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate {
@@ -231,8 +256,11 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
     }
   }
 
-  for (const artistName of spotifyArtist.split(',').map((part) => part.trim())) {
-    if (artistName && combined.includes(artistName)) {
+  for (const artistName of splitArtistNames(spotifyTrack.artist)) {
+    if (candidateArtist.includes(artistName)) {
+      score += 90;
+      reasons.push('artist-channel-match');
+    } else if (artistName && combined.includes(artistName)) {
       score += 45;
       reasons.push('artist-match');
     }
@@ -244,21 +272,27 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   }
 
   for (const keyword of positiveTitleKeywords) {
-    if (candidateTitle.includes(keyword)) {
-      score += keyword.startsWith('official') ? 100 : 30;
+    if (hasKeyword(candidateTitle, keyword)) {
+      score += keyword.startsWith('official')
+        ? 110
+        : keyword === 'mv' || keyword === 'music video'
+          ? 60
+          : keyword === 'original'
+            ? 45
+            : 30;
       reasons.push(`positive-title:${keyword}`);
     }
   }
 
   for (const keyword of positiveChannelKeywords) {
-    if (candidateArtist.includes(keyword)) {
+    if (hasKeyword(candidateArtist, keyword)) {
       score += keyword === 'official' ? 80 : 55;
       reasons.push(`positive-channel:${keyword}`);
     }
   }
 
   for (const keyword of negativeKeywords) {
-    if (combined.includes(keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
       const penalty = instrumentalCoverKeywords.includes(keyword)
         ? 240
         : keyword.includes('react') || keyword === 'reaction'
@@ -270,20 +304,20 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   }
 
   const hasOfficialSignal =
-    candidateTitle.includes('official') ||
-    candidateArtist.includes('official') ||
-    candidateArtist.includes('topic') ||
-    candidateArtist.includes('vevo');
+    hasKeyword(candidateTitle, 'official') ||
+    hasKeyword(candidateArtist, 'official') ||
+    hasKeyword(candidateArtist, 'topic') ||
+    hasKeyword(candidateArtist, 'vevo');
 
   for (const keyword of fanUploadKeywords) {
-    if (combined.includes(keyword) && !hasOfficialSignal) {
+    if (hasKeyword(combined, keyword) && !hasOfficialSignal) {
       score -= keyword.includes('sing') ? 120 : 65;
       reasons.push(`fan-upload:${keyword}`);
     }
   }
 
   for (const keyword of liveVersionKeywords) {
-    if (combined.includes(keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
       score -= keyword === 'tour' ? 260 : 180;
       reasons.push(`live-version:${keyword}`);
     }
@@ -292,13 +326,13 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   if (spotifyTrack.duration > 0 && candidate.duration > 0) {
     const diff = Math.abs(candidate.duration - spotifyTrack.duration);
     if (diff <= 5) {
-      score += 70;
+      score += 90;
       reasons.push('duration-close');
     } else if (diff <= 15) {
-      score += 35;
+      score += 50;
       reasons.push('duration-near');
     } else if (diff >= 45) {
-      score -= 55;
+      score -= diff >= 90 ? 110 : 70;
       reasons.push('duration-far');
     }
   }

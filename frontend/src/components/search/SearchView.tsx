@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Play, Search, Wrench, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
 import { api, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -23,10 +23,6 @@ function isPlaylistUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function isMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 639px)').matches;
 }
 
 export function SearchView() {
@@ -352,10 +348,7 @@ export function SearchView() {
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
               className={`track-row group animate-fade-in max-w-3xl ${isActive ? 'active' : ''}`}
               style={{ animationDelay: `${i * 30}ms` }}
-              onClick={() => {
-                if (isMobileViewport()) handlePlay(track);
-              }}
-              onDoubleClick={() => handlePlay(track)}
+              onClick={() => handlePlay(track)}
             >
               <div className="w-6 flex-shrink-0 flex items-center justify-center">
                 {isActive && isPlaying ? (
@@ -405,21 +398,13 @@ export function SearchView() {
                   className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDebugMatch(track);
+                    void handleDebugMatch(track);
                   }}
                   title="Debug YouTube match"
                 >
                   {debugBusyId === track.id ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
                 </button>
               )}
-
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
-                onClick={() => handlePlay(track)}
-                title="Play"
-              >
-                <Play size={14} fill="currentColor" />
-              </button>
 
               <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
                 <Clock size={10} />

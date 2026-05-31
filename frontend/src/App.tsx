@@ -147,15 +147,13 @@ function AppInner() {
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'playlist' && <PlaylistView />}
           </main>
-          {activeView !== 'player' && showTrackDetails && <TrackDetailsSidebar />}
+          {showTrackDetails && <TrackDetailsSidebar />}
         </div>
       </div>
 
-      {activeView !== 'player' && (
-        <div className="h-20 flex-shrink-0 border-t border-base-800 bg-base-950">
-          <PlayerBar />
-        </div>
-      )}
+      <div className={`h-20 flex-shrink-0 border-t border-base-800 bg-base-950 ${activeView === 'player' ? 'hidden lg:block' : ''}`}>
+        <PlayerBar />
+      </div>
 
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">

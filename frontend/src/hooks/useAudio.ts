@@ -25,6 +25,30 @@ async function playAudio(audio: HTMLAudioElement) {
   await audio.play();
 }
 
+function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
+  if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.removeEventListener('loadedmetadata', handleReady);
+      audio.removeEventListener('canplay', handleReady);
+      audio.removeEventListener('error', handleError);
+    };
+    const handleReady = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(audio.error ?? new Error('Audio failed to load'));
+    };
+
+    audio.addEventListener('loadedmetadata', handleReady, { once: true });
+    audio.addEventListener('canplay', handleReady, { once: true });
+    audio.addEventListener('error', handleError, { once: true });
+  });
+}
+
 export function seekAudio(seconds: number) {
   if (!activeAudio) return;
   const state = usePlayerStore.getState();
@@ -125,11 +149,17 @@ export function useAudio() {
       }
       console.error('[audio] error', e, target.error);
       setLoading(false);
-      setIsPlaying(false);
 
       const track = usePlayerStore.getState().currentTrack;
-      if (!track || track.localAudioPath || recoveryAttemptRef.current === track.id) return;
+      if (!track || track.localAudioPath || recoveryAttemptRef.current === track.id) {
+        setIsPlaying(false);
+        return;
+      }
 
+      const resumeAt = Math.max(
+        0,
+        target.currentTime || usePlayerStore.getState().progress || 0
+      );
       recoveryAttemptRef.current = track.id;
       setLoading(true);
       api.resolve(track.id, track.query)
@@ -153,10 +183,18 @@ export function useAudio() {
           });
           target.src = `${API_BASE}/player/stream/${resolved.id}?retry=${Date.now()}`;
           target.load();
-          return playAudio(target);
+          return waitForAudioReady(target)
+            .then(() => {
+              if (resumeAt > 1) {
+                target.currentTime = Math.min(resumeAt, target.duration || resumeAt);
+                usePlayerStore.getState().setProgress(resumeAt);
+              }
+            })
+            .then(() => playAudio(target));
         })
         .catch((err) => {
           console.warn('[audio] recovery failed:', err);
+          setIsPlaying(false);
           usePlayerStore.getState().markTrackUnavailable(track.id, 'Playback failed');
           setLoading(false);
         });

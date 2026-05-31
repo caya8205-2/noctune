@@ -144,6 +144,12 @@ async function getStreamingDataWithFallback(videoId: string) {
         throw new Error('No playable URL returned');
       }
 
+      if (isLimitedIosStream(format.url)) {
+        throw new Error('Skipping limited iOS stream URL');
+      }
+
+      await validateStreamingUrl(format.url);
+
       return { format: { ...format, url: format.url }, client };
     } catch (err) {
       failures.push(`${client}: ${(err as Error).message}`);
@@ -151,6 +157,25 @@ async function getStreamingDataWithFallback(videoId: string) {
   }
 
   throw new Error(`No YouTube.js client could resolve audio for ${videoId}. ${failures.join(' | ')}`);
+}
+
+function isLimitedIosStream(url: string): boolean {
+  try {
+    return new URL(url).searchParams.get('c')?.toUpperCase() === 'IOS';
+  } catch {
+    return url.includes('c=IOS');
+  }
+}
+
+async function validateStreamingUrl(url: string): Promise<void> {
+  const res = await fetch(url, {
+    headers: { Range: 'bytes=0-1048575' },
+  });
+  res.body?.cancel().catch(() => {});
+
+  if (!res.ok && res.status !== 206) {
+    throw new Error(`Resolved audio URL is not playable: ${res.status} ${res.statusText}`);
+  }
 }
 
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {

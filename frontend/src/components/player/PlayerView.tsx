@@ -209,7 +209,7 @@ export function PlayerView() {
                 <LikeButton track={currentTrack} className="rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60" />
               </div>
 
-              <div className="mt-6 flex items-center justify-center gap-3">
+              <div className="mt-6 flex items-center justify-center gap-3 lg:hidden">
                 <button
                   type="button"
                   onClick={toggleShuffle}
@@ -258,7 +258,7 @@ export function PlayerView() {
               <LyricsPanel track={currentTrack} />
             </section>
 
-            <section className="w-full max-w-3xl mt-8 pb-8 xl:hidden">
+            <section className="w-full max-w-3xl mt-8 pb-8 lg:hidden">
               <div className="flex items-center gap-2 mb-4">
                 <Radio size={15} className="text-accent" />
                 <h2 className="section-label">Details</h2>

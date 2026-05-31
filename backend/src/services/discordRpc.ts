@@ -84,9 +84,10 @@ function toDiscordActivity(activity: RpcActivity) {
     : undefined;
 
   const discordActivity: Record<string, unknown> = {
+    name: 'Noctune',
     type: DISCORD_ACTIVITY_LISTENING,
     details: track.title,
-    state: track.album ? `${track.artist} - ${track.album}` : track.artist,
+    state: track.artist,
     timestamps,
     instance: false,
   };

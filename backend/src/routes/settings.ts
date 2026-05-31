@@ -12,6 +12,7 @@ import { clearLyricsCacheStore, getLyricsCacheStats } from '../services/lyrics.j
 import { clearAudioCache, getAudioCacheStats } from '../services/audioFileCache.js';
 import { clearPlaybackBlacklist, getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { clearMatchCache, getMatchCacheStats } from '../services/youtubeMatcher.js';
+import { clearPrefetchCache } from '../services/prefetch.js';
 
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
@@ -110,7 +111,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     // GET /settings/cache/export — export cache learning JSON
     app.get('/settings/cache/export', async (_req, reply) => {
-        reply.header('Content-Disposition', 'attachment; filename="muzikku-cache.json"');
+        reply.header('Content-Disposition', 'attachment; filename="noctune-cache.json"');
         return reply.send(exportCacheStore());
     });
 
@@ -135,13 +136,15 @@ export async function settingsRoutes(app: FastifyInstance) {
         clearCacheStore();
         clearLyricsCacheStore();
         const audio = clearAudioCache();
-        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio });
+        const prefetch = clearPrefetchCache();
+        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio, prefetch });
     });
 
     // DELETE /settings/cache/tracks — clear only learned track metadata
     app.delete('/settings/cache/tracks', async (_req, reply) => {
         clearCacheStore();
-        return reply.send({ ok: true, cache: getCacheStats() });
+        const prefetch = clearPrefetchCache();
+        return reply.send({ ok: true, cache: getCacheStats(), prefetch });
     });
 
     // DELETE /settings/cache/lyrics — clear only lyrics lookup cache

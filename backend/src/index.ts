@@ -93,7 +93,7 @@ async function bootstrap() {
   scheduleStartupPrefetch();
 
   await app.listen({ port: PORT, host: HOST });
-  console.log(`\n🎵 Muzikku backend running at http://${HOST}:${PORT}\n`);
+  console.log(`\n🎵 Noctune backend running at http://${HOST}:${PORT}\n`);
 }
 
 bootstrap().catch(err => {

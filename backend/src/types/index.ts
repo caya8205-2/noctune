@@ -1,4 +1,4 @@
-// Core domain types for Muzikku backend
+// Core domain types for Noctune backend
 
 export interface Track {
   id: string;           // playable YouTube videoId

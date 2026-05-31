@@ -16,3 +16,6 @@ backend/.env
 backend/.env.local
 frontend/.env
 frontend/.env.local
+%TEMP%/
+.tmp-sidecar-data/
+.tmp-sidecar-data-3134/

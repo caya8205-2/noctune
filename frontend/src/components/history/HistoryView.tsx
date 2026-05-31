@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, ListPlus, Music2, Play, X } from 'lucide-react';
+import { Clock3, ListPlus, Music2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
@@ -17,10 +17,6 @@ function playedLabel(value?: number): string {
   if (diff < day) return `${Math.floor(diff / hour)}h ago`;
   if (diff < day * 7) return `${Math.floor(diff / day)}d ago`;
   return new Date(value).toLocaleDateString();
-}
-
-function isMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 639px)').matches;
 }
 
 export function HistoryView() {
@@ -87,10 +83,7 @@ export function HistoryView() {
                 isActive && 'active'
               )}
               style={{ animationDelay: `${i * 20}ms` }}
-              onClick={() => {
-                if (isMobileViewport()) handlePlay(track);
-              }}
-              onDoubleClick={() => handlePlay(track)}
+              onClick={() => handlePlay(track)}
             >
               <div className="w-6 flex-shrink-0 flex items-center justify-center">
                 {isActive && isPlaying ? (
@@ -150,14 +143,6 @@ export function HistoryView() {
                 title="Remove from history"
               >
                 <X size={14} />
-              </button>
-
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
-                onClick={() => handlePlay(track)}
-                title="Play"
-              >
-                <Play size={14} fill="currentColor" />
               </button>
 
               <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">

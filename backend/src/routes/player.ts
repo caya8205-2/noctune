@@ -177,7 +177,7 @@ function isLimitedIosStream(audioUrl: string): boolean {
   }
 }
 
-const STREAM_CHUNK_SIZE = 64 * 1024;
+const STREAM_CHUNK_SIZE = 1024 * 1024;
 
 function normalizeUpstreamRange(range: string | undefined, chunkSize = STREAM_CHUNK_SIZE): string {
   if (!range) return `bytes=0-${chunkSize - 1}`;
@@ -195,11 +195,13 @@ async function fetchAudioStream(
   videoId: string,
   audioUrl: string,
   range: string | undefined,
-  refreshIfWebm: boolean
+  refreshIfWebm: boolean,
+  boundedRange = true
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
-  const upstreamRange = normalizeUpstreamRange(range);
+  const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : (range ?? normalizeUpstreamRange(undefined));
+  const headers = { Range: upstreamRange };
   const res = await fetch(audioUrl, {
-    headers: { Range: upstreamRange },
+    headers,
   });
 
   const shouldRefresh =
@@ -215,7 +217,7 @@ async function fetchAudioStream(
   const refreshedAudio = await resolveAudioUrl(videoId);
   refreshTrackUrl(videoId, refreshedAudio.url);
   const refreshedRes = await fetch(refreshedAudio.url, {
-    headers: { Range: upstreamRange },
+    headers,
   });
   return { res: refreshedRes, refreshed: true, audioUrl: refreshedAudio.url };
 }
@@ -230,62 +232,9 @@ function parseContentRange(value: string | null): { start: number; end: number; 
   };
 }
 
-function isOpenEndedRangeFromStart(range: string | undefined): boolean {
-  return /^bytes=0-$/i.test(range ?? '');
-}
-
 function audioFormatFromContentType(contentType: string | null): string {
   const content = contentType?.toLowerCase() ?? '';
   return content.includes('webm') ? 'webm' : 'm4a';
-}
-
-function createChunkedAudioStream(
-  videoId: string,
-  audioUrl: string,
-  firstRes: Response,
-  firstRange: { start: number; end: number; total: number },
-  format: string,
-  chunkSize = STREAM_CHUNK_SIZE
-): Readable {
-  const tempPath = getTempAudioCachePath(videoId);
-  const finalPath = getAudioCachePath(videoId, format);
-  const writer = fs.createWriteStream(tempPath);
-
-  async function* streamChunks() {
-    let completed = false;
-    try {
-      if (firstRes.body) {
-        for await (const chunk of Readable.fromWeb(firstRes.body as any)) {
-          writer.write(chunk);
-          yield chunk;
-        }
-      }
-
-      for (let start = firstRange.end + 1; start < firstRange.total; start += chunkSize) {
-        const end = Math.min(start + chunkSize - 1, firstRange.total - 1);
-        const res = await fetch(audioUrl, {
-          headers: { Range: `bytes=${start}-${end}` },
-        });
-        if (!res.ok || !res.body) break;
-        for await (const chunk of Readable.fromWeb(res.body as any)) {
-          writer.write(chunk);
-          yield chunk;
-        }
-      }
-      completed = true;
-    } finally {
-      writer.end(() => {
-        if (completed && commitAudioCache(tempPath, finalPath)) {
-          setLocalAudioPath(videoId, finalPath);
-          enforceAudioCacheLimit(getEnvConfig().audioCacheLimitMb * 1024 * 1024);
-        } else {
-          discardAudioCache(tempPath);
-        }
-      });
-    }
-  }
-
-  return Readable.from(streamChunks());
 }
 
 function writeAudioChunk(writer: fs.WriteStream, chunk: Buffer | Uint8Array): Promise<void> {
@@ -329,11 +278,21 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
     }
 
     if (rangeInfo) {
+      let currentAudioUrl = resolvedAudioUrl;
       for (let start = rangeInfo.end + 1; start < rangeInfo.total; start += STREAM_CHUNK_SIZE) {
         const end = Math.min(start + STREAM_CHUNK_SIZE - 1, rangeInfo.total - 1);
-        const chunkRes = await fetch(resolvedAudioUrl, {
+        let chunkRes = await fetch(currentAudioUrl, {
           headers: { Range: `bytes=${start}-${end}` },
         });
+        if (!chunkRes.ok || !chunkRes.body) {
+          chunkRes.body?.cancel().catch(() => {});
+          const refreshedAudio = await resolveAudioUrl(videoId);
+          currentAudioUrl = refreshedAudio.url;
+          refreshTrackUrl(videoId, currentAudioUrl);
+          chunkRes = await fetch(currentAudioUrl, {
+            headers: { Range: `bytes=${start}-${end}` },
+          });
+        }
         if (!chunkRes.ok || !chunkRes.body) return false;
         for await (const chunk of Readable.fromWeb(chunkRes.body as any)) {
           await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
@@ -595,13 +554,61 @@ export async function playerRoutes(app: FastifyInstance) {
         return streamLocalAudioFile(localAudioPath, range, reply);
       }
 
-      const { res: ytRes, refreshed, audioUrl } = await fetchAudioStream(
+      const { res: ytRes, refreshed } = await fetchAudioStream(
         videoId,
         cached.audioUrl,
         range,
         true
       );
       if (!ytRes.ok || !ytRes.body) {
+        if (ytRes.status === 403) {
+          ytRes.body?.cancel().catch(() => {});
+          try {
+            app.log.info({ videoId }, '[player] stream URL forbidden, resolving full track again');
+            const { track, audio } = await resolveTrack(videoId, cached.query || videoId);
+            const saved = upsertTrack(
+              cached.query || videoId,
+              {
+                ...track,
+                title: cached.title || track.title,
+                artist: cached.artist || track.artist,
+                album: cached.album ?? track.album,
+                duration: cached.duration || track.duration,
+                thumbnail: cached.thumbnail || track.thumbnail,
+                query: cached.query || track.query,
+                spotifyId: cached.spotifyId,
+                spotifyUrl: cached.spotifyUrl,
+                youtubeId: cached.youtubeId,
+                youtubeTitle: cached.youtubeTitle,
+                youtubeArtist: cached.youtubeArtist,
+                queueSource: cached.queueSource,
+              },
+              audio.url
+            );
+            const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
+            if (retry.res.ok && retry.res.body) {
+              cached = saved;
+              if (retry.refreshed) {
+                app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
+              }
+              const retryNodeStream = Readable.fromWeb(retry.res.body as any);
+              reply
+                .status(retry.res.status === 206 ? 206 : 200)
+                .header('Content-Type', retry.res.headers.get('content-type') || 'audio/mp4')
+                .header('Access-Control-Allow-Origin', '*')
+                .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
+                .header('Cache-Control', 'public, max-age=3600');
+              const retryLength = retry.res.headers.get('content-length');
+              const retryRange = retry.res.headers.get('content-range');
+              if (retryLength) reply.header('Content-Length', retryLength);
+              if (retryRange) reply.header('Content-Range', retryRange);
+              return reply.send(retryNodeStream);
+            }
+          } catch (err) {
+            app.log.warn({ videoId, err }, '[player] full stream recovery failed');
+          }
+        }
+
         markPlaybackFailed(videoId);
         app.log.warn(
           {
@@ -625,46 +632,6 @@ export async function playerRoutes(app: FastifyInstance) {
       const contentRange = ytRes.headers.get('content-range');
       const acceptRanges = ytRes.headers.get('accept-ranges') ?? 'bytes';
 
-      const rangeInfo = parseContentRange(contentRange);
-      if (!range && rangeInfo) {
-        reply
-          .status(200)
-          .header('Content-Type', ytRes.headers.get('content-type') || 'audio/mp4')
-          .header('Access-Control-Allow-Origin', '*')
-          .header('Accept-Ranges', acceptRanges)
-          .header('Cache-Control', 'public, max-age=3600');
-
-        return reply.send(
-          createChunkedAudioStream(
-            videoId,
-            audioUrl,
-            ytRes,
-            rangeInfo,
-            audioFormatFromContentType(ytRes.headers.get('content-type'))
-          )
-        );
-      }
-
-      if (isOpenEndedRangeFromStart(range) && rangeInfo?.start === 0) {
-        reply
-          .status(206)
-          .header('Content-Type', ytRes.headers.get('content-type') || 'audio/mp4')
-          .header('Access-Control-Allow-Origin', '*')
-          .header('Accept-Ranges', acceptRanges)
-          .header('Content-Range', `bytes 0-${rangeInfo.total - 1}/${rangeInfo.total}`)
-          .header('Cache-Control', 'public, max-age=3600');
-
-        return reply.send(
-          createChunkedAudioStream(
-            videoId,
-            audioUrl,
-            ytRes,
-            rangeInfo,
-            audioFormatFromContentType(ytRes.headers.get('content-type'))
-          )
-        );
-      }
-
       if (ytRes.status === 206) reply.status(206);
       reply
         .header('Content-Type', ytRes.headers.get('content-type') || 'audio/webm')
@@ -680,7 +647,11 @@ export async function playerRoutes(app: FastifyInstance) {
       });
       return reply.send(nodeStream);
     } catch (err) {
-      return reply.status(502).send({ error: 'Stream proxy failed', message: (err as Error).message });
+      app.log.warn({ videoId, err }, '[player] stream proxy failed');
+      return reply
+        .status(502)
+        .header('Content-Type', 'application/json; charset=utf-8')
+        .send(JSON.stringify({ error: 'Stream proxy failed', message: (err as Error).message }));
     }
   });
   app.post('/player/prefetch', async (req, reply) => {
