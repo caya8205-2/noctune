@@ -2,6 +2,39 @@
 
 All notable Noctune changes are documented here.
 
+## v1.0.0-beta.5.3 - 2026-06-01
+
+### Playback and Resolver
+
+- Improved stream recovery when YouTube audio URLs expire or return forbidden responses.
+- Added validation for resolved YouTube stream URLs and skipped limited iOS stream URLs that can fail during playback.
+- Kept playback recovery closer to the previous position instead of restarting from the beginning when possible.
+- Returned stream proxy failures as safe JSON responses.
+
+### Search and Matching
+
+- Improved Spotify-to-YouTube scoring with stronger official/MV/original signals.
+- Added artist-to-channel matching and stronger duration weighting.
+- Added penalties for acoustic versions and related cover variants.
+- Refreshed Spotify-to-YouTube match cache version so improved scoring can take effect.
+
+### Discord RPC
+
+- Refined Discord activity display so Noctune stays as the listening app while title, artist, and album metadata are shown in the right places.
+- Cleared activity while playback is paused.
+
+### UI and Responsive Layout
+
+- Restored desktop full-player behavior with the track details sidebar and bottom mini player.
+- Kept inline full-player controls and embedded details limited to mobile layouts.
+- Made Search, History, Playlist, and Home track rows/cards play with one click.
+- Removed redundant hover play buttons so row actions stay cleaner and closer to duration text.
+- Updated remaining old scaffold naming to Noctune.
+
+### Packaging and Cleanup
+
+- Removed obsolete setup script and kept generated/local artifacts out of source control.
+
 ## v1.0.0-beta.5 - 2026-05-30
 
 ### Playback and Resolver
@@ -71,4 +104,3 @@ All notable Noctune changes are documented here.
 - Smart autoqueue and prefetch system.
 - Local playlists, liked songs, and cache learning basics.
 - Initial Tauri desktop packaging and app icon.
-
