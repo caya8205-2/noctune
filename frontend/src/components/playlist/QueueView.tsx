@@ -182,20 +182,24 @@ export function QueueView() {
                 {queueSourceLabel(track.queueSource)}
               </span>
               )}
-              <LikeButton track={track} className="hidden sm:flex ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <button
-                className="hidden sm:flex btn-ghost p-1.5 ml-1 text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  removeFromQueue(i);
-                }}
-                title="Remove from queue"
-              >
-                <X size={13} />
-              </button>
-              <span className="ml-2 block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
-                {formatDuration(track.duration)}
-              </span>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <LikeButton track={track} className="p-1.5" />
+                  <button
+                    className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeFromQueue(i);
+                    }}
+                    title="Remove from queue"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
+                  {formatDuration(track.duration)}
+                </span>
+              </div>
             </div>
           );
         })}

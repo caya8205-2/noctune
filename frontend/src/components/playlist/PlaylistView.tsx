@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Clock, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
+import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -610,32 +610,35 @@ export function PlaylistView() {
                 </p>
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  addToQueue(track, 'playlist');
-                }}
-                title="Add to queue"
-              >
-                <ListPlus size={14} />
-              </button>
-              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
-              {editing && !isLikedPlaylist && (
-                <button
-                  className="hidden sm:flex btn-ghost p-1.5 text-muted hover:text-red-400 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(track);
-                  }}
-                  title="Remove from playlist"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
-                <Clock size={10} />
-                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addToQueue(track, 'playlist');
+                    }}
+                    title="Add to queue"
+                  >
+                    <ListPlus size={14} />
+                  </button>
+                  <LikeButton track={track} className="p-1.5" />
+                  {editing && !isLikedPlaylist && (
+                    <button
+                      className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemove(track);
+                      }}
+                      title="Remove from playlist"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+                <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
+                  {formatDuration(track.duration)}
+                </span>
               </div>
             </div>
           );

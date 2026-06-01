@@ -196,7 +196,7 @@ export function PlayerBar() {
 
         {/* Time + Volume */}
         <div className="hidden sm:flex items-center gap-3 w-72 justify-end">
-          <span className="text-xs text-muted font-mono tabular-nums">
+          <span className="w-28 text-right text-xs text-muted font-mono tabular-nums whitespace-nowrap">
             {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>
 

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Clock, Disc3, Heart, ListOrdered, ListPlus, Music2, Radio, Search, Sparkles } from 'lucide-react';
+import { Disc3, Heart, ListOrdered, ListPlus, Music2, Radio, Search, Sparkles } from 'lucide-react';
 import { api, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -38,10 +38,7 @@ function TrackCard({
       <p className="text-sm font-semibold text-white truncate">{track.title}</p>
       <p className="text-xs text-muted truncate mt-1">{track.artist}</p>
       <div className="flex items-center justify-between gap-2 mt-3">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted">
-          <Clock size={11} />
-          <span className="font-mono">{formatDuration(track.duration)}</span>
-        </div>
+        <span className="text-[11px] text-muted font-mono tabular-nums">{formatDuration(track.duration)}</span>
         <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"

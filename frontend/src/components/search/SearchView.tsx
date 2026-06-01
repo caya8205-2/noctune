@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Clock, Download, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Download, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
 import { api, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -380,35 +380,38 @@ export function SearchView() {
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
 
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  addToQueue(track);
-                }}
-                title="Add to queue"
-              >
-                <ListPlus size={14} />
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addToQueue(track);
+                    }}
+                    title="Add to queue"
+                  >
+                    <ListPlus size={14} />
+                  </button>
 
-              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <LikeButton track={track} className="p-1.5" />
 
-              {debugSearch && track.spotifyId && (
-                <button
-                  className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleDebugMatch(track);
-                  }}
-                  title="Debug YouTube match"
-                >
-                  {debugBusyId === track.id ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-                </button>
-              )}
+                  {debugSearch && track.spotifyId && (
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDebugMatch(track);
+                    }}
+                    title="Debug YouTube match"
+                  >
+                    {debugBusyId === track.id ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+                  </button>
+                  )}
+                </div>
 
-              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
-                <Clock size={10} />
-                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+                <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
+                  {formatDuration(track.duration)}
+                </span>
               </div>
             </div>
           );

@@ -121,37 +121,40 @@ export function HistoryView() {
                 <p className="text-xs text-muted truncate">{track.artist}</p>
               </div>
 
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost ml-1 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  addToQueue(track, 'recommendation');
-                }}
-                title="Add to queue"
-              >
-                <ListPlus size={14} />
-              </button>
-
-              <LikeButton track={track} className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity" />
-
-              <button
-                className="hidden sm:flex opacity-0 group-hover:opacity-100 btn-ghost text-muted hover:text-red-400 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemoveHistoryItem(track);
-                }}
-                title="Remove from history"
-              >
-                <X size={14} />
-              </button>
-
               <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">
                 {playedLabel(track.lastPlayed)}
               </span>
 
-              <div className="ml-2 flex items-center justify-end gap-1 text-xs text-muted flex-shrink-0 w-14 sm:w-16">
-                <Clock3 size={10} />
-                <span className="font-mono tabular-nums text-right">{formatDuration(track.duration)}</span>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addToQueue(track, 'recommendation');
+                    }}
+                    title="Add to queue"
+                  >
+                    <ListPlus size={14} />
+                  </button>
+
+                  <LikeButton track={track} className="p-1.5" />
+
+                  <button
+                    className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveHistoryItem(track);
+                    }}
+                    title="Remove from history"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
+                  {formatDuration(track.duration)}
+                </span>
               </div>
             </div>
           );

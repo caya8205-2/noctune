@@ -28,7 +28,7 @@ export interface ScoredCandidate {
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 6;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
@@ -241,6 +241,19 @@ function hasKeyword(text: string, keyword: string): boolean {
   return text.includes(keyword);
 }
 
+function hasDateLikeTitle(value: string): boolean {
+  return (
+    /\b(?:19|20)\d{2}[./-]\d{1,2}(?:[./-]\d{1,2})?\b/.test(value) ||
+    /\b\d{1,2}[./-]\d{1,2}[./-](?:19|20)\d{2}\b/.test(value) ||
+    /(?:19|20)\d{2}年\d{1,2}月(?:\d{1,2}日)?/.test(value)
+  );
+}
+
+function hasLiveVisualSignal(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.includes('live映像') || lower.includes('ライブ映像') || lower.includes('ライブ') || lower.includes('公演');
+}
+
 function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate {
   const spotifyTitle = normalize(spotifyTrack.title);
   const spotifyArtist = normalize(spotifyTrack.artist);
@@ -249,6 +262,7 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   const combined = `${candidateTitle} ${candidateArtist}`;
   const reasons: string[] = [];
   let score = 0;
+  let hasArtistChannelMatch = false;
 
   for (const word of words(spotifyTrack.title)) {
     if (candidateTitle.includes(word)) {
@@ -258,6 +272,7 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const artistName of splitArtistNames(spotifyTrack.artist)) {
     if (candidateArtist.includes(artistName)) {
+      hasArtistChannelMatch = true;
       score += 90;
       reasons.push('artist-channel-match');
     } else if (artistName && combined.includes(artistName)) {
@@ -293,6 +308,10 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
 
   for (const keyword of negativeKeywords) {
     if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+      if ((keyword === 'film' || keyword === 'movie') && hasArtistChannelMatch) {
+        reasons.push(`ignored-negative:${keyword}`);
+        continue;
+      }
       const penalty = instrumentalCoverKeywords.includes(keyword)
         ? 240
         : keyword.includes('react') || keyword === 'reaction'
@@ -323,6 +342,16 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
     }
   }
 
+  if (!hasDateLikeTitle(spotifyTrack.title) && hasDateLikeTitle(candidate.title)) {
+    score -= 170;
+    reasons.push('date-in-title');
+  }
+
+  if (hasLiveVisualSignal(candidate.title) && !hasLiveVisualSignal(spotifyTrack.title)) {
+    score -= 210;
+    reasons.push('live-visual');
+  }
+
   if (spotifyTrack.duration > 0 && candidate.duration > 0) {
     const diff = Math.abs(candidate.duration - spotifyTrack.duration);
     if (diff <= 5) {
@@ -338,6 +367,19 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   }
 
   return { track: candidate, score, reasons };
+}
+
+function hasArtistChannelMatch(candidate: ScoredCandidate): boolean {
+  return candidate.reasons.includes('artist-channel-match');
+}
+
+function compareCandidates(a: ScoredCandidate, b: ScoredCandidate): number {
+  const aArtistChannelMatch = hasArtistChannelMatch(a);
+  const bArtistChannelMatch = hasArtistChannelMatch(b);
+  if (aArtistChannelMatch !== bArtistChannelMatch) {
+    return aArtistChannelMatch ? -1 : 1;
+  }
+  return b.score - a.score;
 }
 
 function fromCache(spotifyTrack: Track): Track | null {
@@ -394,7 +436,7 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     const ranked = candidates
       .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
       .map((candidate) => scoreCandidate(spotifyTrack, candidate))
-      .sort((a, b) => b.score - a.score);
+      .sort(compareCandidates);
     const best = ranked[0];
 
     console.log(
@@ -439,7 +481,7 @@ export async function debugSpotifyYoutubeMatch(
   const ranked = candidates
     .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
     .map((candidate) => scoreCandidate(spotifyTrack, candidate))
-    .sort((a, b) => b.score - a.score);
+    .sort(compareCandidates);
 
   return {
     query,
