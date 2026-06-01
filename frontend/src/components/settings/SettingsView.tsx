@@ -21,7 +21,7 @@ import {
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.5.4';
+const APP_VERSION = 'v1.0.0-beta.5.4.1';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';

@@ -78,13 +78,13 @@ function toDiscordActivity(activity: RpcActivity) {
   const clampedProgress = Math.max(0, Math.min(progress, duration || progress));
   const timestamps = isPlaying
     ? {
-        start: now - clampedProgress * 1000,
-        end: duration > 0 ? now + Math.max(0, duration - clampedProgress) * 1000 : undefined,
-      }
+      start: now - clampedProgress * 1000,
+      end: duration > 0 ? now + Math.max(0, duration - clampedProgress) * 1000 : undefined,
+    }
     : undefined;
 
   const discordActivity: Record<string, unknown> = {
-    name: 'Noctune',
+    name: track.artist || 'Noctune',
     type: DISCORD_ACTIVITY_LISTENING,
     details: track.title,
     state: track.artist,
@@ -126,13 +126,13 @@ export async function updateDiscordActivity(activity: RpcActivity) {
   if (!activity.isPlaying) {
     lastSentAt = 0;
     lastSentTrackId = null;
-    await client.clearActivity().catch(() => {});
+    await client.clearActivity().catch(() => { });
     return { enabled: true, ready };
   }
 
   const discordActivity = toDiscordActivity(activity);
   if (!discordActivity) {
-    await client.clearActivity().catch(() => {});
+    await client.clearActivity().catch(() => { });
     return { enabled: true, ready };
   }
 
@@ -155,7 +155,7 @@ export async function clearDiscordActivity() {
   lastSentAt = 0;
   lastSentTrackId = null;
   if (!client || !ready) return;
-  await client.clearActivity().catch(() => {});
+  await client.clearActivity().catch(() => { });
 }
 
 export async function refreshDiscordActivity() {
