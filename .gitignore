@@ -4,6 +4,9 @@ data/
 backend/data/
 backend/dist/
 frontend/dist/
+.codex/
+automations/
+reports/
 *.db
 *.db-shm
 *.db-wal
