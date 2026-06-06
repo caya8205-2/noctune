@@ -12,6 +12,7 @@ import { QueueView } from './components/playlist/QueueView';
 import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { usePlayerStore } from './store/player';
+import { getShortcutsByCategory } from './constants/keyboardShortcuts';
 import { useAudio } from './hooks/useAudio';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -22,7 +23,7 @@ const qc = new QueryClient({
 function AppInner() {
   useAudio();
   useKeyboardShortcuts();
-  const { activeView, showTrackDetails, setView } = usePlayerStore();
+  const { activeView, showTrackDetails, showShortcutsHelp, setView, toggleShortcutsHelp } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeViewRef = useRef(activeView);
   const skipHistoryPushRef = useRef(false);
@@ -154,6 +155,53 @@ function AppInner() {
       <div className={`h-20 flex-shrink-0 border-t border-base-800 bg-base-950 ${activeView === 'player' ? 'hidden lg:block' : ''}`}>
         <PlayerBar />
       </div>
+
+      {/* ── Shortcuts help overlay ── */}
+      {showShortcutsHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={toggleShortcutsHelp}
+            aria-label="Close shortcuts"
+          />
+          <div className="relative z-10 bg-base-950 border border-base-700 rounded-2xl shadow-2xl shadow-black/50 max-w-lg w-[90vw] max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
+              <button
+                type="button"
+                onClick={toggleShortcutsHelp}
+                className="btn-ghost p-1.5 rounded-lg text-muted hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-muted mb-5 leading-relaxed">
+              Shortcuts work outside text fields so playback and navigation stay close at hand.
+            </p>
+            {Object.entries(getShortcutsByCategory()).map(([category, shortcuts]) => (
+              <div key={category} className="mb-4 last:mb-0">
+                <h3 className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2 px-1">
+                  {category}
+                </h3>
+                <div className="space-y-1">
+                  {shortcuts.filter(Boolean).map((s) => (
+                    <div
+                      key={s.code}
+                      className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-base-800/60 transition-colors"
+                    >
+                      <span className="text-sm text-soft">{s.label}</span>
+                      <span className="rounded-md border border-base-700 bg-base-900 px-2.5 py-1 font-mono text-[11px] text-white flex-shrink-0 ml-3">
+                        {s.keys}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">

@@ -11,6 +11,7 @@ import {
   Info,
   ListMusic,
   Loader2,
+  Keyboard,
   ShieldAlert,
   Settings,
   Sparkles,
@@ -18,6 +19,7 @@ import {
   Zap,
   XCircle,
 } from 'lucide-react';
+import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
@@ -369,6 +371,7 @@ export function SettingsView() {
         </h1>
       </div>
 
+      {/* Spotify API Credentials */}
       {IS_TAURI && (
         <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
           <div>
@@ -482,6 +485,7 @@ export function SettingsView() {
         </section>
       )}
 
+      {/* Diagnostics */}
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -575,6 +579,7 @@ export function SettingsView() {
         </button>
       </section>
 
+      {/* Cache */}
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -707,6 +712,38 @@ export function SettingsView() {
         </div>
       </section>
 
+      {/* Keyboard Shortcuts */}
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
+            <Keyboard size={18} />
+          </div>
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              Keyboard shortcuts
+            </h2>
+            <p className="text-xs text-muted leading-relaxed mt-2">
+              These shortcuts work outside text fields so playback and navigation stay close at hand.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {keyboardShortcuts.map((shortcut) => (
+            <div key={shortcut.code} className="rounded-lg border border-base-600/70 bg-base-900 p-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-white">{shortcut.key}</p>
+                <p className="text-xs text-muted mt-1">{shortcut.label}</p>
+              </div>
+              <span className="rounded-md border border-base-600 bg-base-800 px-2 py-1 font-mono text-[11px] text-soft">
+                {shortcut.keys}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* About */}
       <section className="surface-panel flex flex-col gap-5 max-w-3xl p-5">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
@@ -735,6 +772,7 @@ export function SettingsView() {
         </div>
       </section>
 
+      {/* Version */}
       <section className="max-w-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
         <span>Noctune</span>
         <span className="font-mono">Pre-release {APP_VERSION}</span>
