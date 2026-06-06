@@ -23,6 +23,7 @@ interface PlayerState {
   activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings';
   activePlaylistId: string | null;
   showTrackDetails: boolean;
+  showShortcutsHelp: boolean;
   playbackNotice: string | null;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ interface PlayerState {
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   toggleTrackDetails: () => void;
+  toggleShortcutsHelp: () => void;
   setView: (view: PlayerState['activeView'], playlistId?: string) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
@@ -63,6 +65,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activeView: 'home',
   activePlaylistId: null,
   showTrackDetails: true,
+  showShortcutsHelp: false,
   playbackNotice: null,
 
   setLoading: (v) => set({ isLoading: v }),
@@ -356,6 +359,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   clearQueue: () => set({ queue: [], queueIndex: -1 }),
 
   toggleTrackDetails: () => set((s) => ({ showTrackDetails: !s.showTrackDetails })),
+
+  toggleShortcutsHelp: () => set((s) => ({ showShortcutsHelp: !s.showShortcutsHelp })),
 
   setView: (view, playlistId) =>
     set({ activeView: view, activePlaylistId: playlistId ?? null }),
