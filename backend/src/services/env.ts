@@ -17,6 +17,7 @@ export interface EnvConfig {
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
     audioCacheLimitMb: number;
+    discordRpcEnabled: boolean;
 }
 
 const DEFAULTS: EnvConfig = {
@@ -24,6 +25,7 @@ const DEFAULTS: EnvConfig = {
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
     audioCacheLimitMb: 1024,
+    discordRpcEnabled: true,
 };
 
 function withProcessEnv(config: EnvConfig): EnvConfig {

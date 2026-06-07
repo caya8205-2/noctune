@@ -33,7 +33,8 @@ for (const envPath of [
   }
 }
 
-const PORT = Number(process.env.PORT ?? 3131);
+const PREFERRED_PORT = Number(process.env.PORT ?? 3131);
+const MAX_PORT_ATTEMPTS = 10;
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 async function bootstrap() {
@@ -92,8 +93,26 @@ async function bootstrap() {
   scheduleDemoStateReset((result, message) => app.log.info(result, message));
   scheduleStartupPrefetch();
 
-  await app.listen({ port: PORT, host: HOST });
-  console.log(`\n🎵 Noctune backend running at http://${HOST}:${PORT}\n`);
+  // Try preferred port, fall back to next available ports
+  for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
+    const port = PREFERRED_PORT + attempt;
+    try {
+      await app.listen({ port, host: HOST });
+      if (attempt > 0) {
+        console.warn(`\n Port ${PREFERRED_PORT} was busy, using port ${port} instead.`);
+      }
+      console.log(`\n Noctune backend running at http://${HOST}:${port}\n`);
+      return;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+        console.warn(`[boot] Port ${port} is already in use, trying ${port + 1}...`);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error(`Could not find an available port in range ${PREFERRED_PORT}-${PREFERRED_PORT + MAX_PORT_ATTEMPTS - 1}`);
 }
 
 bootstrap().catch(err => {

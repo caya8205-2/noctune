@@ -2,6 +2,21 @@
 
 All notable Noctune changes are documented here.
 
+## v1.0.0 - 2026-06-08
+
+### Settings & Discord RPC
+
+- Added Discord Rich Presence (RPC) toggle in Settings, allowing users to enable or disable Discord activity status display.
+
+### Backend & Network
+
+- Added port fallback logic: if preferred port `3131` is busy, the backend scans up to 10 sequential ports and binds to the first available one.
+
+### Stability & Security
+
+- Hardened `yt-dlp` search resolver with `try-catch` blocks to prevent crashes on network failures or missing binaries.
+- Added search query sanitization to filter out control and dangerous shell characters before querying `yt-dlp`.
+
 ## v1.0.0-beta.5.3 - 2026-06-01
 
 ### Playback and Resolver

@@ -23,11 +23,12 @@ import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0-beta.5.4.1';
+const APP_VERSION = 'v1.0.0';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
   audioCacheLimitMb: number;
+  discordRpcEnabled: boolean;
   cache?: {
     learning: { total: number; totalQueries: number };
     lyrics: { total: number; hits: number; misses: number };
@@ -91,6 +92,7 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
+  const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
@@ -103,6 +105,7 @@ export function SettingsView() {
         setData(d);
         setClientId(d.spotify.clientId);
         setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
+        setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
       });
   }
 
@@ -359,6 +362,22 @@ export function SettingsView() {
     localStorage.setItem(DEBUG_SEARCH_KEY, enabled ? '1' : '0');
   }
 
+  async function handleDiscordRpcToggle(enabled: boolean) {
+    setDiscordRpcEnabled(enabled);
+    try {
+      const res = await fetch(API_BASE + '/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discordRpcEnabled: enabled }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      setData(updated);
+      setDiscordRpcEnabled(updated.discordRpcEnabled ?? enabled);
+    } catch (err) {
+      console.error('Failed to toggle Discord RPC:', err);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
       <div className="flex flex-col gap-2 max-w-3xl">
@@ -482,6 +501,44 @@ export function SettingsView() {
               )}
             </button>
           </div>
+        </section>
+      )}
+
+      {/* Discord Rich Presence */}
+      {IS_TAURI && (
+        <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              Discord Rich Presence
+            </h2>
+            <p className="text-xs text-muted leading-relaxed mt-2">
+              Show music that you're listening to on your Discord profile
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
+            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+          >
+            <span>
+              <span className="block text-sm font-medium text-white">Enable Discord RPC</span>
+            </span>
+            <span
+              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
+                ? 'border-accent/50 bg-accent/25'
+                : 'border-base-600 bg-base-800'
+                }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
+                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                  : 'translate-x-1 bg-muted'
+                  }`}
+              />
+            </span>
+          </button>
         </section>
       )}
 
@@ -775,7 +832,7 @@ export function SettingsView() {
       {/* Version */}
       <section className="max-w-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
         <span>Noctune</span>
-        <span className="font-mono">Pre-release {APP_VERSION}</span>
+        <span className="font-mono">{APP_VERSION}-Stable</span>
       </section>
     </div>
   );

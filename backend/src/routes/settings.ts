@@ -13,12 +13,14 @@ import { clearAudioCache, getAudioCacheStats } from '../services/audioFileCache.
 import { clearPlaybackBlacklist, getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { clearMatchCache, getMatchCacheStats } from '../services/youtubeMatcher.js';
 import { clearPrefetchCache } from '../services/prefetch.js';
+import { clearDiscordActivity, refreshDiscordActivity } from '../services/discordRpc.js';
 
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
     audioCacheLimitMb: z.number().min(128).max(10240).optional(),
+    discordRpcEnabled: z.boolean().optional(),
 });
 
 const TestBody = z.object({
@@ -33,6 +35,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         return reply.send({
             searchEngine: config.searchEngine,
             audioCacheLimitMb: config.audioCacheLimitMb,
+            discordRpcEnabled: config.discordRpcEnabled,
             cache: {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),
@@ -66,10 +69,17 @@ export async function settingsRoutes(app: FastifyInstance) {
             invalidateToken();
         }
 
+        if (parsed.data.discordRpcEnabled === false) {
+            await clearDiscordActivity();
+        } else if (parsed.data.discordRpcEnabled === true) {
+            await refreshDiscordActivity();
+        }
+
         return reply.send({
             ok: true,
             searchEngine: updated.searchEngine,
             audioCacheLimitMb: updated.audioCacheLimitMb,
+            discordRpcEnabled: updated.discordRpcEnabled,
             spotify: {
                 clientId: updated.spotifyClientId,
                 clientSecretMasked: updated.spotifyClientSecret

@@ -1,5 +1,6 @@
 import { Client, register } from 'discord-rpc';
 import type { Track } from '../types/index.js';
+import { getEnvConfig } from './env.js';
 
 type RpcActivity = {
   track: Track | null;
@@ -27,6 +28,10 @@ function getClientId(): string | null {
   const clientId = process.env.DISCORD_CLIENT_ID?.trim();
   if (!clientId) return null;
   if (process.env.DISCORD_RPC_ENABLED === 'false') return null;
+
+  const config = getEnvConfig();
+  if (config.discordRpcEnabled === false) return null;
+
   return clientId;
 }
 
@@ -154,8 +159,16 @@ export async function clearDiscordActivity() {
   lastActivity = null;
   lastSentAt = 0;
   lastSentTrackId = null;
-  if (!client || !ready) return;
-  await client.clearActivity().catch(() => { });
+  if (client) {
+    if (ready) {
+      await client.clearActivity().catch(() => { });
+    }
+    try {
+      await client.destroy();
+    } catch {}
+    client = null;
+    ready = false;
+  }
 }
 
 export async function refreshDiscordActivity() {

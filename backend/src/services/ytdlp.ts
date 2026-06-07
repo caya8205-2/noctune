@@ -109,15 +109,38 @@ function pickThumbnail(info: YTInfo): string {
   return info.thumbnail ?? '';
 }
 
+/** Sanitize query to remove characters that can break yt-dlp argument parsing. */
+function sanitizeSearchQuery(query: string): string {
+  return query
+    .replace(/[\x00-\x1F\x7F]/g, '')   // strip control characters
+    .replace(/[`$\\]/g, '')              // strip shell-like metacharacters
+    .trim();
+}
+
 /** Search YouTube and return top results as Track objects. */
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
-  const rawResults = await ytDlp.execPromise([
-    `ytsearch${limit}:${query}`,
-    '--dump-json',
-    '--no-playlist',
-    '--flat-playlist',
-    '--no-warnings',
-  ]);
+  const sanitized = sanitizeSearchQuery(query);
+  if (!sanitized) {
+    console.warn('[search:ytdlp] empty query after sanitization, skipping');
+    return [];
+  }
+
+  let rawResults: string;
+  try {
+    rawResults = await ytDlp.execPromise([
+      `ytsearch${limit}:${sanitized}`,
+      '--dump-json',
+      '--no-playlist',
+      '--flat-playlist',
+      '--no-warnings',
+    ]);
+  } catch (err) {
+    console.error(
+      `[search:ytdlp] yt-dlp process failed for query "${sanitized}":`,
+      (err as Error).message ?? err
+    );
+    return [];
+  }
 
   const lines = rawResults.trim().split('\n').filter(Boolean);
   const tracks: Track[] = [];
@@ -140,7 +163,7 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
 
   console.log(
     `[search:ytdlp] ${JSON.stringify({
-      query,
+      query: sanitized,
       returned: tracks.length,
       top: tracks.slice(0, 5).map((track) => ({
         id: track.id,
