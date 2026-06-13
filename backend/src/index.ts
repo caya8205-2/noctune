@@ -22,6 +22,8 @@ import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
 import { getMatchCacheStats } from './services/youtubeMatcher.js';
 import { isDemoMode, scheduleDemoStateReset } from './services/demoMode.js';
 import { getDiscordRpcStatus } from './services/discordRpc.js';
+const rootPkg = require('../../package.json');
+export const APP_VERSION: string = rootPkg.version;
 
 for (const envPath of [
   path.resolve(process.cwd(), '.env'),

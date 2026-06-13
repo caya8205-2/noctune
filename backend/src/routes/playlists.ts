@@ -94,8 +94,8 @@ export async function playlistRoutes(app: FastifyInstance) {
 
     try {
       const imported = parsedUrl.kind === 'spotify-playlist'
-        ? await getSpotifyPlaylistTracks(parsedUrl.id, 100)
-        : await getYoutubePlaylistTracks(parsedUrl.url, 100);
+        ? await getSpotifyPlaylistTracks(parsedUrl.id)
+        : await getYoutubePlaylistTracks(parsedUrl.url);
 
       if (imported.tracks.length === 0) {
         return reply.status(404).send({ error: 'No tracks found in playlist' });

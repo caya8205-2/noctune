@@ -1,6 +1,6 @@
 {
   "name": "noctune",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "workspaces": [
     "frontend",
@@ -13,7 +13,8 @@
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "tauri": "npm run build --workspace=backend && concurrently \"npm run dev:backend\" \"tauri dev\"",
-    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build"
+    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build",
+    "version:sync": "node scripts/sync-version.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",

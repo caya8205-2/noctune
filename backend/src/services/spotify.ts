@@ -398,36 +398,53 @@ export async function getSpotifyTrackMetadata(id: string): Promise<SpotifyTrackM
     return metadata;
 }
 
-export async function getSpotifyPlaylistTracks(id: string, limit = 100): Promise<{
+export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promise<{
     name: string;
     tracks: Track[];
 }> {
     const token = await getAccessToken();
-    const url = new URL(`https://api.spotify.com/v1/playlists/${id}`);
-    url.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(name),album(name,images),external_urls)),tracks.next');
-    url.searchParams.set('limit', String(Math.min(Math.max(limit, 1), 100)));
 
-    const res = await fetch(url.toString(), {
+    // First page — also gets playlist name
+    const firstUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
+    firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(name),album(name,images),external_urls)),tracks.next');
+    firstUrl.searchParams.set('limit', '100');
+
+    const firstRes = await fetch(firstUrl.toString(), {
         headers: { Authorization: `Bearer ${token}` },
     });
 
-    if (res.status === 401) {
+    if (firstRes.status === 401) {
         invalidateToken();
         throw new Error('Spotify token expired — retry');
     }
-
-    if (!res.ok) {
-        throw new Error(`Spotify playlist failed: ${res.status}`);
+    if (!firstRes.ok) {
+        throw new Error(`Spotify playlist failed: ${firstRes.status}`);
     }
 
-    const data = (await res.json()) as SpotifyPlaylistResponse;
+    const firstData = (await firstRes.json()) as SpotifyPlaylistResponse;
+    const playlistName = firstData.name || 'Spotify Playlist';
+    const allItems = [...firstData.tracks.items];
+    let nextUrl: string | null = firstData.tracks.next;
+
+    // Paginate until no more pages or limit reached
+    while (nextUrl && allItems.length < limit) {
+        const pageRes = await fetch(nextUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!pageRes.ok) break;
+
+        const pageData = (await pageRes.json()) as SpotifyPlaylistResponse['tracks'];
+        allItems.push(...pageData.items);
+        nextUrl = pageData.next;
+    }
+
     return {
-        name: data.name || 'Spotify Playlist',
-        tracks: data.tracks.items
+        name: playlistName,
+        tracks: allItems
             .map((item) => item.track)
             .filter((track): track is SpotifyTrack => Boolean(track?.id))
             .slice(0, limit)
-            .map((track) => spotifyTrackToTrack(track, data.name || 'Spotify playlist')),
+            .map((track) => spotifyTrackToTrack(track, playlistName)),
     };
 }
 

@@ -23,7 +23,7 @@ import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { API_BASE } from '../../utils/api';
 import { api, type BackendStatus } from '../../utils/api';
 
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';

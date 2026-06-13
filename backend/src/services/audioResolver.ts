@@ -112,7 +112,7 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlO
   );
 }
 
-export async function getYoutubePlaylistTracks(url: string, limit = 100): Promise<PlaylistImportResult> {
+export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promise<PlaylistImportResult> {
   return withYtdlpFallback(
     'getYoutubePlaylistTracks',
     () => getAudioResolver().getYoutubePlaylistTracks(url, limit),

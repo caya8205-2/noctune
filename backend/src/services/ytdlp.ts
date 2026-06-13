@@ -188,7 +188,7 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlO
   };
 }
 
-export async function getYoutubePlaylistTracks(url: string, limit = 100): Promise<{
+export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promise<{
   name: string;
   tracks: Track[];
 }> {
@@ -197,8 +197,6 @@ export async function getYoutubePlaylistTracks(url: string, limit = 100): Promis
     '--dump-single-json',
     '--flat-playlist',
     '--no-warnings',
-    '--playlist-end',
-    String(limit),
   ]);
   const playlist = JSON.parse(raw) as YTPlaylistInfo;
   const entries = playlist.entries ?? [];
