@@ -13,7 +13,6 @@ import {
   Loader2,
   Keyboard,
   ShieldAlert,
-  Settings,
   Sparkles,
   Trash2,
   Zap,
@@ -382,7 +381,6 @@ export function SettingsView() {
     <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
       <div className="flex flex-col gap-2 max-w-3xl">
         <div className="flex items-center gap-3">
-          <Settings size={18} className="text-accent" />
           <p className="section-label text-accent">Settings</p>
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">

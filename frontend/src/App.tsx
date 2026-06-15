@@ -78,68 +78,77 @@ function AppInner() {
     window.history.pushState({ noctuneView: activeView }, '', window.location.href);
   }, [activeView]);
 
+  const playerBarClass =
+    'relative z-10 h-20 flex-shrink-0 border-t border-white/[0.06] bg-base-950/60 backdrop-blur-xl ' +
+    (activeView === 'player' ? 'hidden lg:block' : '');
+
   return (
-    <div className="flex flex-col h-screen bg-base-950 overflow-hidden text-white">
+    <div className="relative z-10 flex h-screen flex-col overflow-hidden text-white">
+      {/* Ambient atmosphere */}
+      <div className="ambient-glow -top-40 left-1/4 h-72 w-72 bg-accent/10 animate-float" aria-hidden="true" />
+      <div className="ambient-glow bottom-8 right-6 h-80 w-80 bg-moon/10" aria-hidden="true" />
+
+      {/* Title bar */}
       <div
         data-tauri-drag-region
-        className="h-14 md:h-9 grid grid-cols-[auto_1fr_auto] md:flex items-center gap-3 px-3 md:px-4 bg-base-950 flex-shrink-0 select-none border-b border-base-800/60"
+        className="relative z-10 grid h-14 grid-cols-[auto_1fr_auto] select-none items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-3 backdrop-blur-xl md:flex md:h-10 md:px-4"
       >
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="md:hidden btn-ghost p-2"
+          className="btn-ghost p-2 md:hidden"
           title="Open menu"
         >
           <Menu size={20} />
         </button>
         {IS_TAURI && (
-          <div className="hidden md:flex items-center gap-1.5 group">
+          <div className="group hidden items-center gap-1.5 md:flex">
             <button
               onClick={handleClose}
               title="Close"
-              className="w-3 h-3 rounded-full bg-[#FF5F57] hover:brightness-90 transition-all flex items-center justify-center"
+              className="flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F57] transition-all hover:brightness-90"
             >
-              <span className="hidden group-hover:block text-[#7a0000] leading-none" style={{ fontSize: 8, fontWeight: 900, marginTop: -1 }}>&#10005;</span>
+              <span className="hidden text-[8px] leading-none text-[#7a0000] group-hover:block">&#10005;</span>
             </button>
             <button
               onClick={handleMinimize}
               title="Minimize"
-              className="w-3 h-3 rounded-full bg-[#FEBC2E] hover:brightness-90 transition-all flex items-center justify-center"
+              className="flex h-3 w-3 items-center justify-center rounded-full bg-[#FEBC2E] transition-all hover:brightness-90"
             >
-              <span className="hidden group-hover:block text-[#7a5800] leading-none" style={{ fontSize: 8, fontWeight: 900, marginTop: -1 }}>&#8722;</span>
+              <span className="hidden text-[8px] leading-none text-[#7a5800] group-hover:block">&#8722;</span>
             </button>
             <button
               onClick={handleMaximize}
               title="Maximize"
-              className="w-3 h-3 rounded-full bg-[#28C840] hover:brightness-90 transition-all flex items-center justify-center"
+              className="flex h-3 w-3 items-center justify-center rounded-full bg-[#28C840] transition-all hover:brightness-90"
             >
-              <span className="hidden group-hover:block text-[#004d00] leading-none" style={{ fontSize: 7, fontWeight: 900, marginTop: -1 }}>&#10697;</span>
+              <span className="hidden text-[7px] leading-none text-[#004d00] group-hover:block">&#10697;</span>
             </button>
           </div>
         )}
-        <span className="md:hidden justify-self-center text-sm font-semibold text-muted tracking-wide">
-          Noctune
-        </span>
-        <span className="hidden md:inline text-xs font-semibold text-muted tracking-wide">
+        <div className="hidden items-center gap-2 md:flex">
+          <span className="font-display text-[13px] font-medium tracking-tight text-white/90">Noctune</span>
+        </div>
+        <span className="justify-self-center font-display text-base text-white md:hidden">
           Noctune
         </span>
         <button
           type="button"
           onClick={() => setView('search')}
-          className="md:hidden justify-self-end btn-ghost p-2"
+          className="btn-ghost justify-self-end p-2 md:hidden"
           title="Search"
         >
           <Search size={20} className="text-accent" />
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <div className="hidden md:block w-56 flex-shrink-0 border-r border-base-800">
+      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+        <div className="hidden w-60 flex-shrink-0 border-r border-white/[0.06] md:block">
           <Sidebar />
         </div>
 
-        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden bg-base-900">
-          <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {activeView === 'home' && <HomeView />}
             {activeView === 'player' && <PlayerView />}
             {activeView === 'search' && <SearchView />}
@@ -152,11 +161,11 @@ function AppInner() {
         </div>
       </div>
 
-      <div className={`h-20 flex-shrink-0 border-t border-base-800 bg-base-950 ${activeView === 'player' ? 'hidden lg:block' : ''}`}>
+      <div className={playerBarClass}>
         <PlayerBar />
       </div>
 
-      {/* ── Shortcuts help overlay ── */}
+      {/* Shortcuts help overlay */}
       {showShortcutsHelp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <button
@@ -165,33 +174,33 @@ function AppInner() {
             onClick={toggleShortcutsHelp}
             aria-label="Close shortcuts"
           />
-          <div className="relative z-10 bg-base-950 border border-base-700 rounded-2xl shadow-2xl shadow-black/50 max-w-lg w-[90vw] max-h-[85vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
+          <div className="surface-panel relative z-10 max-h-[85vh] w-[90vw] max-w-lg animate-slide-up overflow-y-auto p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="font-display text-xl text-white">Keyboard Shortcuts</h2>
               <button
                 type="button"
                 onClick={toggleShortcutsHelp}
-                className="btn-ghost p-1.5 rounded-lg text-muted hover:text-white"
+                className="btn-ghost p-1.5 text-muted hover:text-white"
               >
                 <X size={18} />
               </button>
             </div>
-            <p className="text-xs text-muted mb-5 leading-relaxed">
+            <p className="mb-5 text-xs leading-relaxed text-muted">
               Shortcuts work outside text fields so playback and navigation stay close at hand.
             </p>
             {Object.entries(getShortcutsByCategory()).map(([category, shortcuts]) => (
               <div key={category} className="mb-4 last:mb-0">
-                <h3 className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2 px-1">
+                <h3 className="section-label mb-2 px-1">
                   {category}
                 </h3>
                 <div className="space-y-1">
                   {shortcuts.filter(Boolean).map((s) => (
                     <div
                       key={s.code}
-                      className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-base-800/60 transition-colors"
+                      className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-white/[0.04]"
                     >
                       <span className="text-sm text-soft">{s.label}</span>
-                      <span className="rounded-md border border-base-700 bg-base-900 px-2.5 py-1 font-mono text-[11px] text-white flex-shrink-0 ml-3">
+                      <span className="ml-3 flex-shrink-0 rounded-md border border-white/[0.08] bg-base-900 px-2.5 py-1 font-mono text-[11px] text-white">
                         {s.keys}
                       </span>
                     </div>
@@ -207,11 +216,11 @@ function AppInner() {
         <div className="fixed inset-0 z-50 md:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close menu"
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-[82vw] max-w-80 border-r border-base-700 bg-base-950 shadow-2xl shadow-black/40">
+          <aside className="absolute bottom-0 left-0 top-0 w-[82vw] max-w-80 animate-slide-up border-r border-white/[0.08] bg-base-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl">
             <div className="absolute right-3 top-3 z-10">
               <button
                 type="button"
@@ -237,5 +246,3 @@ export default function App() {
     </QueryClientProvider>
   );
 }
-
-
