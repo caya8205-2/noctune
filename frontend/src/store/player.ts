@@ -10,6 +10,7 @@ interface PlayerState {
   isPlaying: boolean;
   isLoading: boolean;
   volume: number;         // 0–1
+  lastNonZeroVolume: number;
   progress: number;       // seconds
   duration: number;       // seconds
   shuffle: boolean;
@@ -30,6 +31,7 @@ interface PlayerState {
   playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean; queueSource?: Track['queueSource'] }) => Promise<void>;
   togglePlay: () => void;
   setVolume: (v: number) => void;
+  toggleMute: () => void;
   setProgress: (s: number) => void;
   setDuration: (s: number) => void;
   next: () => Promise<void>;
@@ -56,6 +58,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isPlaying: false,
   isLoading: false,
   volume: 0.8,
+  lastNonZeroVolume: 0.8,
   progress: 0,
   duration: 0,
   shuffle: false,
@@ -70,7 +73,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setLoading: (v) => set({ isLoading: v }),
   setIsPlaying: (v) => set({ isPlaying: v }),
-  setVolume: (v) => set({ volume: v }),
+  setVolume: (v) => set({
+    volume: v,
+    ...(v > 0 ? { lastNonZeroVolume: v } : {}),
+  }),
+  toggleMute: () => set((s) => (
+    s.volume > 0
+      ? { volume: 0, lastNonZeroVolume: s.volume }
+      : { volume: s.lastNonZeroVolume > 0 ? s.lastNonZeroVolume : 0.8 }
+  )),
   setProgress: (s) => set({ progress: s }),
   setDuration: (s) => set({ duration: s }),
 

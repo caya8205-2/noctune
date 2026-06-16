@@ -19,8 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { API_BASE } from '../../utils/api';
-import { api, type BackendStatus } from '../../utils/api';
+import { api, apiUrl, type BackendStatus } from '../../utils/api';
 
 const APP_VERSION = __APP_VERSION__;
 
@@ -98,14 +97,12 @@ export function SettingsView() {
   const [debugSearch, setDebugSearch] = useState(false);
 
   async function loadSettings() {
-    return fetch(API_BASE + '/settings')
-      .then((r) => r.json())
-      .then((d: SettingsData) => {
-        setData(d);
-        setClientId(d.spotify.clientId);
-        setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
-        setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
-      });
+    const res = await fetch(await apiUrl('/settings'));
+    const d = (await res.json()) as SettingsData;
+    setData(d);
+    setClientId(d.spotify.clientId);
+    setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
+    setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
   }
 
   useEffect(() => {
@@ -123,7 +120,7 @@ export function SettingsView() {
       if (clientId) body.spotifyClientId = clientId;
       if (clientSecret) body.spotifyClientSecret = clientSecret;
 
-      const res = await fetch(API_BASE + '/settings', {
+      const res = await fetch(await apiUrl('/settings'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -150,7 +147,7 @@ export function SettingsView() {
       if (clientId) body.spotifyClientId = clientId;
       if (clientSecret) body.spotifyClientSecret = clientSecret;
 
-      const res = await fetch(API_BASE + '/settings/spotify/test', {
+      const res = await fetch(await apiUrl('/settings/spotify/test'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -184,7 +181,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/cache/export');
+      const res = await fetch(await apiUrl('/settings/cache/export'));
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -210,7 +207,7 @@ export function SettingsView() {
 
     try {
       const json = JSON.parse(await file.text());
-      const res = await fetch(API_BASE + '/settings/cache/import', {
+      const res = await fetch(await apiUrl('/settings/cache/import'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(json),
@@ -232,7 +229,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/cache', { method: 'DELETE' });
+      const res = await fetch(await apiUrl('/settings/cache'), { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear cache failed');
       await loadSettings();
       setCacheMessage({ ok: true, text: 'All cache cleared.' });
@@ -249,7 +246,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/cache/tracks', { method: 'DELETE' });
+      const res = await fetch(await apiUrl('/settings/cache/tracks'), { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear track cache failed');
       await loadSettings();
       setCacheMessage({ ok: true, text: 'Track cache cleared.' });
@@ -266,7 +263,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/cache/lyrics', { method: 'DELETE' });
+      const res = await fetch(await apiUrl('/settings/cache/lyrics'), { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear lyrics cache failed');
       await loadSettings();
       setCacheMessage({ ok: true, text: 'Lyrics cache cleared.' });
@@ -283,7 +280,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings/cache/audio', { method: 'DELETE' });
+      const res = await fetch(await apiUrl('/settings/cache/audio'), { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear audio cache failed');
       await loadSettings();
       setCacheMessage({ ok: true, text: 'Audio cache cleared.' });
@@ -299,7 +296,7 @@ export function SettingsView() {
     setCacheMessage(null);
 
     try {
-      const res = await fetch(API_BASE + '/settings', {
+      const res = await fetch(await apiUrl('/settings'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioCacheLimitMb }),
@@ -364,7 +361,7 @@ export function SettingsView() {
   async function handleDiscordRpcToggle(enabled: boolean) {
     setDiscordRpcEnabled(enabled);
     try {
-      const res = await fetch(API_BASE + '/settings', {
+      const res = await fetch(await apiUrl('/settings'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ discordRpcEnabled: enabled }),

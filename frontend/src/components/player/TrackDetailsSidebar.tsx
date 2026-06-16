@@ -4,6 +4,18 @@ import { api, type CachedTrack, type SpotifyTrackMetadata } from '../../utils/ap
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+async function openExternalUrl(url: string) {
+  if (!IS_TAURI) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('open_external_url', { url });
+}
+
 function DetailRow({
   icon: Icon,
   label,
@@ -88,15 +100,14 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
       </div>
 
       {metadata.spotifyUrl && (
-        <a
-          href={metadata.spotifyUrl}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => openExternalUrl(metadata.spotifyUrl!).catch(console.error)}
           className="btn-ghost border border-base-600/50 px-3 py-2 text-xs justify-center"
         >
           <ExternalLink size={13} />
           Open in Spotify
-        </a>
+        </button>
       )}
     </>
   );

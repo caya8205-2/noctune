@@ -23,7 +23,8 @@ import { formatDuration } from '../../utils/format';
 import { Visualizer } from './Visualizer';
 import { LikeButton } from './LikeButton';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
-import { api, type LyricsResult, type Track } from '../../utils/api';
+import { type LyricsResult, type Track } from '../../utils/api';
+import { lyricsQueryOptions } from '../../hooks/useLyrics';
 
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
@@ -34,10 +35,11 @@ const sourceMeta = {
 
 function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: number): number {
   if (!lyrics?.synced) return -1;
+  const lyricLeadSeconds = 0.3;
   let active = -1;
   for (let i = 0; i < lyrics.lines.length; i++) {
     const time = lyrics.lines[i].time;
-    if (time === null || time > progress + 0.12) break;
+    if (time === null || time > progress + lyricLeadSeconds) break;
     active = i;
   }
   return active;
@@ -46,12 +48,7 @@ function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: 
 function LyricsPanel({ track }: { track: Track }) {
   const progress = usePlayerStore((state) => state.progress);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
-  const { data: lyrics, isLoading, isError } = useQuery({
-    queryKey: ['lyrics', track.spotifyId ?? track.id, track.title, track.artist, track.duration],
-    queryFn: () => api.lyrics(track),
-    staleTime: 1000 * 60 * 60,
-    retry: false,
-  });
+  const { data: lyrics, isLoading, isError } = useQuery(lyricsQueryOptions(track));
 
   const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress), [lyrics, progress]);
 

@@ -14,19 +14,52 @@ function firstExistingPath(paths: string[]): string | undefined {
 }
 
 function resolveYtdlpBinaryPath(): string | undefined {
-  if (process.env.YT_DLP_PATH && fs.existsSync(process.env.YT_DLP_PATH)) {
-    return process.env.YT_DLP_PATH;
+  const envPath = process.env.YT_DLP_PATH;
+  if (envPath) {
+    try {
+      if (fs.existsSync(envPath)) return envPath;
+    } catch {
+      // Ignore invalid env paths and continue with bundled candidates.
+    }
   }
 
   const exeDir = path.dirname(process.execPath);
-  return firstExistingPath([
-    path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
-    path.join(process.cwd(), 'yt-dlp.exe'),
-    path.join(process.cwd(), 'yt-dlp-x86_64-pc-windows-msvc.exe'),
-    path.join(exeDir, 'yt-dlp.exe'),
-    path.join(exeDir, 'bin', 'yt-dlp.exe'),
-    path.join(exeDir, 'yt-dlp-x86_64-pc-windows-msvc.exe'),
-  ]);
+  const roots = [process.cwd(), exeDir];
+  const binaryNamesByPlatform: Partial<Record<NodeJS.Platform, string[]>> = {
+    win32: [
+      'yt-dlp.exe',
+      'yt-dlp-x86_64-pc-windows-msvc.exe',
+      'yt-dlp_x86.exe',
+    ],
+    linux: [
+      'yt-dlp',
+      'yt-dlp_linux',
+      'yt-dlp_linux_aarch64',
+      'yt-dlp_x86_64-unknown-linux-gnu',
+    ],
+    darwin: [
+      'yt-dlp',
+      'yt-dlp_macos',
+      'yt-dlp_macos_legacy',
+    ],
+    aix: ['yt-dlp'],
+    android: ['yt-dlp'],
+    freebsd: ['yt-dlp'],
+    haiku: ['yt-dlp'],
+    openbsd: ['yt-dlp'],
+    sunos: ['yt-dlp'],
+    cygwin: ['yt-dlp.exe', 'yt-dlp'],
+    netbsd: ['yt-dlp'],
+  };
+  const binaryNames = binaryNamesByPlatform[process.platform] ?? ['yt-dlp'];
+  const candidates = roots.flatMap((root) =>
+    binaryNames.flatMap((name) => [
+      path.join(root, 'bin', name),
+      path.join(root, name),
+    ])
+  );
+
+  return firstExistingPath(candidates);
 }
 
 const resolvedBinaryPath = resolveYtdlpBinaryPath();

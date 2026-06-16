@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { API_BASE, api } from '../utils/api';
+import { api, apiUrl } from '../utils/api';
 
 let activeAudio: HTMLAudioElement | null = null;
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -181,9 +181,12 @@ export function useAudio() {
               youtubeArtist: latestTrack.youtubeArtist,
             },
           });
-          target.src = `${API_BASE}/player/stream/${resolved.id}?retry=${Date.now()}`;
-          target.load();
-          return waitForAudioReady(target)
+          return apiUrl(`/player/stream/${resolved.id}?retry=${Date.now()}`)
+            .then((src) => {
+              target.src = src;
+              target.load();
+              return waitForAudioReady(target);
+            })
             .then(() => {
               if (resumeAt > 1) {
                 target.currentTime = Math.min(resumeAt, target.duration || resumeAt);
@@ -215,18 +218,25 @@ export function useAudio() {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
 
-    const src = API_BASE + '/player/stream/' + currentTrack.id;
-
-    if (audio.src !== src) {
-      recoveryAttemptRef.current = null;
-      recordedTrackRef.current = null;
-      audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
-      audio.src = src;
-      audio.load();
-    }
-    if (isPlaying) {
-      playAudio(audio).catch(err => console.warn('[audio] play blocked:', err));
-    }
+    let cancelled = false;
+    apiUrl('/player/stream/' + currentTrack.id)
+      .then((src) => {
+        if (cancelled || !audioRef.current) return;
+        if (audio.src !== src) {
+          recoveryAttemptRef.current = null;
+          recordedTrackRef.current = null;
+          audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+          audio.src = src;
+          audio.load();
+        }
+        if (usePlayerStore.getState().isPlaying) {
+          playAudio(audio).catch(err => console.warn('[audio] play blocked:', err));
+        }
+      })
+      .catch(err => console.warn('[audio] stream URL failed:', err));
+    return () => {
+      cancelled = true;
+    };
   }, [currentTrack?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync play/pause

@@ -19,7 +19,7 @@ export function PlayerBar() {
     volume, progress, duration,
     shuffle, repeat,
     togglePlay, setVolume, next, prev,
-    toggleShuffle, cycleRepeat, setView, showTrackDetails, toggleTrackDetails,
+    toggleMute, toggleShuffle, cycleRepeat, setView, showTrackDetails, toggleTrackDetails,
   } = usePlayerStore();
 
   const seekDuration = duration > 0 ? duration : currentTrack?.duration ?? 0;
@@ -199,7 +199,7 @@ export function PlayerBar() {
           </span>
 
           <button
-            onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+            onClick={toggleMute}
             className="btn-ghost"
           >
             {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}

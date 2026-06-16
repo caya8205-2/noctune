@@ -4,7 +4,7 @@ import type { LyricsCacheStore, LyricsResult } from '../types/index.js';
 
 const LRCLIB_BASE = 'https://lrclib.net/api';
 const USER_AGENT = 'Noctune/1.0.0-beta.2 (https://github.com/caya/noctune)';
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
   : path.join(process.cwd(), 'data');
@@ -57,7 +57,7 @@ function titleCandidates(title: string): string[] {
     .map((part) => compactTitle(part))
     .filter((part) => part.length >= 3);
 
-  return [...new Set([title, compact, ...parts])].filter(Boolean);
+  return [...new Set([compact, title, ...parts])].filter(Boolean);
 }
 
 function cacheKey(title: string, artist: string, duration: number): string {
@@ -154,19 +154,25 @@ function durationScore(candidate: LrclibLyrics, duration: number): number {
 }
 
 function scoreCandidate(candidate: LrclibLyrics, title: string, artist: string, duration: number): number {
-  const wantedTitle = normalize(title);
+  const wantedTitles = titleCandidates(title).map(normalize).filter(Boolean);
   const wantedArtist = normalize(artist);
   const trackName = normalize(candidate.trackName || candidate.name || '');
   const artistName = normalize(candidate.artistName || '');
   let score = durationScore(candidate, duration);
 
-  if (trackName === wantedTitle) score += 70;
-  else if (trackName.includes(wantedTitle) || wantedTitle.includes(trackName)) score += 35;
+  if (wantedTitles.includes(trackName)) {
+    score += 85;
+  } else if (wantedTitles.some((candidateTitle) => trackName.includes(candidateTitle) || candidateTitle.includes(trackName))) {
+    score += 35;
+  } else {
+    score -= 45;
+  }
 
   if (artistName === wantedArtist) score += 50;
   else if (artistName.includes(wantedArtist) || wantedArtist.includes(artistName)) score += 20;
+  else if (wantedArtist && artistName) score -= 35;
 
-  if (candidate.syncedLyrics) score += 20;
+  if (candidate.syncedLyrics) score += 35;
   if (candidate.instrumental) score -= 40;
   return score;
 }
@@ -200,17 +206,16 @@ export async function findLyrics(title: string, artist: string, duration: number
 
   const seen = new Set<number>();
   const candidates: LrclibLyrics[] = [];
+  const artistCandidates = [...new Set([artist, ''])];
   for (const candidateTitle of titleCandidates(title)) {
-    for (const candidateArtist of [artist, '']) {
+    for (const candidateArtist of artistCandidates) {
       const results = await searchLrclib(candidateTitle, candidateArtist);
       for (const result of results) {
         if (seen.has(result.id)) continue;
         seen.add(result.id);
         candidates.push(result);
       }
-      if (candidates.length > 0) break;
     }
-    if (candidates.length > 0) break;
   }
 
   const scored = candidates

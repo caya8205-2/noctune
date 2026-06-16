@@ -1,9 +1,56 @@
 // In production Tauri builds the Vite proxy doesn't exist, so we call the backend directly.
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const WEB_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const TAURI_BACKEND_HOST = import.meta.env.VITE_TAURI_BACKEND_HOST || '127.0.0.1';
+const TAURI_BACKEND_PORT = Number(import.meta.env.VITE_TAURI_BACKEND_PORT || 3131);
+const TAURI_BACKEND_PORT_ATTEMPTS = Number(import.meta.env.VITE_TAURI_BACKEND_PORT_ATTEMPTS || 10);
 const normalizeBase = (base: string) => base.replace(/\/+$/, '');
-const BASE = normalizeBase(IS_TAURI ? 'http://127.0.0.1:3131' : WEB_API_BASE);
-export const API_BASE = BASE;
+const tauriBaseForPort = (port: number) => `http://${TAURI_BACKEND_HOST}:${port}`;
+export const API_BASE = normalizeBase(IS_TAURI ? tauriBaseForPort(TAURI_BACKEND_PORT) : WEB_API_BASE);
+
+let apiBasePromise: Promise<string | null> | null = null;
+
+async function canReachBackend(base: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 450);
+  try {
+    const res = await fetch(`${base}/status`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function getApiBase(): Promise<string> {
+  if (!IS_TAURI) return API_BASE;
+
+  if (!apiBasePromise) {
+    apiBasePromise = (async () => {
+      for (let attempt = 0; attempt < TAURI_BACKEND_PORT_ATTEMPTS; attempt++) {
+        const base = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT + attempt));
+        if (await canReachBackend(base)) return base;
+      }
+      return null;
+    })();
+  }
+
+  const resolvedBase = await apiBasePromise;
+  if (!resolvedBase) {
+    apiBasePromise = null;
+    return API_BASE;
+  }
+
+  return resolvedBase;
+}
+
+export async function apiUrl(path: string): Promise<string> {
+  return `${await getApiBase()}${path}`;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
@@ -11,7 +58,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${await getApiBase()}${path}`, {
     ...options,
     headers,
   });

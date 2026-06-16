@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Download, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
-import { api, type DebugMatchResult, type Track } from '../../utils/api';
+import { api, apiUrl, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
-import { API_BASE } from '../../utils/api';
 import { LikeButton } from '../player/LikeButton';
 
 interface SettingsData {
@@ -45,7 +44,8 @@ export function SearchView() {
   const { playTrack, currentTrack, isPlaying, addToQueue } = usePlayerStore();
 
   useEffect(() => {
-    fetch(API_BASE + '/settings')
+    apiUrl('/settings')
+      .then((url) => fetch(url))
       .then((r) => r.json())
       .then((data: SettingsData) => setEngine(data.searchEngine))
       .catch(console.error);
@@ -63,7 +63,7 @@ export function SearchView() {
     setEngine(nextEngine);
     setSavingEngine(true);
     try {
-      await fetch(API_BASE + '/settings', {
+      await fetch(await apiUrl('/settings'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchEngine: nextEngine }),

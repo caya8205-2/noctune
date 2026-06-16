@@ -44,7 +44,7 @@ export function useKeyboardShortcuts() {
         activeView, currentTrack, volume, duration,
         showShortcutsHelp,
         setView, togglePlay, setVolume,
-        toggleShuffle, cycleRepeat, toggleShortcutsHelp,
+        toggleMute, toggleShuffle, cycleRepeat, toggleShortcutsHelp,
       } = usePlayerStore.getState();
 
       switch (shortcut.action) {
@@ -101,7 +101,7 @@ export function useKeyboardShortcuts() {
         case 'toggleMute': {
           if (e.metaKey || e.ctrlKey) break;
           e.preventDefault();
-          usePlayerStore.getState().setVolume(volume > 0 ? 0 : 0.8);
+          toggleMute();
           break;
         }
 

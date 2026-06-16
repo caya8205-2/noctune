@@ -15,6 +15,7 @@ import { usePlayerStore } from './store/player';
 import { getShortcutsByCategory } from './constants/keyboardShortcuts';
 import { useAudio } from './hooks/useAudio';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useLyricsPrefetch } from './hooks/useLyrics';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
@@ -23,6 +24,7 @@ const qc = new QueryClient({
 function AppInner() {
   useAudio();
   useKeyboardShortcuts();
+  useLyricsPrefetch();
   const { activeView, showTrackDetails, showShortcutsHelp, setView, toggleShortcutsHelp } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeViewRef = useRef(activeView);

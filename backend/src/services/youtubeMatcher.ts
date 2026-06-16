@@ -28,7 +28,7 @@ export interface ScoredCandidate {
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 7;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
@@ -161,6 +161,19 @@ const liveVersionKeywords = [
   'stage',
   'showcase',
   'tour',
+];
+
+const alternateVersionKeywords = [
+  'tv version',
+  'tv ver',
+  'tv size',
+  'television version',
+  'short version',
+  'anime version',
+  'opening version',
+  'ending version',
+  'op version',
+  'ed version',
 ];
 
 function ensureDataDir() {
@@ -339,6 +352,13 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
     if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
       score -= keyword === 'tour' ? 260 : 180;
       reasons.push(`live-version:${keyword}`);
+    }
+  }
+
+  for (const keyword of alternateVersionKeywords) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+      score -= 220;
+      reasons.push(`alternate-version:${keyword}`);
     }
   }
 
