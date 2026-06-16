@@ -12,6 +12,8 @@ import { homeRoutes } from './routes/home.js';
 import { lyricsRoutes } from './routes/lyrics.js';
 import { metadataRoutes } from './routes/metadata.js';
 import { rpcRoutes } from './routes/rpc.js';
+import { browseRoutes } from './routes/browse.js';
+import { updateRoutes } from './routes/updates.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
@@ -75,6 +77,8 @@ async function bootstrap() {
   await app.register(lyricsRoutes);
   await app.register(metadataRoutes);
   await app.register(rpcRoutes);
+  await app.register(browseRoutes);
+  await app.register(updateRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({
@@ -88,6 +92,9 @@ async function bootstrap() {
     matchCache: getMatchCacheStats(),
     discordRpc: getDiscordRpcStatus(),
     demoMode: isDemoMode(),
+    features: {
+      updates: true,
+    },
   }));
 
   // Init SQLite schema
@@ -121,4 +128,3 @@ bootstrap().catch(err => {
   console.error('[fatal]', err);
   process.exit(1);
 });
-

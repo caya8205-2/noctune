@@ -18,7 +18,9 @@ async function canReachBackend(base: string): Promise<boolean> {
       cache: 'no-store',
       signal: controller.signal,
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const status = (await res.json()) as { features?: { updates?: boolean } };
+    return status.features?.updates === true;
   } catch {
     return false;
   } finally {
@@ -79,7 +81,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search: (q: string, limit = 10) =>
+  search: (q: string, limit = 25) =>
     request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
     ),
@@ -136,10 +138,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tracks }),
     }),
+  clearTrackCache: (track: Track) =>
+    request<ClearTrackCacheResult>('/player/cache/clear-track', {
+      method: 'POST',
+      body: JSON.stringify(track),
+    }),
   clearResolverBlacklist: () =>
     request<{ ok: boolean; blacklist: { cleared: number } }>('/settings/resolver-blacklist', { method: 'DELETE' }),
   clearResolverMatchCache: () =>
     request<{ ok: boolean; matchCache: { cleared: number } }>('/settings/resolver-match-cache', { method: 'DELETE' }),
+  checkForUpdates: (force = false) =>
+    request<UpdateInfo>(`/updates/latest${force ? '?force=true' : ''}`),
+
+  browseArtist: (artistId: string) =>
+    request<ArtistView>(`/browse/artist/${encodeURIComponent(artistId)}`),
+  browseAlbum: (albumId: string) =>
+    request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
 
   recommend: (seed: Track, excludeIds: string[] = [], limit = 12) =>
     request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
@@ -200,6 +214,8 @@ export interface Track {
   query: string;
   spotifyId?: string;
   spotifyUrl?: string;
+  artistId?: string;   // Spotify artist ID for artist view navigation
+  albumId?: string;    // Spotify album ID for album view navigation
   youtubeId?: string;
   youtubeTitle?: string;
   youtubeArtist?: string;
@@ -288,6 +304,28 @@ export interface AudioCacheStatus {
   }>;
 }
 
+export interface ClearTrackCacheResult {
+  ok: boolean;
+  ids: string[];
+  learned: { tracks: number; queries: number };
+  audio: { files: number; bytes: number };
+  prefetch: { prefetched: number; inFlight: number };
+  blacklist: { cleared: number };
+  matchCache: { cleared: number; youtubeId?: string };
+}
+
+export interface UpdateInfo {
+  ok: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseName: string | null;
+  releaseUrl: string;
+  publishedAt: string | null;
+  checkedAt: number;
+  error?: string;
+}
+
 export interface BackendStatus {
   ok: boolean;
   cache: { total: number; totalQueries: number };
@@ -296,6 +334,7 @@ export interface BackendStatus {
   playbackBlacklist?: { failedIds: number };
   matchCache?: { total: number };
   discordRpc?: { enabled: boolean; ready: boolean };
+  features?: { updates?: boolean };
 }
 
 export interface DebugMatchResult {
@@ -315,5 +354,45 @@ export interface DebugMatchResult {
   }>;
 }
 
+// ── Browse types ─────────────────────────────────────────────────────────────
 
+export interface ArtistAlbum {
+  id: string;
+  name: string;
+  type: string;
+  releaseDate: string | null;
+  totalTracks: number;
+  image: string | null;
+  spotifyUrl: string | null;
+}
 
+export interface ArtistView {
+  id: string;
+  name: string;
+  genres: string[];
+  popularity: number | null;
+  followers: number | null;
+  image: string | null;
+  spotifyUrl: string | null;
+  topTracks: Track[];
+  albums: ArtistAlbum[];
+}
+
+export interface AlbumTrack extends Track {
+  trackNumber: number;
+  albumId: string;
+}
+
+export interface AlbumView {
+  id: string;
+  name: string;
+  type: string;
+  releaseDate: string | null;
+  totalTracks: number;
+  label: string | null;
+  popularity: number | null;
+  image: string | null;
+  spotifyUrl: string | null;
+  artists: Array<{ id: string; name: string }>;
+  tracks: AlbumTrack[];
+}

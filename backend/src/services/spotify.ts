@@ -89,14 +89,14 @@ interface SpotifyAlbum {
     id: string;
     name: string;
     images: Array<{ url: string; width: number; height: number }>;
-    artists: Array<{ name: string }>;
+    artists: Array<{ id?: string; name: string }>;
 }
 
 interface SpotifyAlbumTrack {
     id: string;
     name: string;
     duration_ms: number;
-    artists: Array<{ name: string }>;
+    artists: Array<{ id?: string; name: string }>;
     external_urls: { spotify: string };
 }
 
@@ -221,6 +221,20 @@ async function getAccessToken(): Promise<string> {
     return _token;
 }
 
+/** Exported fetch helper for other modules that need Spotify API access */
+export async function spotifyFetch<T>(path: string): Promise<T> {
+    const token = await getAccessToken();
+    const res = await fetch(`https://api.spotify.com/v1${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+        invalidateToken();
+        throw new Error('Spotify token expired');
+    }
+    if (!res.ok) throw new Error(`Spotify ${path} failed: ${res.status}`);
+    return res.json() as Promise<T>;
+}
+
 /** Invalidate cached token (call after 401) */
 export function invalidateToken(): void {
     _token = null;
@@ -243,6 +257,8 @@ function spotifyTrackToTrack(st: SpotifyTrack, query: string): Track {
         query,
         spotifyId: st.id,
         spotifyUrl: st.external_urls.spotify,
+        artistId: st.artists[0]?.id,
+        albumId: st.album.id,
     };
 }
 
@@ -266,6 +282,8 @@ function spotifyAlbumTrackToTrack(
         query,
         spotifyId: st.id,
         spotifyUrl: st.external_urls.spotify,
+        artistId: st.artists[0]?.id ?? album.artists[0]?.id,
+        albumId: album.id,
     };
 }
 
@@ -406,7 +424,7 @@ export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promis
 
     // First page — also gets playlist name
     const firstUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
-    firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(name),album(name,images),external_urls)),tracks.next');
+    firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(id,name),album(id,name,images),external_urls)),tracks.next');
     firstUrl.searchParams.set('limit', '100');
 
     const firstRes = await fetch(firstUrl.toString(), {

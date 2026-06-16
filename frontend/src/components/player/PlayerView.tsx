@@ -23,7 +23,7 @@ import { formatDuration } from '../../utils/format';
 import { Visualizer } from './Visualizer';
 import { LikeButton } from './LikeButton';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
-import { type LyricsResult, type Track } from '../../utils/api';
+import { api, type LyricsResult, type Track } from '../../utils/api';
 import { lyricsQueryOptions } from '../../hooks/useLyrics';
 
 const sourceMeta = {
@@ -47,13 +47,30 @@ function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: 
 
 function LyricsPanel({ track }: { track: Track }) {
   const progress = usePlayerStore((state) => state.progress);
+  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
   const { data: lyrics, isLoading, isError } = useQuery(lyricsQueryOptions(track));
 
   const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress), [lyrics, progress]);
 
   useEffect(() => {
-    activeLineRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const container = lyricsScrollRef.current;
+    const activeLine = activeLineRef.current;
+    if (!container || !activeLine) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeLineRect = activeLine.getBoundingClientRect();
+    const targetTop =
+      container.scrollTop +
+      activeLineRect.top -
+      containerRect.top -
+      container.clientHeight / 2 +
+      activeLineRect.height / 2;
+
+    container.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'smooth',
+    });
   }, [activeIndex]);
 
   if (isLoading) {
@@ -88,7 +105,7 @@ function LyricsPanel({ track }: { track: Track }) {
 
   return (
     <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden">
-      <div className="h-full overflow-y-auto px-6 py-5">
+      <div ref={lyricsScrollRef} className="h-full overflow-y-auto px-6 py-5">
         <div className="min-h-full flex flex-col justify-center gap-3">
           {lyrics.lines.map((line, index) => {
             const isActive = index === activeIndex;
@@ -130,9 +147,19 @@ export function PlayerView() {
     next,
     toggleShuffle,
     cycleRepeat,
+    setView,
   } = usePlayerStore();
   const upcomingCount = Math.max(0, queue.length - queueIndex - 1);
   const SourceIcon = currentTrack?.source ? sourceMeta[currentTrack.source]?.Icon : null;
+  const needsSpotifyNavigation = Boolean(currentTrack?.spotifyId && (!currentTrack.albumId || !currentTrack.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', currentTrack?.spotifyId],
+    queryFn: () => api.spotifyMetadata(currentTrack!.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
+  const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
 
   return (
     <div className="h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8">
@@ -172,10 +199,32 @@ export function PlayerView() {
 
             <div className="w-full max-w-3xl text-center mt-6 sm:mt-8">
               <p className="section-label text-accent mb-3">Now playing</p>
-              <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight line-clamp-2 sm:truncate">
-                {currentTrack.title}
-              </h1>
-              <p className="text-lg text-soft mt-2 truncate">{currentTrack.artist}</p>
+              {albumViewId ? (
+                <button
+                  type="button"
+                  className="mx-auto block max-w-full text-3xl font-bold leading-tight text-white transition-colors hover:text-accent sm:truncate sm:text-4xl"
+                  onClick={() => setView('album', albumViewId)}
+                  title={`Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? currentTrack.title}`}
+                >
+                  {currentTrack.title}
+                </button>
+              ) : (
+                <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight line-clamp-2 sm:truncate">
+                  {currentTrack.title}
+                </h1>
+              )}
+              {artistViewId ? (
+                <button
+                  type="button"
+                  className="mx-auto mt-2 block max-w-full truncate text-lg text-soft transition-colors hover:text-accent"
+                  onClick={() => setView('artist', artistViewId)}
+                  title={`Go to artist: ${currentTrack.artist}`}
+                >
+                  {currentTrack.artist}
+                </button>
+              ) : (
+                <p className="text-lg text-soft mt-2 truncate">{currentTrack.artist}</p>
+              )}
               <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 text-xs text-soft px-2.5 py-1 rounded-full border border-base-600/40 bg-base-900/60">
                   <Zap size={12} className="text-accent" />
@@ -206,7 +255,7 @@ export function PlayerView() {
                 <LikeButton track={currentTrack} className="rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60" />
               </div>
 
-              <div className="mt-6 flex items-center justify-center gap-3 lg:hidden">
+              <div className="mt-6 flex items-center justify-center gap-3 md:hidden">
                 <button
                   type="button"
                   onClick={toggleShuffle}
@@ -255,7 +304,7 @@ export function PlayerView() {
               <LyricsPanel track={currentTrack} />
             </section>
 
-            <section className="w-full max-w-3xl mt-8 pb-8 lg:hidden">
+            <section className="w-full max-w-3xl mt-8 pb-8 md:hidden">
               <div className="flex items-center gap-2 mb-4">
                 <Radio size={15} className="text-accent" />
                 <h2 className="section-label">Details</h2>

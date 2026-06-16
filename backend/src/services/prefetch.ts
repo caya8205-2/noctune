@@ -128,6 +128,13 @@ export function clearPrefetchCache(): { prefetched: number; inFlight: number; qu
   return snapshot;
 }
 
+export function clearPrefetchForId(videoId: string): { prefetched: number; inFlight: boolean } {
+  const hadPrefetched = prefetched.delete(videoId) ? 1 : 0;
+  const wasInFlight = inFlight.delete(videoId);
+  logPrefetch('cleared track memory cache', { videoId, prefetched: hadPrefetched, inFlight: wasInFlight });
+  return { prefetched: hadPrefetched, inFlight: wasInFlight };
+}
+
 export function getPrefetchStatus() {
   return {
     queueSize: prefetchQueue.size,

@@ -1,7 +1,9 @@
 import { usePlayerStore } from '../../store/player';
 import { useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
+import { api } from '../../utils/api';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
@@ -29,6 +31,15 @@ export function PlayerBar() {
   const progressThumbStyle = { left: `${progressPct}%`, transform: 'translate(-50%, -50%)' };
   const volFillStyle = { width: `${volume * 100}%` };
   const volThumbStyle = { left: `${volume * 100}%`, transform: 'translate(-50%, -50%)' };
+  const needsSpotifyNavigation = Boolean(currentTrack?.spotifyId && (!currentTrack.albumId || !currentTrack.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', currentTrack?.spotifyId],
+    queryFn: () => api.spotifyMetadata(currentTrack!.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
+  const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
 
   function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -100,11 +111,23 @@ export function PlayerBar() {
 
       <div className="flex flex-1 items-center gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Track info */}
-        <button
-          type="button"
+        <div
+          role={currentTrack ? 'button' : undefined}
+          tabIndex={currentTrack ? 0 : undefined}
           onClick={() => currentTrack && setView('player')}
-          disabled={!currentTrack}
-          className="-ml-1 flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1.5 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-default disabled:hover:bg-transparent sm:-ml-2 sm:w-72 sm:flex-none sm:px-2"
+          onKeyDown={(event) => {
+            if (!currentTrack) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setView('player');
+            }
+          }}
+          className={clsx(
+            '-ml-1 flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1.5 text-left transition-colors sm:-ml-2 sm:w-72 sm:flex-none sm:px-2',
+            currentTrack
+              ? 'cursor-pointer hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60'
+              : 'cursor-default'
+          )}
           title={currentTrack ? 'Open full player' : undefined}
         >
           {currentTrack ? (
@@ -122,11 +145,37 @@ export function PlayerBar() {
                   </div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-tight text-white">
+              <div className="flex min-w-0 flex-1 flex-col items-start">
+                <button
+                  type="button"
+                  aria-disabled={!albumViewId}
+                  className={clsx(
+                    'inline-block max-w-full truncate text-left text-sm font-semibold leading-tight text-white transition-colors',
+                    albumViewId ? 'hover:text-accent' : 'cursor-default'
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (albumViewId) setView('album', albumViewId);
+                  }}
+                  title={albumViewId ? `Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? ''}` : undefined}
+                >
                   {currentTrack.title}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted">{currentTrack.artist}</p>
+                </button>
+                <button
+                  type="button"
+                  aria-disabled={!artistViewId}
+                  className={clsx(
+                    'mt-0.5 inline-block max-w-full truncate text-left text-xs text-muted transition-colors',
+                    artistViewId ? 'hover:text-accent' : 'cursor-default'
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (artistViewId) setView('artist', artistViewId);
+                  }}
+                  title={artistViewId ? `Go to artist: ${currentTrack.artist}` : undefined}
+                >
+                  {currentTrack.artist}
+                </button>
               </div>
             </>
           ) : (
@@ -135,7 +184,7 @@ export function PlayerBar() {
               <span className="text-sm text-muted">Nothing playing</span>
             </div>
           )}
-        </button>
+        </div>
 
         {/* Controls */}
         <div className="hidden flex-1 items-center justify-center gap-2 sm:flex">

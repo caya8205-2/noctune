@@ -12,6 +12,7 @@ import {
   ListMusic,
   Loader2,
   Keyboard,
+  RefreshCw,
   ShieldAlert,
   Sparkles,
   Trash2,
@@ -19,7 +20,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type BackendStatus } from '../../utils/api';
+import { api, apiUrl, type BackendStatus, type UpdateInfo } from '../../utils/api';
+import { openExternalUrl } from '../../hooks/useUpdateChecker';
 
 const APP_VERSION = __APP_VERSION__;
 
@@ -95,6 +97,8 @@ export function SettingsView() {
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [debugSearch, setDebugSearch] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   async function loadSettings() {
     const res = await fetch(await apiUrl('/settings'));
@@ -108,6 +112,7 @@ export function SettingsView() {
   useEffect(() => {
     loadSettings().catch(console.error);
     api.status().then(setDiagnostics).catch(console.error);
+    api.checkForUpdates().then(setUpdateInfo).catch(console.error);
     setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
@@ -374,6 +379,27 @@ export function SettingsView() {
     }
   }
 
+  async function handleCheckForUpdates() {
+    setUpdateBusy(true);
+    try {
+      setUpdateInfo(await api.checkForUpdates(true));
+    } catch (err) {
+      setUpdateInfo({
+        ok: false,
+        currentVersion: APP_VERSION,
+        latestVersion: null,
+        updateAvailable: false,
+        releaseName: null,
+        releaseUrl: 'https://github.com/caya8205-2/noctune/releases/latest',
+        publishedAt: null,
+        checkedAt: Date.now(),
+        error: (err as Error).message,
+      });
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
       <div className="flex flex-col gap-2 max-w-3xl">
@@ -384,6 +410,55 @@ export function SettingsView() {
           Make global choices feel immediate.
         </h1>
       </div>
+
+      {/* Updates */}
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Updates
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Noctune checks GitHub Releases on startup and then every 5 hours while the app is open.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">
+                {updateInfo?.ok === false
+                  ? 'Update check failed'
+                  : updateInfo?.updateAvailable
+                  ? `Noctune ${updateInfo.latestVersion} is available`
+                  : 'Noctune is up to date'}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Current version: {APP_VERSION}
+                {updateInfo?.error ? ` · ${updateInfo.error}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleCheckForUpdates}
+                disabled={updateBusy}
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+              >
+                {updateBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Check
+              </button>
+              <button
+                type="button"
+                onClick={() => openExternalUrl(updateInfo?.releaseUrl ?? 'https://github.com/caya8205-2/noctune/releases/latest').catch(console.error)}
+                className="btn-accent px-3 py-2 rounded-xl text-sm"
+              >
+                <ExternalLink size={14} />
+                Update
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Spotify API Credentials */}
       {IS_TAURI && (
@@ -399,15 +474,14 @@ export function SettingsView() {
             )}
           </div>
 
-          <a
-            href="https://developer.spotify.com/dashboard"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={() => openExternalUrl('https://developer.spotify.com/dashboard').catch(console.error)}
             className="flex items-center gap-2 text-xs text-muted hover:text-accent transition-colors"
           >
             <ExternalLink size={12} />
             Get credentials at developer.spotify.com/dashboard
-          </a>
+          </button>
 
           <p className="text-xs text-muted leading-relaxed">
             Spotify credentials are used for metadata search, playlist import, and release discovery.

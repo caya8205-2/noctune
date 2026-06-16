@@ -27,3 +27,8 @@ export function clearPlaybackBlacklist(): { cleared: number } {
   failedIds.clear();
   return { cleared };
 }
+
+export function clearPlaybackBlacklistForId(videoId: string): { cleared: number } {
+  const cleared = failedIds.delete(videoId) ? 1 : 0;
+  return { cleared };
+}

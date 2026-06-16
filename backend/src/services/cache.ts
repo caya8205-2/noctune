@@ -92,6 +92,10 @@ export function getCachedById(videoId: string): CachedTrack | null {
   return getStore().tracks[videoId] ?? null;
 }
 
+export function getCachedBySpotifyId(spotifyId: string): CachedTrack | null {
+  return Object.values(getStore().tracks).find((track) => track.spotifyId === spotifyId) ?? null;
+}
+
 /** Check if a cached URL is still valid (not expired). */
 export function isUrlFresh(track: CachedTrack): boolean {
   return Date.now() < track.audioUrlExpiry;
@@ -226,6 +230,35 @@ export function removePlaybackHistoryItem(videoId: string): boolean {
   track.playCount = 0;
   saveStore(store);
   return true;
+}
+
+export function clearTrackCache(videoIds: string[], spotifyId?: string): { tracks: number; queries: number } {
+  const store = getStore();
+  const ids = new Set(videoIds.filter(Boolean));
+  if (spotifyId) {
+    for (const [id, track] of Object.entries(store.tracks)) {
+      if (track.spotifyId === spotifyId) ids.add(id);
+    }
+  }
+
+  let tracks = 0;
+  for (const id of ids) {
+    if (store.tracks[id]) {
+      delete store.tracks[id];
+      tracks += 1;
+    }
+  }
+
+  let queries = 0;
+  for (const [hash, id] of Object.entries(store.queryIndex)) {
+    if (ids.has(id)) {
+      delete store.queryIndex[hash];
+      queries += 1;
+    }
+  }
+
+  if (tracks > 0 || queries > 0) saveStore(store);
+  return { tracks, queries };
 }
 
 /** Total number of cached tracks. */

@@ -6,6 +6,7 @@ import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { clsx } from 'clsx';
 import { LikeButton } from '../player/LikeButton';
+import { useClearTrackCache } from '../../hooks/useClearTrackCache';
 
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
 const CROP_VIEWPORT_SIZE = 320;
@@ -212,6 +213,66 @@ function CoverCropModal({
   );
 }
 
+function PlaylistTrackTitle({
+  track,
+  isActive,
+  setView,
+}: {
+  track: Track;
+  isActive: boolean;
+  setView: ReturnType<typeof usePlayerStore.getState>['setView'];
+}) {
+  const needsSpotifyNavigation = Boolean(track.spotifyId && (!track.albumId || !track.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track.spotifyId],
+    queryFn: () => api.spotifyMetadata(track.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const albumViewId = track.albumId ?? spotifyMetadata?.album.id;
+  const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id;
+
+  return (
+    <div className="flex min-w-0 flex-col items-start">
+      {albumViewId ? (
+        <button
+          type="button"
+          className={clsx(
+            'max-w-full truncate text-left text-sm transition-colors hover:text-accent',
+            isActive ? 'font-medium text-accent' : 'text-white'
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('album', albumViewId);
+          }}
+          title={`Go to album: ${track.album ?? spotifyMetadata?.album.name ?? track.title}`}
+        >
+          {track.title}
+        </button>
+      ) : (
+        <p className={'max-w-full truncate text-sm ' + (isActive ? 'text-accent font-medium' : 'text-white')}>
+          {track.title}
+        </p>
+      )}
+      {artistViewId ? (
+        <button
+          type="button"
+          className="mt-0.5 max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('artist', artistViewId);
+          }}
+          title={`Go to artist: ${track.artist}`}
+        >
+          {track.artist}
+        </button>
+      ) : (
+        <p className="max-w-full truncate text-xs text-muted">{track.artist}</p>
+      )}
+    </div>
+  );
+}
+
 export function PlaylistView() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
@@ -223,7 +284,8 @@ export function PlaylistView() {
   const [trackFilter, setTrackFilter] = useState('');
   const [sortMode, setSortMode] = useState<PlaylistSort>('custom');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { activePlaylistId, playTrack, currentTrack, addToQueue } = usePlayerStore();
+  const { activePlaylistId, playTrack, currentTrack, addToQueue, setView } = usePlayerStore();
+  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
   const qc = useQueryClient();
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', activePlaylistId],
@@ -394,6 +456,7 @@ export function PlaylistView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {clearTrackCacheModal}
       {cropSource && (
         <CoverCropModal
           source={cropSource}
@@ -605,10 +668,7 @@ export function PlaylistView() {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className={'text-sm truncate ' + (isActive ? 'text-accent font-medium' : 'text-white')}>
-                  {track.title}
-                </p>
-                <p className="text-xs text-muted truncate">{track.artist}</p>
+                <PlaylistTrackTitle track={track} isActive={isActive} setView={setView} />
               </div>
               <div className="flex flex-shrink-0 items-center gap-1">
                 <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -623,6 +683,16 @@ export function PlaylistView() {
                     <ListPlus size={14} />
                   </button>
                   <LikeButton track={track} className="p-1.5" />
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestClearTrackCache(track);
+                    }}
+                    title="Clear track cache"
+                  >
+                    <HardDrive size={14} />
+                  </button>
                   {editing && !isLikedPlaylist && (
                     <button
                       className="btn-ghost p-1.5 text-muted hover:text-red-400"

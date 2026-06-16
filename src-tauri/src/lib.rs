@@ -1,19 +1,30 @@
 #[cfg(not(debug_assertions))]
 use tauri::Manager;
+use std::process::Command;
+#[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
 
 #[cfg(not(debug_assertions))]
 struct BackendProcess(std::sync::Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 #[tauri::command]
-fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+fn open_external_url(url: String) -> Result<(), String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("Only http(s) URLs can be opened externally".to_string());
     }
 
-    app.shell()
-        .open(url, None)
-        .map_err(|err| err.to_string())
+    #[cfg(target_os = "windows")]
+    let result = Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", &url])
+        .spawn();
+
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(&url).spawn();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = Command::new("xdg-open").arg(&url).spawn();
+
+    result.map(|_| ()).map_err(|err| err.to_string())
 }
 
 #[cfg(not(debug_assertions))]

@@ -9,7 +9,7 @@ import { debugSpotifyYoutubeMatch } from '../services/youtubeMatcher.js';
 
 const SearchQuery = z.object({
   q: z.string().min(1).max(200),
-  limit: z.coerce.number().min(1).max(20).default(10),
+  limit: z.coerce.number().min(1).max(50).default(25),
 });
 
 const DebugMatchQuery = z.object({
@@ -20,6 +20,28 @@ const DebugMatchQuery = z.object({
   thumbnail: z.string().optional(),
   limit: z.coerce.number().min(1).max(20).default(10),
 });
+
+function trackDedupeKey(track: { id: string; spotifyId?: string; youtubeId?: string }) {
+  return track.spotifyId ?? track.youtubeId ?? track.id;
+}
+
+function mergeCachedSearchResult<T extends { id: string; spotifyId?: string; youtubeId?: string }>(
+  cached: T | null,
+  tracks: T[],
+  limit: number
+) {
+  if (!cached) return tracks.slice(0, limit);
+  const seen = new Set([trackDedupeKey(cached)]);
+  return [
+    cached,
+    ...tracks.filter((track) => {
+      const key = trackDedupeKey(track);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  ].slice(0, limit);
+}
 
 export async function searchRoutes(app: FastifyInstance) {
   app.get('/search/debug-match', async (req, reply) => {
@@ -64,25 +86,24 @@ export async function searchRoutes(app: FastifyInstance) {
       return reply.send({ fromCache: false, query: q, tracks: [] });
     }
 
-    // Check cache first — if we have an exact query hit, return instantly
     const cached = getCachedByQuery(q);
-    if (cached) {
-      return reply.send({
-        fromCache: true,
-        query: q,
-        tracks: [cached],
-      });
-    }
 
     const { searchEngine } = getEnvConfig();
 
-    // Live search via selected engine.
     try {
       const tracks = searchEngine === 'spotify'
         ? await searchSpotify(q, limit)
         : await searchTracks(q, limit);
-      return reply.send({ fromCache: false, query: q, tracks });
+      return reply.send({
+        fromCache: Boolean(cached),
+        query: q,
+        tracks: mergeCachedSearchResult(cached, tracks, limit),
+      });
     } catch (err) {
+      if (cached) {
+        app.log.warn(err, 'Live search failed, returning cached query hit');
+        return reply.send({ fromCache: true, query: q, tracks: [cached] });
+      }
       app.log.error(err, 'Search failed');
       return reply.status(502).send({ error: 'Search failed', message: (err as Error).message });
     }

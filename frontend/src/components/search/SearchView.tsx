@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Download, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Download, HardDrive, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
 import { api, apiUrl, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { LikeButton } from '../player/LikeButton';
+import { useClearTrackCache } from '../../hooks/useClearTrackCache';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -11,6 +12,7 @@ interface SettingsData {
 
 const RECENT_SEARCHES_KEY = 'noctune:recent-searches';
 const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
+const SEARCH_RESULT_LIMIT = 25;
 
 function isPlaylistUrl(value: string): boolean {
   try {
@@ -40,8 +42,9 @@ export function SearchView() {
   const [debugResult, setDebugResult] = useState<{ source: Track; result: DebugMatchResult } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const playlistUrl = useMemo(() => isPlaylistUrl(query), [query]);
+  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
 
-  const { playTrack, currentTrack, isPlaying, addToQueue } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, addToQueue, setView } = usePlayerStore();
 
   useEffect(() => {
     apiUrl('/settings')
@@ -86,7 +89,7 @@ export function SearchView() {
     }
     setIsSearching(true);
     try {
-      const res = await api.search(cleanQuery);
+      const res = await api.search(cleanQuery, SEARCH_RESULT_LIMIT);
       setResults(res.tracks);
       setDebugResult(null);
       setFromCache(res.fromCache);
@@ -161,6 +164,7 @@ export function SearchView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {clearTrackCacheModal}
       <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
         <div className="flex items-end justify-between gap-4 mb-5">
           <div>
@@ -222,7 +226,7 @@ export function SearchView() {
           {searched && fromCache ? (
             <div className="flex items-center gap-1.5 text-xs text-accent">
               <Zap size={11} />
-              <span>Instant from cache</span>
+              <span>Cached match included</span>
             </div>
           ) : recentSearches.length > 0 && !searched && !query.trim() ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +381,43 @@ export function SearchView() {
                 <p className={`text-sm truncate ${isActive ? 'text-accent font-medium' : 'text-white'}`}>
                   {track.title}
                 </p>
-                <p className="text-xs text-muted truncate">{track.artist}</p>
+                <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted">
+                  {track.artistId ? (
+                    <button
+                      type="button"
+                      className="truncate text-left transition-colors hover:text-accent"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setView('artist', track.artistId);
+                      }}
+                      title={`Go to artist: ${track.artist}`}
+                    >
+                      {track.artist}
+                    </button>
+                  ) : (
+                    <span className="truncate">{track.artist}</span>
+                  )}
+                  {track.album && (
+                    <>
+                      <span className="text-base-600">•</span>
+                      {track.albumId ? (
+                        <button
+                          type="button"
+                          className="truncate text-left transition-colors hover:text-accent"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setView('album', track.albumId);
+                          }}
+                          title={`Go to album: ${track.album}`}
+                        >
+                          {track.album}
+                        </button>
+                      ) : (
+                        <span className="truncate">{track.album}</span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-shrink-0 items-center gap-1">
@@ -394,6 +434,17 @@ export function SearchView() {
                   </button>
 
                   <LikeButton track={track} className="p-1.5" />
+
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestClearTrackCache(track);
+                    }}
+                    title="Clear track cache"
+                  >
+                    <HardDrive size={14} />
+                  </button>
 
                   {debugSearch && track.spotifyId && (
                   <button

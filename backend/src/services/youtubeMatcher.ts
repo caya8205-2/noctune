@@ -222,6 +222,15 @@ export function clearMatchCache(): { cleared: number } {
   return { cleared };
 }
 
+export function clearMatchCacheForSpotifyId(spotifyId: string): { cleared: number; youtubeId?: string } {
+  const current = getStore();
+  const existing = current.matches[spotifyId];
+  if (!existing) return { cleared: 0 };
+  delete current.matches[spotifyId];
+  saveStore(current);
+  return { cleared: 1, youtubeId: existing.youtubeId };
+}
+
 function normalize(value: string): string {
   return value
     .toLowerCase()

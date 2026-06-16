@@ -114,3 +114,23 @@ export function clearAudioCache(): { files: number; bytes: number } {
   }
   return before;
 }
+
+export function clearAudioCacheForId(videoId: string): { files: number; bytes: number } {
+  ensureAudioCacheDir();
+  const base = safeName(videoId);
+  let files = 0;
+  let bytes = 0;
+
+  for (const file of fs.readdirSync(AUDIO_CACHE_DIR)) {
+    if (!file.startsWith(`${base}.`) && !file.startsWith(`${base}-`)) continue;
+    const fullPath = path.join(AUDIO_CACHE_DIR, file);
+    try {
+      const stat = fs.statSync(fullPath);
+      fs.rmSync(fullPath, { force: true });
+      files += 1;
+      bytes += stat.size;
+    } catch {}
+  }
+
+  return { files, bytes };
+}

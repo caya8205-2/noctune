@@ -10,6 +10,8 @@ export interface Track {
   query: string;        // original search query that found this track
   spotifyId?: string;   // Spotify track ID (present when found via Spotify search)
   spotifyUrl?: string;  // Spotify track URL
+  artistId?: string;    // Spotify primary artist ID
+  albumId?: string;     // Spotify album ID
   youtubeId?: string;   // matched YouTube videoId for Spotify-backed results
   youtubeTitle?: string;
   youtubeArtist?: string;

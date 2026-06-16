@@ -59,10 +59,31 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
 
       <div>
         <p className="section-label text-accent">Track details</p>
-        <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{metadata.title}</h2>
-        <p className="text-sm text-muted mt-1 leading-relaxed">
-          {metadata.artists.map((artist) => artist.name).join(', ')}
-        </p>
+        {metadata.album.id ? (
+          <button
+            type="button"
+            className="mt-2 block text-left text-lg font-semibold leading-tight text-white transition-colors hover:text-accent"
+            onClick={() => usePlayerStore.getState().setView('album', metadata.album.id)}
+            title={`Go to album: ${metadata.album.name}`}
+          >
+            {metadata.title}
+          </button>
+        ) : (
+          <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{metadata.title}</h2>
+        )}
+        <div className="mt-1 flex flex-wrap gap-1">
+          {metadata.artists.map((artist, i) => (
+            <span key={artist.id}>
+              <button
+                className="text-sm text-muted hover:text-accent transition-colors"
+                onClick={() => usePlayerStore.getState().setView('artist', artist.id)}
+              >
+                {artist.name}
+              </button>
+              {i < metadata.artists.length - 1 && <span className="text-muted">,</span>}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -87,7 +108,18 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
       )}
 
       <div className="space-y-3 rounded-lg border border-base-600/60 bg-base-800 p-3">
-        <DetailRow icon={Album} label="Album" value={metadata.album.name} />
+        <div className="flex items-start gap-2 text-xs">
+          <Album size={13} className="text-muted mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-muted">Album</p>
+            <button
+              className="mt-0.5 text-left text-soft hover:text-accent transition-colors break-words"
+              onClick={() => metadata.album.id && usePlayerStore.getState().setView('album', metadata.album.id)}
+            >
+              {metadata.album.name}
+            </button>
+          </div>
+        </div>
         <DetailRow icon={Disc3} label="Release" value={metadata.album.releaseDate} />
         <DetailRow icon={Tag} label="Label" value={metadata.album.label} />
         <DetailRow icon={Music2} label="Track" value={
@@ -133,8 +165,29 @@ function LocalDetails({ track }: { track: CachedTrack }) {
 
       <div>
         <p className="section-label text-accent">Local track</p>
-        <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{track.title}</h2>
-        <p className="text-sm text-muted mt-1 leading-relaxed">{track.artist}</p>
+        {track.artistId ? (
+          <button
+            type="button"
+            className="mt-2 block text-left text-lg font-semibold leading-tight text-white transition-colors hover:text-accent"
+            onClick={() => usePlayerStore.getState().setView('artist', track.artistId)}
+            title={`Go to artist: ${track.artist}`}
+          >
+            {track.title}
+          </button>
+        ) : (
+          <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{track.title}</h2>
+        )}
+        {track.artistId ? (
+          <button
+            type="button"
+            className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
+            onClick={() => usePlayerStore.getState().setView('artist', track.artistId)}
+          >
+            {track.artist}
+          </button>
+        ) : (
+          <p className="text-sm text-muted mt-1 leading-relaxed">{track.artist}</p>
+        )}
       </div>
 
       <div className="space-y-3 rounded-lg border border-base-600/60 bg-base-800 p-3">

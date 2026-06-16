@@ -11,23 +11,51 @@ import { HistoryView } from './components/history/HistoryView';
 import { QueueView } from './components/playlist/QueueView';
 import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
+import { ArtistView } from './components/browse/ArtistView';
+import { AlbumView } from './components/browse/AlbumView';
 import { usePlayerStore } from './store/player';
 import { getShortcutsByCategory } from './constants/keyboardShortcuts';
 import { useAudio } from './hooks/useAudio';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useLyricsPrefetch } from './hooks/useLyrics';
+import { useUpdateChecker } from './hooks/useUpdateChecker';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
 });
 
+function viewRouteId(
+  view: ReturnType<typeof usePlayerStore.getState>['activeView'],
+  ids: { playlistId: string | null; artistId: string | null; albumId: string | null }
+) {
+  if (view === 'playlist') return ids.playlistId;
+  if (view === 'artist') return ids.artistId;
+  if (view === 'album') return ids.albumId;
+  return null;
+}
+
 function AppInner() {
   useAudio();
   useKeyboardShortcuts();
   useLyricsPrefetch();
-  const { activeView, showTrackDetails, showShortcutsHelp, setView, toggleShortcutsHelp } = usePlayerStore();
+  const { updateToast } = useUpdateChecker();
+  const {
+    activeView,
+    activePlaylistId,
+    showTrackDetails,
+    showShortcutsHelp,
+    setView,
+    toggleShortcutsHelp,
+    activeArtistId,
+    activeAlbumId,
+  } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeViewRef = useRef(activeView);
+  const activeRouteIdRef = useRef(viewRouteId(activeView, {
+    playlistId: activePlaylistId,
+    artistId: activeArtistId,
+    albumId: activeAlbumId,
+  }));
   const skipHistoryPushRef = useRef(false);
 
   const IS_TAURI =
@@ -57,13 +85,17 @@ function AppInner() {
   }
 
   useEffect(() => {
-    window.history.replaceState({ noctuneView: activeViewRef.current }, '', window.location.href);
+    window.history.replaceState(
+      { noctuneView: activeViewRef.current, noctuneId: activeRouteIdRef.current },
+      '',
+      window.location.href
+    );
 
     function handlePopState(event: PopStateEvent) {
       const nextView = event.state?.noctuneView;
       if (!nextView) return;
       skipHistoryPushRef.current = true;
-      setView(nextView);
+      setView(nextView, event.state?.noctuneId);
     }
 
     window.addEventListener('popstate', handlePopState);
@@ -71,18 +103,23 @@ function AppInner() {
   }, [setView]);
 
   useEffect(() => {
-    if (activeViewRef.current === activeView) return;
+    const routeId = viewRouteId(activeView, {
+      playlistId: activePlaylistId,
+      artistId: activeArtistId,
+      albumId: activeAlbumId,
+    });
+    if (activeViewRef.current === activeView && activeRouteIdRef.current === routeId) return;
     activeViewRef.current = activeView;
+    activeRouteIdRef.current = routeId;
     if (skipHistoryPushRef.current) {
       skipHistoryPushRef.current = false;
       return;
     }
-    window.history.pushState({ noctuneView: activeView }, '', window.location.href);
-  }, [activeView]);
+    window.history.pushState({ noctuneView: activeView, noctuneId: routeId }, '', window.location.href);
+  }, [activeView, activePlaylistId, activeArtistId, activeAlbumId]);
 
   const playerBarClass =
-    'relative z-10 h-20 flex-shrink-0 border-t border-white/[0.06] bg-base-950/60 backdrop-blur-xl ' +
-    (activeView === 'player' ? 'hidden lg:block' : '');
+    'relative z-10 h-20 flex-shrink-0 border-t border-white/[0.06] bg-base-950/60 backdrop-blur-xl';
 
   return (
     <div className="relative z-10 flex h-screen flex-col overflow-hidden text-white">
@@ -158,6 +195,8 @@ function AppInner() {
             {activeView === 'queue' && <QueueView />}
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'playlist' && <PlaylistView />}
+            {activeView === 'artist' && activeArtistId && <ArtistView artistId={activeArtistId} />}
+            {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
           </main>
           {showTrackDetails && <TrackDetailsSidebar />}
         </div>
@@ -166,6 +205,8 @@ function AppInner() {
       <div className={playerBarClass}>
         <PlayerBar />
       </div>
+
+      {updateToast}
 
       {/* Shortcuts help overlay */}
       {showShortcutsHelp && (

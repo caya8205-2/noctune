@@ -3,7 +3,9 @@ import { z } from 'zod';
 import fs from 'fs';
 import PQueue from 'p-queue';
 import {
+  clearTrackCache,
   getCachedById,
+  getCachedBySpotifyId,
   isUrlFresh,
   recordPlayWithMetadata,
   refreshTrackUrl,
@@ -12,16 +14,18 @@ import {
 } from '../services/cache.js';
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
 import { Readable } from 'stream';
-import { matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
+import { clearMatchCacheForSpotifyId, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { Track } from '../types/index.js';
 import {
   consumePrefetch,
   getPrefetched,
   getPrefetchStatus,
   isPrefetching,
+  clearPrefetchForId,
   schedulePrefetch,
 } from '../services/prefetch.js';
 import {
+  clearAudioCacheForId,
   commitAudioCache,
   discardAudioCache,
   enforceAudioCacheLimit,
@@ -31,7 +35,7 @@ import {
   touchAudioCache,
 } from '../services/audioFileCache.js';
 import { getEnvConfig } from '../services/env.js';
-import { markPlaybackFailed } from '../services/playbackBlacklist.js';
+import { clearPlaybackBlacklistForId, markPlaybackFailed } from '../services/playbackBlacklist.js';
 
 const PlayParams = z.object({ videoId: z.string().min(5).max(64) });
 const audioCacheQueue = new PQueue({ concurrency: 2 });
@@ -91,6 +95,13 @@ const PlayedBody = z.object({
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
   queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation']).optional(),
+});
+
+const ClearTrackCacheBody = PlayedBody.partial().extend({
+  id: z.string().min(1),
+  title: z.string().default(''),
+  artist: z.string().default(''),
+  query: z.string().default(''),
 });
 
 function isYoutubeVideoId(id: string): boolean {
@@ -704,6 +715,67 @@ export async function playerRoutes(app: FastifyInstance) {
       cachedIds,
       inFlightIds: playableIds.filter((id) => audioCacheInFlight.has(id)),
       tracks: trackStatuses,
+    });
+  });
+
+  app.post('/player/cache/clear-track', async (req, reply) => {
+    const parsed = ClearTrackCacheBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const track = parsed.data;
+    const videoIds = new Set<string>();
+
+    if (track.id && isYoutubeVideoId(track.id)) videoIds.add(track.id);
+    if (track.youtubeId && isYoutubeVideoId(track.youtubeId)) videoIds.add(track.youtubeId);
+
+    const cachedBySpotify = track.spotifyId ? getCachedBySpotifyId(track.spotifyId) : null;
+    if (cachedBySpotify?.id && isYoutubeVideoId(cachedBySpotify.id)) videoIds.add(cachedBySpotify.id);
+    if (cachedBySpotify?.youtubeId && isYoutubeVideoId(cachedBySpotify.youtubeId)) videoIds.add(cachedBySpotify.youtubeId);
+
+    const matchCache = track.spotifyId ? clearMatchCacheForSpotifyId(track.spotifyId) : { cleared: 0 };
+    if (matchCache.youtubeId && isYoutubeVideoId(matchCache.youtubeId)) videoIds.add(matchCache.youtubeId);
+
+    if (videoIds.size === 0) {
+      const [resolvedId] = await resolvePrefetchIds([], [track as Track]);
+      if (resolvedId && isYoutubeVideoId(resolvedId)) videoIds.add(resolvedId);
+    }
+
+    const ids = [...videoIds];
+    const audio = ids.reduce(
+      (total, id) => {
+        audioCacheInFlight.delete(id);
+        const result = clearAudioCacheForId(id);
+        total.files += result.files;
+        total.bytes += result.bytes;
+        return total;
+      },
+      { files: 0, bytes: 0 }
+    );
+    const prefetch = ids.reduce(
+      (total, id) => {
+        const result = clearPrefetchForId(id);
+        total.prefetched += result.prefetched;
+        total.inFlight += result.inFlight ? 1 : 0;
+        return total;
+      },
+      { prefetched: 0, inFlight: 0 }
+    );
+    const blacklist = ids.reduce(
+      (total, id) => total + clearPlaybackBlacklistForId(id).cleared,
+      0
+    );
+    const learned = clearTrackCache(ids, track.spotifyId);
+
+    return reply.send({
+      ok: true,
+      ids,
+      learned,
+      audio,
+      prefetch,
+      blacklist: { cleared: blacklist },
+      matchCache,
     });
   });
 

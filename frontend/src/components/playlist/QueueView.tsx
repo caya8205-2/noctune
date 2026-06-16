@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, HardDrive, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
 import { LikeButton } from '../player/LikeButton';
 import { api, type Track } from '../../utils/api';
+import { useClearTrackCache } from '../../hooks/useClearTrackCache';
 
 function queueSourceLabel(source: Track['queueSource']): string {
   if (source === 'manual') return 'Manual';
@@ -35,6 +36,7 @@ export function QueueView() {
   } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [hideFailed, setHideFailed] = useState(false);
+  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
   const { data: audioCache } = useQuery({
     queryKey: ['audio-cache-status', queue.map((track) => track.id).join('|')],
     queryFn: () => api.audioCacheStatus(queue),
@@ -59,6 +61,7 @@ export function QueueView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {clearTrackCacheModal}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4">
         <div>
           <p className="section-label text-accent">Queue</p>
@@ -185,6 +188,16 @@ export function QueueView() {
               <div className="flex flex-shrink-0 items-center gap-1">
                 <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   <LikeButton track={track} className="p-1.5" />
+                  <button
+                    className="btn-ghost p-1.5"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      requestClearTrackCache(track);
+                    }}
+                    title="Clear track cache"
+                  >
+                    <HardDrive size={13} />
+                  </button>
                   <button
                     className="btn-ghost p-1.5 text-muted hover:text-red-400"
                     onClick={(event) => {

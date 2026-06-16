@@ -21,8 +21,10 @@ interface PlayerState {
   queueIndex: number;     // index of currentTrack in queue
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings';
+  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album';
   activePlaylistId: string | null;
+  activeArtistId: string | null;
+  activeAlbumId: string | null;
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   playbackNotice: string | null;
@@ -48,7 +50,7 @@ interface PlayerState {
   clearQueue: () => void;
   toggleTrackDetails: () => void;
   toggleShortcutsHelp: () => void;
-  setView: (view: PlayerState['activeView'], playlistId?: string) => void;
+  setView: (view: PlayerState['activeView'], id?: string) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
 }
@@ -67,6 +69,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queueIndex: -1,
   activeView: 'home',
   activePlaylistId: null,
+  activeArtistId: null,
+  activeAlbumId: null,
   showTrackDetails: true,
   showShortcutsHelp: false,
   playbackNotice: null,
@@ -112,6 +116,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         query: track.query,
         spotifyId: track.spotifyId,
         spotifyUrl: track.spotifyUrl,
+        artistId: track.artistId,
+        albumId: track.albumId,
         youtubeId: track.youtubeId ?? resolved.id,
         youtubeTitle: track.youtubeTitle,
         youtubeArtist: track.youtubeArtist,
@@ -373,8 +379,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   toggleShortcutsHelp: () => set((s) => ({ showShortcutsHelp: !s.showShortcutsHelp })),
 
-  setView: (view, playlistId) =>
-    set({ activeView: view, activePlaylistId: playlistId ?? null }),
+  setView: (view, id) =>
+    set({
+      activeView: view,
+      activePlaylistId: view === 'playlist' ? (id ?? null) : null,
+      activeArtistId: view === 'artist' ? (id ?? null) : null,
+      activeAlbumId: view === 'album' ? (id ?? null) : null,
+    }),
 }));
 
 function getNextCandidateTracks(
