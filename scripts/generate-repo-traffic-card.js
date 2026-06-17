@@ -131,10 +131,19 @@ function renderCard(rows) {
 `;
 }
 
-const csvPath = path.join(statsDir, "views_clones_aggregate.csv");
+function findAggregateCsv() {
+  const candidates = [
+    path.join(statsDir, "views_clones_aggregate.csv"),
+    path.join(statsDir, "ghrs-data", "views_clones_aggregate.csv"),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+const csvPath = findAggregateCsv();
 let svg;
 
-if (fs.existsSync(csvPath)) {
+if (csvPath) {
   const rows = parseCsv(fs.readFileSync(csvPath, "utf8"));
   svg = renderCard(rows);
 } else {
