@@ -94,6 +94,7 @@ async function bootstrap() {
     demoMode: isDemoMode(),
     features: {
       updates: true,
+      lyricsRomanization: true,
     },
   }));
 

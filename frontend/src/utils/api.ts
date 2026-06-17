@@ -19,8 +19,8 @@ async function canReachBackend(base: string): Promise<boolean> {
       signal: controller.signal,
     });
     if (!res.ok) return false;
-    const status = (await res.json()) as { features?: { updates?: boolean } };
-    return status.features?.updates === true;
+    const status = (await res.json()) as { features?: { updates?: boolean; lyricsRomanization?: boolean } };
+    return status.features?.updates === true && status.features?.lyricsRomanization === true;
   } catch {
     return false;
   } finally {
@@ -115,8 +115,13 @@ export const api = {
   spotifyMetadata: (spotifyId: string) =>
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
 
-  resolve: (videoId: string, query?: string) =>
-    request<CachedTrack>(`/player/resolve/${videoId}${query ? `?query=${encodeURIComponent(query)}` : ''}`),
+  resolve: (videoId: string, query?: string, youtubeId?: string) => {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (youtubeId) params.set('youtubeId', youtubeId);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return request<CachedTrack>(`/player/resolve/${videoId}${suffix}`);
+  },
   recordPlayed: (track: Track) =>
     request<{ ok: boolean; track: CachedTrack }>('/player/played', {
       method: 'POST',
@@ -246,6 +251,7 @@ export interface Playlist {
 export interface LyricLine {
   time: number | null;
   text: string;
+  romanizedText?: string;
 }
 
 export interface LyricsResult {
@@ -334,7 +340,7 @@ export interface BackendStatus {
   playbackBlacklist?: { failedIds: number };
   matchCache?: { total: number };
   discordRpc?: { enabled: boolean; ready: boolean };
-  features?: { updates?: boolean };
+  features?: { updates?: boolean; lyricsRomanization?: boolean };
 }
 
 export interface DebugMatchResult {

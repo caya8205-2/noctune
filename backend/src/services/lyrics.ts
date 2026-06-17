@@ -1,14 +1,17 @@
 import fs from 'fs';
 import path from 'path';
+import Kuroshiro from 'kuroshiro';
+import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 import type { LyricsCacheStore, LyricsResult } from '../types/index.js';
 
 const LRCLIB_BASE = 'https://lrclib.net/api';
 const USER_AGENT = 'Noctune/1.0.0-beta.2 (https://github.com/caya/noctune)';
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
   : path.join(process.cwd(), 'data');
 const LYRICS_CACHE_FILE = path.join(DATA_DIR, 'lyrics.json');
+const JAPANESE_SCRIPT_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
 
 interface LrclibLyrics {
   id: number;
@@ -99,10 +102,58 @@ function saveStore(store: LyricsCacheStore): void {
 }
 
 let _store: LyricsCacheStore | null = null;
+let romanizerPromise: Promise<Kuroshiro> | null = null;
 
 function getStore(): LyricsCacheStore {
   if (!_store) _store = loadStore();
   return _store;
+}
+
+async function getRomanizer(): Promise<Kuroshiro> {
+  if (!romanizerPromise) {
+    romanizerPromise = (async () => {
+      const kuroshiro = new Kuroshiro();
+      await kuroshiro.init(new KuromojiAnalyzer());
+      return kuroshiro;
+    })();
+  }
+  return romanizerPromise;
+}
+
+function hasJapaneseScript(value: string): boolean {
+  return JAPANESE_SCRIPT_RE.test(value);
+}
+
+async function addRomanizedLines(lyrics: LyricsResult): Promise<LyricsResult> {
+  if (!lyrics.lines.some((line) => hasJapaneseScript(line.text))) {
+    return lyrics;
+  }
+
+  try {
+    const romanizer = await getRomanizer();
+    const lines = await Promise.all(
+      lyrics.lines.map(async (line) => {
+        if (!hasJapaneseScript(line.text)) return line;
+        const romanizedText = await romanizer.convert(line.text, {
+          to: 'romaji',
+          mode: 'spaced',
+          romajiSystem: 'hepburn',
+        });
+        return {
+          ...line,
+          romanizedText: romanizedText.replace(/\s+/g, ' ').trim(),
+        };
+      })
+    );
+    return { ...lyrics, lines };
+  } catch (err) {
+    console.warn('[lyrics] Japanese romanization failed:', (err as Error).message);
+    return lyrics;
+  }
+}
+
+function hasMissingRomanizedLines(lyrics: LyricsResult): boolean {
+  return lyrics.lines.some((line) => hasJapaneseScript(line.text) && !line.romanizedText);
 }
 
 function getCachedLyrics(key: string): LyricsResult | null | undefined {
@@ -202,7 +253,14 @@ async function searchLrclib(title: string, artist: string): Promise<LrclibLyrics
 export async function findLyrics(title: string, artist: string, duration: number): Promise<LyricsResult | null> {
   const key = cacheKey(title, artist, duration);
   const cached = getCachedLyrics(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    if (cached && hasMissingRomanizedLines(cached)) {
+      const updated = await addRomanizedLines(cached);
+      setCachedLyrics(key, title, artist, duration, updated);
+      return updated;
+    }
+    return cached;
+  }
 
   const seen = new Set<number>();
   const candidates: LrclibLyrics[] = [];
@@ -235,7 +293,7 @@ export async function findLyrics(title: string, artist: string, duration: number
 
   const syncedLines = best.syncedLyrics ? parseSyncedLyrics(best.syncedLyrics) : [];
   const plainLines = best.plainLyrics ? parsePlainLyrics(best.plainLyrics) : [];
-  const result: LyricsResult = {
+  const result = await addRomanizedLines({
     provider: 'lrclib',
     id: best.id,
     title: best.trackName || best.name || title,
@@ -245,7 +303,7 @@ export async function findLyrics(title: string, artist: string, duration: number
     instrumental: best.instrumental,
     synced: syncedLines.length > 0,
     lines: syncedLines.length > 0 ? syncedLines : plainLines,
-  };
+  });
 
   setCachedLyrics(key, title, artist, duration, result);
   return result;

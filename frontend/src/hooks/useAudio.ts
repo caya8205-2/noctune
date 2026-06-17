@@ -256,6 +256,16 @@ export function useAudio() {
     if (audioRef.current) audioRef.current.volume = outputVolume(volume);
   }, [volume]);
 
+  useEffect(() => {
+    function handleSeek(event: Event) {
+      const seconds = (event as CustomEvent<number>).detail;
+      if (typeof seconds === 'number') seekAudio(seconds);
+    }
+
+    window.addEventListener('noctune:seek', handleSeek);
+    return () => window.removeEventListener('noctune:seek', handleSeek);
+  }, []);
+
   // Seek (only when progress changes externally — not from timeupdate)
   const seek = useCallback((seconds: number) => {
     seekAudio(seconds);

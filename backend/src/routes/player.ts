@@ -108,8 +108,9 @@ function isYoutubeVideoId(id: string): boolean {
   return /^[a-zA-Z0-9_-]{11}$/.test(id);
 }
 
-async function resolvePlayableVideoId(videoId: string, query: string): Promise<string | null> {
+async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?: string): Promise<string | null> {
   if (!videoId.startsWith('spotify:')) return isYoutubeVideoId(videoId) ? videoId : null;
+  if (youtubeId && isYoutubeVideoId(youtubeId)) return youtubeId;
   const spotifyId = videoId.replace(/^spotify:/, '');
   const matched = await matchSpotifyTrackToYoutube({
     id: videoId,
@@ -166,6 +167,7 @@ async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<
   const trackIds = await Promise.all(
     tracks.map(async (track) => {
       if (!track.id.startsWith('spotify:')) return isYoutubeVideoId(track.id) ? track.id : null;
+      if (track.youtubeId && isYoutubeVideoId(track.youtubeId)) return track.youtubeId;
       const matched = await matchSpotifyTrackToYoutube(track);
       return matched?.id && isYoutubeVideoId(matched.id) ? matched.id : null;
     })
@@ -382,7 +384,7 @@ function streamLocalAudioFile(filePath: string, range: string | undefined, reply
 }
 
 export async function playerRoutes(app: FastifyInstance) {
-  app.get<{ Params: { videoId: string }; Querystring: { query?: string } }>(
+  app.get<{ Params: { videoId: string }; Querystring: { query?: string; youtubeId?: string } }>(
     '/player/resolve/:videoId',
     async (req, reply) => {
       const parsed = PlayParams.safeParse(req.params);
@@ -395,7 +397,7 @@ export async function playerRoutes(app: FastifyInstance) {
       const startedAt = Date.now();
       app.log.info({ videoId, query }, '[player] resolve requested');
 
-      const playableVideoId = await resolvePlayableVideoId(videoId, query);
+      const playableVideoId = await resolvePlayableVideoId(videoId, query, req.query.youtubeId);
 
       if (!playableVideoId) {
         app.log.warn({ videoId, query }, '[player] resolve failed before playback lookup');
@@ -736,11 +738,6 @@ export async function playerRoutes(app: FastifyInstance) {
 
     const matchCache = track.spotifyId ? clearMatchCacheForSpotifyId(track.spotifyId) : { cleared: 0 };
     if (matchCache.youtubeId && isYoutubeVideoId(matchCache.youtubeId)) videoIds.add(matchCache.youtubeId);
-
-    if (videoIds.size === 0) {
-      const [resolvedId] = await resolvePrefetchIds([], [track as Track]);
-      if (resolvedId && isYoutubeVideoId(resolvedId)) videoIds.add(resolvedId);
-    }
 
     const ids = [...videoIds];
     const audio = ids.reduce(

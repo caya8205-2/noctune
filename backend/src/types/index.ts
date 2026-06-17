@@ -74,6 +74,7 @@ export interface AudioStreamInfo {
 export interface LyricLine {
   time: number | null;
   text: string;
+  romanizedText?: string;
 }
 
 export interface LyricsResult {

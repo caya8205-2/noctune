@@ -2,7 +2,7 @@
 
 <img src="app-icon.png" width="128" alt="Noctune logo" />
 
-Noctune is a local-first desktop music player built for fast local playback, clean metadata, smart queueing, synced lyrics, and a polished full-player experience.
+Noctune is a local-first desktop music player built for fast local playback, clean metadata, smart queueing, synced lyrics, cache-first playback, and a polished full-player experience.
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111111)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -11,13 +11,15 @@ Noctune is a local-first desktop music player built for fast local playback, cle
 [![Node.js](https://img.shields.io/badge/Node.js-24-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4-000000?logo=fastify&logoColor=white)](https://fastify.dev/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-Tauri_shell-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-Local-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![YouTube.js](https://img.shields.io/badge/YouTube.js-Resolver-FF0000)](https://github.com/LuanRT/YouTube.js)
 [![Spotify Web API](https://img.shields.io/badge/Spotify_Web_API-Metadata-1DB954?logo=spotify&logoColor=white)](https://developer.spotify.com/documentation/web-api)
 [![LRCLIB](https://img.shields.io/badge/LRCLIB-Lyrics-9B5CFF)](https://lrclib.net/)
+[![Kuroshiro](https://img.shields.io/badge/Kuroshiro-Romaji_lyrics-F7B733)](https://github.com/hexenq/kuroshiro)
 [![MIT](https://img.shields.io/badge/License-MIT-white)](./LICENSE)
 
-Noctune uses Spotify for metadata and discovery, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, and queue-aware playback behavior.
+Noctune uses Spotify for metadata and discovery, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, and desktop update checks through GitHub Releases.
 
 ## Highlights
 
@@ -28,13 +30,15 @@ Noctune uses Spotify for metadata and discovery, then resolves playable audio th
 - **Queue-aware playback** where Search starts an autoqueue, while Playlist playback keeps the full playlist order.
 - **Background prefetch** for upcoming tracks and recommendations.
 - **Local audio cache** that can stream while writing cache files, with size limits and cache controls.
-- **Synced lyrics** through LRCLIB with local lyrics cache.
+- **Synced lyrics** through LRCLIB with auto-loading on track start, local lyrics cache, and Romaji mode for Japanese lyrics.
 - **Adaptive circular visualizer** around the album disk, using colors derived from the current artwork.
 - **Local playlists** with liked songs, drag reorder, rename, cover upload/crop, import from Spotify or YouTube playlist URLs, and playlist cache tools.
+- **Album and artist views** reachable from track details, search results, playlist rows, mini player, and full player links.
 - **History view** that records actual playback using the displayed track metadata.
 - **Track details sidebar** for Spotify-rich metadata and local resolver details.
-- **Diagnostics and debug tools** for resolver health, failed stream IDs, Spotify-to-YouTube match cache, and candidate scoring.
-- **Desktop app** packaged with Tauri.
+- **Diagnostics and debug tools** for resolver health, failed stream IDs, Spotify-to-YouTube match cache, candidate scoring, and per-track cache clearing with confirmation.
+- **GitHub Releases update checks** on startup and periodically while the app is open, with a download action in Settings.
+- **Desktop app** packaged with Tauri and a bundled local backend sidecar.
 
 ## How It Works
 
@@ -45,10 +49,12 @@ Search
   -> Resolve playable YouTube audio
   -> Stream through local backend proxy
   -> Prefetch next queue candidates
-  -> Cache metadata, mapping, lyrics, and audio files locally
+  -> Cache metadata, mappings, lyrics, and audio files locally
 ```
 
 For Spotify-backed tracks, Noctune keeps the Spotify metadata visible in the UI while mapping the track to a playable YouTube stream behind the scenes.
+
+The desktop frontend talks to the local backend through a small port resolver. It prefers the normal backend port, but can follow a compatible backend sidecar when that port is already occupied.
 
 ## Matching Strategy
 
@@ -64,19 +70,20 @@ Noctune ranks YouTube candidates with lightweight heuristics:
 
 | Layer | Tech |
 |---|---|
-| Desktop shell | Tauri 2 |
+| Desktop shell | Tauri 2, Rust, bundled sidecar backend |
 | Frontend | React 18, Vite, Tailwind CSS |
 | UI state | Zustand |
 | Server state | TanStack Query |
 | Icons | Lucide React |
 | Audio visualizer | audiomotion-analyzer |
-| Backend | Fastify, TypeScript |
+| Backend | Fastify, TypeScript, Node.js 24 |
 | Primary resolver | youtubei.js |
 | Fallback resolver | yt-dlp-wrap |
 | Queue workers | p-queue |
 | Local database | SQLite via better-sqlite3 |
-| Lyrics | LRCLIB |
-| Runtime cache | JSON files and audio files in local data storage |
+| Lyrics | LRCLIB, Kuroshiro, Kuromoji |
+| External metadata | Spotify Web API, GitHub Releases API |
+| Runtime cache | SQLite, JSON files, and audio files in local data storage |
 
 ## Setup
 
@@ -86,7 +93,7 @@ Install dependencies:
 npm install
 ```
 
-Spotify credentials are optional but recommended for metadata search, Spotify playlist import, and new releases. Add your Client ID and Client Secret from the app Settings screen.
+Spotify credentials are optional but recommended for metadata search, Spotify playlist import, album and artist discovery, and new releases. Add your Client ID and Client Secret from the app Settings screen.
 
 `yt-dlp` is optional for the fallback resolver. The main resolver path uses `youtubei.js`, so Noctune does not require users to install `yt-dlp` for the primary playback path.
 
@@ -146,11 +153,11 @@ Noctune stores runtime data locally and ignores it from git:
 - `audio-cache/` - optional cached audio files
 - lyrics cache - local LRCLIB lookup results
 
-Settings includes controls for cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing.
+Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
 
 ## Repository Description
 
-Local-first desktop music player with Spotify metadata, YouTube stream resolving, synced lyrics, smart queueing, local playlists, adaptive visualizer, and cache-first playback.
+Local-first desktop music player with Spotify metadata, YouTube stream resolving, synced and Romaji lyrics, smart queueing, local playlists, album and artist browsing, adaptive visualizer, GitHub Releases update checks, and cache-first playback.
 
 ## Changelog
 

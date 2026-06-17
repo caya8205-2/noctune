@@ -6,7 +6,7 @@ import { usePlayerStore } from '../store/player';
 const LYRICS_STALE_TIME = 1000 * 60 * 60;
 
 export function lyricsQueryKey(track: Track) {
-  return ['lyrics', track.spotifyId ?? track.id, track.title, track.artist, track.duration];
+  return ['lyrics', 'romanized-v1', track.spotifyId ?? track.id, track.title, track.artist, track.duration];
 }
 
 export function lyricsQueryOptions(track: Track) {

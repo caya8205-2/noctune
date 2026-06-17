@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -33,6 +33,8 @@ const sourceMeta = {
   resolved: { label: 'Resolved', Icon: Radio, className: 'bg-base-700 text-muted border-base-600/40' },
 };
 
+const JAPANESE_SCRIPT_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
+
 function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: number): number {
   if (!lyrics?.synced) return -1;
   const lyricLeadSeconds = 0.3;
@@ -46,12 +48,31 @@ function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: 
 }
 
 function LyricsPanel({ track }: { track: Track }) {
+  const [lyricsMode, setLyricsMode] = useState<'original' | 'romaji'>('original');
   const progress = usePlayerStore((state) => state.progress);
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
   const { data: lyrics, isLoading, isError } = useQuery(lyricsQueryOptions(track));
 
   const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress), [lyrics, progress]);
+  const hasJapaneseLyrics = useMemo(
+    () => Boolean(lyrics?.lines.some((line) => JAPANESE_SCRIPT_RE.test(line.text))),
+    [lyrics]
+  );
+  const displayLines = useMemo(
+    () =>
+      lyrics?.lines.map((line) => ({
+        ...line,
+        text: lyricsMode === 'romaji' ? (line.romanizedText ?? line.text) : line.text,
+      })) ?? [],
+    [lyrics, lyricsMode]
+  );
+
+  useEffect(() => {
+    if (!hasJapaneseLyrics && lyricsMode === 'romaji') {
+      setLyricsMode('original');
+    }
+  }, [hasJapaneseLyrics, lyricsMode]);
 
   useEffect(() => {
     const container = lyricsScrollRef.current;
@@ -105,9 +126,35 @@ function LyricsPanel({ track }: { track: Track }) {
 
   return (
     <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden">
-      <div ref={lyricsScrollRef} className="h-full overflow-y-auto px-6 py-5">
+      <div className="flex items-center justify-end gap-1 border-b border-base-600/50 px-4 py-2">
+        <button
+          type="button"
+          onClick={() => setLyricsMode('original')}
+          className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${
+            lyricsMode === 'original'
+              ? 'bg-accent text-base-950'
+              : 'text-muted hover:bg-base-700/70 hover:text-white'
+          }`}
+        >
+          Original
+        </button>
+        <button
+          type="button"
+          onClick={() => setLyricsMode('romaji')}
+          disabled={!hasJapaneseLyrics}
+          className={`rounded-lg px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            lyricsMode === 'romaji'
+              ? 'bg-accent text-base-950'
+              : 'text-muted hover:bg-base-700/70 hover:text-white'
+          }`}
+          title={hasJapaneseLyrics ? 'Show Japanese lyrics as romaji' : 'No Japanese lyrics detected'}
+        >
+          Romaji
+        </button>
+      </div>
+      <div ref={lyricsScrollRef} className="h-[calc(100%-41px)] overflow-y-auto px-6 py-5">
         <div className="min-h-full flex flex-col justify-center gap-3">
-          {lyrics.lines.map((line, index) => {
+          {displayLines.map((line, index) => {
             const isActive = index === activeIndex;
             const isPassed = lyrics.synced && activeIndex > index;
             return (

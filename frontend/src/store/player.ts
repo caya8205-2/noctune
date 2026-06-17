@@ -105,7 +105,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const resolveQuery = track.id.startsWith('spotify:')
         ? `${track.title} ${track.artist}`
         : track.query;
-      const resolved = await api.resolve(track.id, resolveQuery);
+      const resolved = await api.resolve(track.id, resolveQuery, track.youtubeId);
       const playableTrack = {
         ...resolved,
         title: track.title,
@@ -268,14 +268,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   prev: async () => {
-    const { queue, queueIndex, progress } = get();
-    // If > 3s in, restart current track
-    if (progress > 3) {
+    const { queue, queueIndex } = get();
+    if (queue.length === 0) return;
+    const prevIdx = queueIndex > 0 ? queueIndex - 1 : 0;
+    if (prevIdx === queueIndex) {
       set({ progress: 0 });
+      window.dispatchEvent(new CustomEvent('noctune:seek', { detail: 0 }));
       return;
     }
-    if (queue.length === 0) return;
-    const prevIdx = Math.max(0, queueIndex - 1);
     await get().playTrack(queue[prevIdx], queue);
   },
 
