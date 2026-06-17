@@ -95,6 +95,7 @@ async function bootstrap() {
     features: {
       updates: true,
       lyricsRomanization: true,
+      audioQualityPreference: true,
     },
   }));
 

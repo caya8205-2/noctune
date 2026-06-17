@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getDataDir } from './env.js';
+import type { AudioQualityPreference } from '../types/index.js';
 
 const AUDIO_CACHE_DIR = path.join(getDataDir(), 'audio-cache');
 const TEMP_EXT = '.tmp';
@@ -13,15 +14,26 @@ function safeName(videoId: string): string {
   return videoId.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-export function getAudioCachePath(videoId: string, format = 'm4a'): string {
-  ensureAudioCacheDir();
-  const ext = format === 'webm' ? 'webm' : 'm4a';
-  return path.join(AUDIO_CACHE_DIR, `${safeName(videoId)}.${ext}`);
+function qualitySuffix(preference: AudioQualityPreference): string {
+  return preference === 'high' ? '-high' : '';
 }
 
-export function getExistingAudioCachePath(videoId: string): string | null {
+export function getAudioCachePath(
+  videoId: string,
+  format = 'm4a',
+  preference: AudioQualityPreference = 'auto'
+): string {
   ensureAudioCacheDir();
-  const base = safeName(videoId);
+  const ext = format === 'webm' ? 'webm' : 'm4a';
+  return path.join(AUDIO_CACHE_DIR, `${safeName(videoId)}${qualitySuffix(preference)}.${ext}`);
+}
+
+export function getExistingAudioCachePath(
+  videoId: string,
+  preference: AudioQualityPreference = 'auto'
+): string | null {
+  ensureAudioCacheDir();
+  const base = `${safeName(videoId)}${qualitySuffix(preference)}`;
   for (const ext of ['m4a', 'webm']) {
     const candidate = path.join(AUDIO_CACHE_DIR, `${base}.${ext}`);
     if (fs.existsSync(candidate)) return candidate;

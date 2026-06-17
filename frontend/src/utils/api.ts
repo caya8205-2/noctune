@@ -19,8 +19,14 @@ async function canReachBackend(base: string): Promise<boolean> {
       signal: controller.signal,
     });
     if (!res.ok) return false;
-    const status = (await res.json()) as { features?: { updates?: boolean; lyricsRomanization?: boolean } };
-    return status.features?.updates === true && status.features?.lyricsRomanization === true;
+    const status = (await res.json()) as {
+      features?: { updates?: boolean; lyricsRomanization?: boolean; audioQualityPreference?: boolean };
+    };
+    return (
+      status.features?.updates === true &&
+      status.features?.lyricsRomanization === true &&
+      status.features?.audioQualityPreference === true
+    );
   } catch {
     return false;
   } finally {
@@ -231,6 +237,7 @@ export interface Track {
 export interface CachedTrack extends Track {
   audioUrl: string;
   audioUrlExpiry: number;
+  audioQualityPreference?: 'auto' | 'high';
   localAudioPath?: string;
   cachedAt: number;
   playCount: number;
@@ -340,7 +347,7 @@ export interface BackendStatus {
   playbackBlacklist?: { failedIds: number };
   matchCache?: { total: number };
   discordRpc?: { enabled: boolean; ready: boolean };
-  features?: { updates?: boolean; lyricsRomanization?: boolean };
+  features?: { updates?: boolean; lyricsRomanization?: boolean; audioQualityPreference?: boolean };
 }
 
 export interface DebugMatchResult {

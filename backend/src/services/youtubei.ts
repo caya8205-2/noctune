@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import type { AudioStreamInfo, Track } from '../types/index.js';
+import type { AudioQualityPreference, AudioStreamInfo, Track } from '../types/index.js';
 import type { PlaylistImportResult, ResolvedTrackResult } from './audioResolver.js';
 
 type YoutubeiModule = typeof import('youtubei.js');
@@ -127,32 +127,46 @@ async function getBasicInfoWithFallback(videoId: string) {
   throw new Error(`No YouTube.js client could load metadata for ${videoId}. ${failures.join(' | ')}`);
 }
 
-async function getStreamingDataWithFallback(videoId: string) {
+function streamingOptionSets(preference: AudioQualityPreference) {
+  const stable = { type: 'audio', quality: 'best', format: 'mp4' } as const;
+  if (preference === 'high') {
+    return [
+      { type: 'audio', quality: 'best', format: 'any' } as const,
+      stable,
+    ];
+  }
+  return [stable];
+}
+
+async function getStreamingDataWithFallback(
+  videoId: string,
+  preference: AudioQualityPreference = 'auto'
+) {
   const youtube = await getInnertube();
   const failures: string[] = [];
 
   for (const client of YOUTUBEI_CLIENTS) {
-    try {
-      const format = await youtube.getStreamingData(videoId, {
-        type: 'audio',
-        quality: 'best',
-        format: 'mp4',
-        client: client as any,
-      });
+    for (const options of streamingOptionSets(preference)) {
+      try {
+        const format = await youtube.getStreamingData(videoId, {
+          ...options,
+          client: client as any,
+        });
 
-      if (!format.url) {
-        throw new Error('No playable URL returned');
+        if (!format.url) {
+          throw new Error('No playable URL returned');
+        }
+
+        if (isLimitedIosStream(format.url)) {
+          throw new Error('Skipping limited iOS stream URL');
+        }
+
+        await validateStreamingUrl(format.url);
+
+        return { format: { ...format, url: format.url }, client, qualityPreference: preference };
+      } catch (err) {
+        failures.push(`${client}/${options.format}: ${(err as Error).message}`);
       }
-
-      if (isLimitedIosStream(format.url)) {
-        throw new Error('Skipping limited iOS stream URL');
-      }
-
-      await validateStreamingUrl(format.url);
-
-      return { format: { ...format, url: format.url }, client };
-    } catch (err) {
-      failures.push(`${client}: ${(err as Error).message}`);
     }
   }
 
@@ -236,8 +250,11 @@ export async function getYoutubePlaylistTracks(
   };
 }
 
-export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
-  const { format } = await getStreamingDataWithFallback(videoId);
+export async function resolveAudioUrl(
+  videoId: string,
+  preference: AudioQualityPreference = 'auto'
+): Promise<AudioStreamInfo> {
+  const { format, qualityPreference } = await getStreamingDataWithFallback(videoId, preference);
 
   return {
     videoId,
@@ -249,16 +266,18 @@ export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo>
       : format.bitrate
         ? `${Math.round(format.bitrate / 1000)}kbps`
         : 'unknown',
+    qualityPreference,
   };
 }
 
 export async function resolveTrack(
   videoId: string,
-  originalQuery: string
+  originalQuery: string,
+  preference: AudioQualityPreference = 'auto'
 ): Promise<ResolvedTrackResult> {
   const [{ info }, audio] = await Promise.all([
     getBasicInfoWithFallback(videoId),
-    resolveAudioUrl(videoId),
+    resolveAudioUrl(videoId, preference),
   ]);
 
   return {

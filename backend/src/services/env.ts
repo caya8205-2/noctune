@@ -16,6 +16,7 @@ export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
+    audioQualityPreference: 'auto' | 'high';
     audioCacheLimitMb: number;
     discordRpcEnabled: boolean;
 }
@@ -24,6 +25,7 @@ const DEFAULTS: EnvConfig = {
     spotifyClientId: '',
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
+    audioQualityPreference: 'auto',
     audioCacheLimitMb: 1024,
     discordRpcEnabled: true,
 };

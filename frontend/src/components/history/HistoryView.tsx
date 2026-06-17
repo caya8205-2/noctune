@@ -64,7 +64,7 @@ export function HistoryView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-6">
         {!isLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -82,7 +82,7 @@ export function HistoryView() {
             <div
               key={`${track.id}-${track.spotifyId ?? 'history'}-${i}`}
               className={clsx(
-                'track-row group animate-fade-in max-w-3xl',
+                'track-row group animate-fade-in',
                 isActive && 'active'
               )}
               style={{ animationDelay: `${i * 20}ms` }}

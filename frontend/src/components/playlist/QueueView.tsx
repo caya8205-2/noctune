@@ -96,9 +96,9 @@ export function QueueView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-6">
         {playbackNotice && (
-          <div className="max-w-3xl mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-3 text-xs text-red-200">
+          <div className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-3 text-xs text-red-200">
             <span>{playbackNotice}</span>
             <button className="btn-ghost p-1 hover:text-white" onClick={dismissPlaybackNotice} title="Dismiss">
               <X size={12} />
@@ -127,7 +127,7 @@ export function QueueView() {
               }}
               onDragEnd={() => setDragIndex(null)}
               className={clsx(
-                'group max-w-3xl flex items-center px-4 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100',
+                'group flex items-center px-4 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100',
                 isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
                 track.playbackError && 'border-red-500/20 bg-red-500/5',
                 isPast && 'opacity-40',

@@ -19,6 +19,7 @@ const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
+    audioQualityPreference: z.enum(['auto', 'high']).optional(),
     audioCacheLimitMb: z.number().min(128).max(10240).optional(),
     discordRpcEnabled: z.boolean().optional(),
 });
@@ -34,6 +35,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         const config = getEnvConfig();
         return reply.send({
             searchEngine: config.searchEngine,
+            audioQualityPreference: config.audioQualityPreference,
             audioCacheLimitMb: config.audioCacheLimitMb,
             discordRpcEnabled: config.discordRpcEnabled,
             cache: {
@@ -62,6 +64,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         if (!parsed.success) {
             return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
         }
+        const previous = getEnvConfig();
         const updated = saveEnvConfig(parsed.data);
 
         // Invalidate Spotify token if credentials changed
@@ -75,9 +78,17 @@ export async function settingsRoutes(app: FastifyInstance) {
             await refreshDiscordActivity();
         }
 
+        if (
+            parsed.data.audioQualityPreference &&
+            parsed.data.audioQualityPreference !== previous.audioQualityPreference
+        ) {
+            clearPrefetchCache();
+        }
+
         return reply.send({
             ok: true,
             searchEngine: updated.searchEngine,
+            audioQualityPreference: updated.audioQualityPreference,
             audioCacheLimitMb: updated.audioCacheLimitMb,
             discordRpcEnabled: updated.discordRpcEnabled,
             spotify: {

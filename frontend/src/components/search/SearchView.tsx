@@ -178,7 +178,7 @@ export function SearchView() {
           )}
         </div>
 
-        <div className="relative max-w-3xl">
+        <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="text"
@@ -196,7 +196,7 @@ export function SearchView() {
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between max-w-3xl mt-3 gap-3">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             {(['ytdlp', 'spotify'] as const).map((option) => (
               <button
@@ -222,7 +222,7 @@ export function SearchView() {
           </p>
         </div>
 
-        <div className="max-w-3xl mt-2 min-h-5">
+        <div className="mt-2 min-h-5">
           {searched && fromCache ? (
             <div className="flex items-center gap-1.5 text-xs text-accent">
               <Zap size={11} />
@@ -246,13 +246,13 @@ export function SearchView() {
         </div>
 
         {debugSearch && (
-          <div className="max-w-3xl mt-2 rounded-lg border border-base-600/70 bg-base-900 px-3 py-2 text-xs text-muted">
+          <div className="mt-2 rounded-lg border border-base-600/70 bg-base-900 px-3 py-2 text-xs text-muted">
             Debug mode is on. Use the debug button on Spotify results to inspect YouTube candidate scoring.
           </div>
         )}
 
         {playlistUrl && (
-          <div className="max-w-3xl mt-3 rounded-lg border border-base-600/70 bg-base-800 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="mt-3 flex flex-col gap-3 rounded-lg border border-base-600/70 bg-base-800 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-white">Playlist URL detected</p>
               <p className="text-xs text-muted mt-0.5">Import it into a local Noctune playlist.</p>
@@ -270,7 +270,7 @@ export function SearchView() {
 
         {importMessage && (
           <div
-            className={`max-w-3xl mt-3 flex items-center gap-2 text-sm px-3 py-2 rounded-lg border ${
+            className={`mt-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
               importMessage.ok
                 ? 'bg-green-500/10 text-green-400 border-green-500/20'
                 : 'bg-red-500/10 text-red-400 border-red-500/20'
@@ -284,7 +284,7 @@ export function SearchView() {
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 sm:px-6 lg:px-9">
         {debugSearch && debugResult && (
-          <div className="max-w-3xl mb-4 rounded-lg border border-accent/25 bg-base-900 p-4">
+          <div className="mb-4 rounded-lg border border-accent/25 bg-base-900 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="section-label text-accent">Scoring debug</p>
@@ -320,7 +320,7 @@ export function SearchView() {
         )}
 
         {!searched && !isSearching && (
-          <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
               <Music size={28} strokeWidth={1.2} />
             </div>
@@ -329,7 +329,7 @@ export function SearchView() {
         )}
 
         {searched && results.length === 0 && !isSearching && (
-          <div className="max-w-3xl h-full flex flex-col items-center justify-center gap-3 text-muted">
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-muted">
             <p className="text-sm">No results for "{query}"</p>
             {engine && (
               <button
@@ -350,7 +350,7 @@ export function SearchView() {
           return (
             <div
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
-              className={`track-row group animate-fade-in max-w-3xl ${isActive ? 'active' : ''}`}
+              className={`track-row group animate-fade-in ${isActive ? 'active' : ''}`}
               style={{ animationDelay: `${i * 30}ms` }}
               onClick={() => handlePlay(track)}
             >

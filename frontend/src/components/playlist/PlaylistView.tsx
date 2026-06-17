@@ -574,13 +574,13 @@ export function PlaylistView() {
 
       {cacheMessage && (
         <div className="px-4 sm:px-6 lg:px-9 pb-3 -mt-2">
-          <p className="max-w-3xl rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
+          <p className="rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
             {cacheMessage}
           </p>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-7 pb-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-6">
         {!isLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -591,7 +591,7 @@ export function PlaylistView() {
         )}
 
         {tracks.length > 0 && (
-          <div className="max-w-3xl mb-3 flex flex-col sm:flex-row gap-2">
+          <div className="mb-3 flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
@@ -615,7 +615,7 @@ export function PlaylistView() {
         )}
 
         {tracks.length > 0 && visibleTracks.length === 0 && (
-          <div className="max-w-3xl rounded-lg border border-base-600/50 bg-base-900 px-4 py-3 text-sm text-muted">
+          <div className="rounded-lg border border-base-600/50 bg-base-900 px-4 py-3 text-sm text-muted">
             No tracks match "{trackFilter}".
           </div>
         )}
@@ -639,7 +639,7 @@ export function PlaylistView() {
               }}
               onDragEnd={() => setDragIndex(null)}
               className={clsx(
-                'group max-w-3xl flex items-center px-3 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 transition-colors duration-100',
+                'group flex items-center px-3 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 transition-colors duration-100',
                 canReorder ? 'cursor-grab' : 'cursor-pointer',
                 isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
                 dragIndex === originalIndex && 'opacity-50'

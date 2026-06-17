@@ -1,6 +1,7 @@
 import PQueue from 'p-queue';
-import { getCachedById, isUrlFresh, upsertTrack } from './cache.js';
+import { cacheMatchesAudioQuality, getCachedById, isUrlFresh, upsertTrack } from './cache.js';
 import { resolveAudioUrl, resolveTrack } from './audioResolver.js';
+import { getEnvConfig } from './env.js';
 import type { CachedTrack } from '../types/index.js';
 
 const prefetchQueue = new PQueue({ concurrency: 2 });
@@ -22,6 +23,7 @@ export function isPrefetching(videoId: string): boolean {
 
 export async function schedulePrefetch(videoIds: string[]): Promise<void> {
   const targets = videoIds.slice(0, 5);
+  const preference = getEnvConfig().audioQualityPreference;
   logPrefetch('schedule requested', {
     requested: videoIds.length,
     targets,
@@ -43,11 +45,15 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
     }
 
     const cached = getCachedById(videoId);
-    if (cached && isUrlFresh(cached)) {
+    if (cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)) {
       prefetched.set(videoId, cached);
       logPrefetch('fresh cache promoted to prefetched map', {
         videoId,
         title: cached.title,
+        preference,
+        cachedPreference: cached.audioQualityPreference ?? 'auto',
+        format: cached.audioFormat ?? 'unknown',
+        quality: cached.audioQuality ?? 'unknown',
         expiresInMs: cached.audioUrlExpiry - Date.now(),
       });
       continue;
@@ -69,22 +75,44 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
       try {
         if (cached) {
           const audio = await resolveAudioUrl(videoId);
-          const refreshed = upsertTrack(cached.query, cached, audio.url);
+          const refreshed = upsertTrack(
+            cached.query,
+            cached,
+            audio.url,
+            undefined,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
           prefetched.set(videoId, refreshed);
           logPrefetch('job done', {
             videoId,
             mode,
             title: refreshed.title,
+            preference: refreshed.audioQualityPreference ?? 'auto',
+            format: refreshed.audioFormat ?? 'unknown',
+            quality: refreshed.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
         } else {
           const { track, audio } = await resolveTrack(videoId, videoId);
-          const saved = upsertTrack(videoId, track, audio.url);
+          const saved = upsertTrack(
+            videoId,
+            track,
+            audio.url,
+            undefined,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
           prefetched.set(videoId, saved);
           logPrefetch('job done', {
             videoId,
             mode,
             title: track.title,
+            preference: saved.audioQualityPreference ?? 'auto',
+            format: saved.audioFormat ?? 'unknown',
+            quality: saved.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
         }

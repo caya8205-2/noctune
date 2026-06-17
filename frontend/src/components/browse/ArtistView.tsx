@@ -79,7 +79,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
 
           <div className="min-w-0 pb-1">
             <p className="section-label mb-1">ARTIST</p>
-            <h1 className="font-display text-3xl font-bold text-white leading-tight truncate">
+            <h1 className="font-display text-3xl font-semibold text-white leading-tight truncate">
               {data.name}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
@@ -189,7 +189,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
                       </div>
                     )}
                   </div>
-                  <p className="mt-2 truncate text-sm font-medium text-white group-hover:text-accent transition-colors">
+                  <p className="mt-2 truncate font-display text-sm font-medium text-white group-hover:text-accent transition-colors">
                     {album.name}
                   </p>
                   <p className="truncate text-xs text-muted capitalize">

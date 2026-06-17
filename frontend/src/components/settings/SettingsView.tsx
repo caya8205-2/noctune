@@ -27,6 +27,7 @@ const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
+  audioQualityPreference: 'auto' | 'high';
   audioCacheLimitMb: number;
   discordRpcEnabled: boolean;
   cache?: {
@@ -92,6 +93,7 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
+  const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
@@ -106,6 +108,7 @@ export function SettingsView() {
     setData(d);
     setClientId(d.spotify.clientId);
     setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
+    setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
     setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
   }
 
@@ -314,6 +317,29 @@ export function SettingsView() {
       setCacheMessage({ ok: false, text: (err as Error).message });
     } finally {
       setCacheBusy(false);
+    }
+  }
+
+  async function handleAudioQualityChange(preference: 'auto' | 'high') {
+    if (preference === audioQualityPreference) return;
+    const previous = audioQualityPreference;
+    setAudioQualityPreference(preference);
+    setCacheMessage(null);
+
+    try {
+      const res = await fetch(await apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioQualityPreference: preference }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      if (!res.ok) throw new Error('Save audio quality failed');
+      setData(updated);
+      setAudioQualityPreference(updated.audioQualityPreference ?? preference);
+      setCacheMessage({ ok: true, text: 'Preferred stream quality saved.' });
+    } catch (err) {
+      setAudioQualityPreference(previous);
+      setCacheMessage({ ok: false, text: (err as Error).message });
     }
   }
 
@@ -572,6 +598,46 @@ export function SettingsView() {
           </div>
         </section>
       )}
+
+      {/* Playback */}
+      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Playback
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Choose how aggressively the local YouTube resolver should prefer audio stream quality.
+            Spotify is still used only for metadata.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Preferred stream quality</p>
+              <p className="mt-1 text-xs text-muted">
+                High may use larger streams when available, then falls back automatically if a format fails.
+              </p>
+            </div>
+            <div className="flex shrink-0 rounded-xl border border-base-600/70 bg-base-950 p-1">
+              {(['auto', 'high'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleAudioQualityChange(option)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    audioQualityPreference === option
+                      ? 'bg-accent text-base-950'
+                      : 'text-muted hover:bg-base-800 hover:text-white'
+                  }`}
+                >
+                  {option === 'auto' ? 'Auto' : 'High'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Discord Rich Presence */}
       {IS_TAURI && (

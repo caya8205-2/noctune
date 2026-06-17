@@ -81,7 +81,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
 
           <div className="min-w-0 flex-1 pb-1">
             <p className="section-label mb-1 capitalize">{data.type}</p>
-            <h1 className="font-display text-2xl font-bold text-white leading-tight">
+            <h1 className="font-display text-2xl font-semibold text-white leading-tight">
               {data.name}
             </h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -89,7 +89,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
               {data.artists.map((artist, i) => (
                 <span key={artist.id}>
                   <button
-                    className="hover:text-accent transition-colors"
+                    className="font-display hover:text-accent transition-colors"
                     onClick={() => usePlayerStore.getState().setView('artist' as never, artist.id)}
                   >
                     {artist.name}

@@ -1,4 +1,5 @@
-import type { AudioStreamInfo, Track } from '../types/index.js';
+import type { AudioQualityPreference, AudioStreamInfo, Track } from '../types/index.js';
+import { getEnvConfig } from './env.js';
 import {
   getYoutubePlaylistTracks as youtubeiGetYoutubePlaylistTracks,
   getYoutubeTrack as youtubeiGetYoutubeTrack,
@@ -25,8 +26,8 @@ export interface AudioResolver {
   searchTracks(query: string, limit?: number): Promise<Track[]>;
   getYoutubeTrack(urlOrVideoId: string, originalQuery?: string): Promise<Track>;
   getYoutubePlaylistTracks(url: string, limit?: number): Promise<PlaylistImportResult>;
-  resolveAudioUrl(videoId: string): Promise<AudioStreamInfo>;
-  resolveTrack(videoId: string, originalQuery: string): Promise<ResolvedTrackResult>;
+  resolveAudioUrl(videoId: string, preference?: AudioQualityPreference): Promise<AudioStreamInfo>;
+  resolveTrack(videoId: string, originalQuery: string, preference?: AudioQualityPreference): Promise<ResolvedTrackResult>;
 }
 
 const youtubeiResolver: AudioResolver = {
@@ -96,6 +97,25 @@ async function withYtdlpFallback<T>(
   }
 }
 
+function logResolvedStream(
+  source: AudioResolverName,
+  operation: 'resolveAudioUrl' | 'resolveTrack',
+  audio: AudioStreamInfo,
+  elapsedMs: number
+) {
+  console.log(
+    `[audio] resolved stream ${JSON.stringify({
+      source,
+      operation,
+      videoId: audio.videoId,
+      preference: audio.qualityPreference,
+      format: audio.format,
+      quality: audio.quality,
+      elapsedMs,
+    })}`
+  );
+}
+
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
   return withYtdlpFallback(
     'searchTracks',
@@ -120,18 +140,61 @@ export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promi
   );
 }
 
-export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
-  return withYtdlpFallback(
-    'resolveAudioUrl',
-    () => getAudioResolver().resolveAudioUrl(videoId),
-    async () => (await getYtdlpResolver()).resolveAudioUrl(videoId)
-  );
+export async function resolveAudioUrl(
+  videoId: string,
+  preference: AudioQualityPreference = getEnvConfig().audioQualityPreference
+): Promise<AudioStreamInfo> {
+  const startedAt = Date.now();
+  try {
+    const audio = await getAudioResolver().resolveAudioUrl(videoId, preference);
+    logResolvedStream('youtubei', 'resolveAudioUrl', audio, Date.now() - startedAt);
+    return audio;
+  } catch (err) {
+    console.warn(
+      `[audio-resolver] youtubei resolveAudioUrl failed, falling back to yt-dlp: ${
+        (err as Error).message
+      }`
+    );
+    try {
+      const audio = await (await getYtdlpResolver()).resolveAudioUrl(videoId, preference);
+      logResolvedStream('ytdlp', 'resolveAudioUrl', audio, Date.now() - startedAt);
+      return audio;
+    } catch (fallbackErr) {
+      throw new Error(
+        `youtubei resolveAudioUrl failed: ${(err as Error).message}; yt-dlp fallback failed: ${
+          (fallbackErr as Error).message
+        }`
+      );
+    }
+  }
 }
 
-export async function resolveTrack(videoId: string, originalQuery: string): Promise<ResolvedTrackResult> {
-  return withYtdlpFallback(
-    'resolveTrack',
-    () => getAudioResolver().resolveTrack(videoId, originalQuery),
-    async () => (await getYtdlpResolver()).resolveTrack(videoId, originalQuery)
-  );
+export async function resolveTrack(
+  videoId: string,
+  originalQuery: string,
+  preference: AudioQualityPreference = getEnvConfig().audioQualityPreference
+): Promise<ResolvedTrackResult> {
+  const startedAt = Date.now();
+  try {
+    const result = await getAudioResolver().resolveTrack(videoId, originalQuery, preference);
+    logResolvedStream('youtubei', 'resolveTrack', result.audio, Date.now() - startedAt);
+    return result;
+  } catch (err) {
+    console.warn(
+      `[audio-resolver] youtubei resolveTrack failed, falling back to yt-dlp: ${
+        (err as Error).message
+      }`
+    );
+    try {
+      const result = await (await getYtdlpResolver()).resolveTrack(videoId, originalQuery, preference);
+      logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
+      return result;
+    } catch (fallbackErr) {
+      throw new Error(
+        `youtubei resolveTrack failed: ${(err as Error).message}; yt-dlp fallback failed: ${
+          (fallbackErr as Error).message
+        }`
+      );
+    }
+  }
 }

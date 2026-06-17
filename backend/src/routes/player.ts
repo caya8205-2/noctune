@@ -4,6 +4,7 @@ import fs from 'fs';
 import PQueue from 'p-queue';
 import {
   clearTrackCache,
+  cacheMatchesAudioQuality,
   getCachedById,
   getCachedBySpotifyId,
   isUrlFresh,
@@ -15,7 +16,7 @@ import {
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
 import { Readable } from 'stream';
 import { clearMatchCacheForSpotifyId, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
-import type { Track } from '../types/index.js';
+import type { CachedTrack, Track } from '../types/index.js';
 import {
   consumePrefetch,
   getPrefetched,
@@ -220,7 +221,9 @@ async function fetchAudioStream(
   const shouldRefresh =
     !res.ok ||
     isLimitedIosStream(audioUrl) ||
-    (refreshIfWebm && isLikelyWebmStream(res.headers.get('content-type'), audioUrl));
+    (refreshIfWebm &&
+      getEnvConfig().audioQualityPreference === 'auto' &&
+      isLikelyWebmStream(res.headers.get('content-type'), audioUrl));
 
   if (!shouldRefresh) {
     return { res, refreshed: false, audioUrl };
@@ -228,7 +231,13 @@ async function fetchAudioStream(
 
   res.body?.cancel().catch(() => {});
   const refreshedAudio = await resolveAudioUrl(videoId);
-  refreshTrackUrl(videoId, refreshedAudio.url);
+  refreshTrackUrl(
+    videoId,
+    refreshedAudio.url,
+    refreshedAudio.qualityPreference,
+    refreshedAudio.format,
+    refreshedAudio.quality
+  );
   const refreshedRes = await fetch(refreshedAudio.url, {
     headers,
   });
@@ -248,6 +257,16 @@ function parseContentRange(value: string | null): { start: number; end: number; 
 function audioFormatFromContentType(contentType: string | null): string {
   const content = contentType?.toLowerCase() ?? '';
   return content.includes('webm') ? 'webm' : 'm4a';
+}
+
+function audioCacheLog(track: CachedTrack, preference: string) {
+  return {
+    preference,
+    cachedPreference: track.audioQualityPreference ?? 'auto',
+    format: track.audioFormat ?? 'unknown',
+    quality: track.audioQuality ?? 'unknown',
+    hasLocalAudio: Boolean(track.localAudioPath),
+  };
 }
 
 function writeAudioChunk(writer: fs.WriteStream, chunk: Buffer | Uint8Array): Promise<void> {
@@ -273,7 +292,8 @@ function finishWriter(writer: fs.WriteStream): Promise<void> {
 }
 
 async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolean> {
-  if (getExistingAudioCachePath(videoId)) return true;
+  const preference = getEnvConfig().audioQualityPreference;
+  if (getExistingAudioCachePath(videoId, preference)) return true;
 
   const { res, audioUrl: resolvedAudioUrl } = await fetchAudioStream(videoId, audioUrl, undefined, true);
   if (!res.ok || !res.body) return false;
@@ -281,7 +301,7 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
   const rangeInfo = parseContentRange(res.headers.get('content-range'));
   const format = audioFormatFromContentType(res.headers.get('content-type'));
   const tempPath = getTempAudioCachePath(videoId);
-  const finalPath = getAudioCachePath(videoId, format);
+  const finalPath = getAudioCachePath(videoId, format, preference);
   const writer = fs.createWriteStream(tempPath);
   let completed = false;
 
@@ -301,7 +321,13 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
           chunkRes.body?.cancel().catch(() => {});
           const refreshedAudio = await resolveAudioUrl(videoId);
           currentAudioUrl = refreshedAudio.url;
-          refreshTrackUrl(videoId, currentAudioUrl);
+          refreshTrackUrl(
+            videoId,
+            currentAudioUrl,
+            refreshedAudio.qualityPreference,
+            refreshedAudio.format,
+            refreshedAudio.quality
+          );
           chunkRes = await fetch(currentAudioUrl, {
             headers: { Range: `bytes=${start}-${end}` },
           });
@@ -332,13 +358,14 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
 }
 
 async function scheduleAudioCache(videoIds: string[], app: FastifyInstance) {
+  const preference = getEnvConfig().audioQualityPreference;
   for (const videoId of videoIds) {
-    if (audioCacheInFlight.has(videoId) || getExistingAudioCachePath(videoId)) continue;
+    if (audioCacheInFlight.has(videoId) || getExistingAudioCachePath(videoId, preference)) continue;
     audioCacheInFlight.add(videoId);
     audioCacheQueue.add(async () => {
       try {
         const cached = getCachedById(videoId);
-        const audioUrl = cached && isUrlFresh(cached)
+        const audioUrl = cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)
           ? cached.audioUrl
           : (await resolveAudioUrl(videoId)).url;
         const ok = await cacheAudioFile(videoId, audioUrl);
@@ -394,6 +421,7 @@ export async function playerRoutes(app: FastifyInstance) {
 
       const { videoId } = parsed.data;
       const query = req.query.query ?? videoId;
+      const preference = getEnvConfig().audioQualityPreference;
       const startedAt = Date.now();
       app.log.info({ videoId, query }, '[player] resolve requested');
 
@@ -409,7 +437,7 @@ export async function playerRoutes(app: FastifyInstance) {
       }
 
       const prefetched = getPrefetched(playableVideoId);
-      if (prefetched && isUrlFresh(prefetched)) {
+      if (prefetched && isUrlFresh(prefetched) && cacheMatchesAudioQuality(prefetched, preference)) {
         const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, prefetched.title);
         if (replacementId !== playableVideoId) {
           consumePrefetch(playableVideoId);
@@ -418,29 +446,43 @@ export async function playerRoutes(app: FastifyInstance) {
             '[player] replacing unwanted live/tour prefetched match'
           );
           const { track, audio } = await resolveTrack(replacementId, query);
-          const saved = upsertTrack(query, track, audio.url);
+          const saved = upsertTrack(
+            query,
+            track,
+            audio.url,
+            undefined,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
           return reply.send({ ...saved, source: 'resolved' });
         }
 
         consumePrefetch(playableVideoId);
         app.log.info(
-          { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
+          {
+            videoId: playableVideoId,
+            elapsedMs: Date.now() - startedAt,
+            ...audioCacheLog(prefetched, preference),
+          },
           '[player] prefetch hit'
         );
         return reply.send({ ...prefetched, source: 'prefetch' });
       }
 
+      const cached = getCachedById(playableVideoId);
       app.log.info(
         {
           videoId: playableVideoId,
           inFlight: isPrefetching(playableVideoId),
           prefetch: getPrefetchStatus(),
+          preference,
+          cachedPreference: cached?.audioQualityPreference ?? null,
         },
         '[player] prefetch miss'
       );
 
-      const cached = getCachedById(playableVideoId);
-      if (cached && isUrlFresh(cached)) {
+      if (cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)) {
         const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, cached.title);
         if (replacementId !== playableVideoId) {
           app.log.info(
@@ -448,25 +490,55 @@ export async function playerRoutes(app: FastifyInstance) {
             '[player] replacing unwanted live/tour cached match'
           );
           const { track, audio } = await resolveTrack(replacementId, query);
-          const saved = upsertTrack(query, track, audio.url);
+          const saved = upsertTrack(
+            query,
+            track,
+            audio.url,
+            undefined,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
           return reply.send({ ...saved, source: 'resolved' });
         }
 
         app.log.info(
-          { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
+          {
+            videoId: playableVideoId,
+            elapsedMs: Date.now() - startedAt,
+            ...audioCacheLog(cached, preference),
+          },
           '[player] cache hit fresh'
         );
         return reply.send({ ...cached, source: 'cache' });
       }
 
-      if (cached && !isUrlFresh(cached)) {
+      if (cached && (!isUrlFresh(cached) || !cacheMatchesAudioQuality(cached, preference))) {
         try {
-          app.log.info({ videoId: playableVideoId }, '[player] cache hit stale, refreshing URL');
+          app.log.info(
+            {
+              videoId: playableVideoId,
+              staleUrl: !isUrlFresh(cached),
+              qualityMismatch: !cacheMatchesAudioQuality(cached, preference),
+              ...audioCacheLog(cached, preference),
+            },
+            '[player] cache hit stale, refreshing URL'
+          );
           const audio = await resolveAudioUrl(playableVideoId);
-          refreshTrackUrl(playableVideoId, audio.url);
+          refreshTrackUrl(
+            playableVideoId,
+            audio.url,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
           const refreshed = getCachedById(playableVideoId)!;
           app.log.info(
-            { videoId: playableVideoId, elapsedMs: Date.now() - startedAt },
+            {
+              videoId: playableVideoId,
+              elapsedMs: Date.now() - startedAt,
+              ...audioCacheLog(refreshed, preference),
+            },
             '[player] cache URL refreshed'
           );
           return reply.send({ ...refreshed, source: 'cache_refreshed' });
@@ -487,13 +559,34 @@ export async function playerRoutes(app: FastifyInstance) {
             '[player] replacing unwanted live/tour cold match'
           );
           const replacement = await resolveTrack(replacementId, query);
-          const saved = upsertTrack(query, replacement.track, replacement.audio.url);
+          const saved = upsertTrack(
+            query,
+            replacement.track,
+            replacement.audio.url,
+            undefined,
+            replacement.audio.qualityPreference,
+            replacement.audio.format,
+            replacement.audio.quality
+          );
           return reply.send({ ...saved, source: 'resolved' });
         }
 
-        const saved = upsertTrack(query, track, audio.url);
+        const saved = upsertTrack(
+          query,
+          track,
+          audio.url,
+          undefined,
+          audio.qualityPreference,
+          audio.format,
+          audio.quality
+        );
         app.log.info(
-          { videoId: playableVideoId, title: track.title, elapsedMs: Date.now() - startedAt },
+          {
+            videoId: playableVideoId,
+            title: track.title,
+            elapsedMs: Date.now() - startedAt,
+            ...audioCacheLog(saved, preference),
+          },
           '[player] cold resolve done'
         );
         return reply.send({ ...saved, source: 'resolved' });
@@ -523,23 +616,32 @@ export async function playerRoutes(app: FastifyInstance) {
   // Stream audio through backend (bypass CORS for Web Audio API)
   app.get('/player/stream/:videoId', async (req, reply) => {
     const { videoId } = req.params as { videoId: string };
+    const preference = getEnvConfig().audioQualityPreference;
     let cached = getCachedById(videoId);
     if (!cached) {
       try {
         app.log.info({ videoId }, '[player] stream cache miss, resolving on demand');
         const { track, audio } = await resolveTrack(videoId, videoId);
-        cached = upsertTrack(videoId, track, audio.url);
+        cached = upsertTrack(
+          videoId,
+          track,
+          audio.url,
+          undefined,
+          audio.qualityPreference,
+          audio.format,
+          audio.quality
+        );
       } catch (err) {
         app.log.warn(err, `[player] stream cache miss resolve failed for ${videoId}`);
         return reply
           .status(404)
           .send({ error: 'No fresh stream, resolve first', message: (err as Error).message });
       }
-    } else if (!isUrlFresh(cached)) {
+    } else if (!isUrlFresh(cached) || !cacheMatchesAudioQuality(cached, preference)) {
       try {
         app.log.info({ videoId }, '[player] stream cache stale, refreshing URL');
         const audio = await resolveAudioUrl(videoId);
-        refreshTrackUrl(videoId, audio.url);
+        refreshTrackUrl(videoId, audio.url, audio.qualityPreference, audio.format, audio.quality);
         cached = getCachedById(videoId);
       } catch (err) {
         app.log.warn(err, `[player] stream stale refresh failed for ${videoId}`);
@@ -557,13 +659,17 @@ export async function playerRoutes(app: FastifyInstance) {
       const range = req.headers.range;
       const localAudioPath = cached.localAudioPath && fs.existsSync(cached.localAudioPath)
         ? cached.localAudioPath
-        : getExistingAudioCachePath(videoId);
+        : getExistingAudioCachePath(videoId, preference);
 
       if (localAudioPath) {
         if (localAudioPath !== cached.localAudioPath) {
           setLocalAudioPath(videoId, localAudioPath);
         }
         touchAudioCache(localAudioPath);
+        app.log.info(
+          { videoId, localAudioPath, ...audioCacheLog(cached, preference) },
+          '[player] streaming local audio cache'
+        );
         return streamLocalAudioFile(localAudioPath, range, reply);
       }
 
@@ -596,7 +702,11 @@ export async function playerRoutes(app: FastifyInstance) {
                 youtubeArtist: cached.youtubeArtist,
                 queueSource: cached.queueSource,
               },
-              audio.url
+              audio.url,
+              undefined,
+              audio.qualityPreference,
+              audio.format,
+              audio.quality
             );
             const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
             if (retry.res.ok && retry.res.body) {
@@ -638,7 +748,10 @@ export async function playerRoutes(app: FastifyInstance) {
       }
 
       if (refreshed) {
-        app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
+        app.log.info(
+          { videoId, ...audioCacheLog(cached, preference) },
+          '[player] refreshed stream URL before proxying'
+        );
       }
 
       const contentLength = ytRes.headers.get('content-length');
@@ -699,19 +812,20 @@ export async function playerRoutes(app: FastifyInstance) {
     }
 
     const { videoIds = [], tracks = [] } = parsed.data;
+    const preference = getEnvConfig().audioQualityPreference;
     const trackStatuses = await Promise.all(
       tracks.map(async (track) => {
         const [playableId] = await resolvePrefetchIds([], [track]);
         return {
           id: track.id,
           playableId: playableId ?? null,
-          cached: playableId ? Boolean(getExistingAudioCachePath(playableId)) : false,
+          cached: playableId ? Boolean(getExistingAudioCachePath(playableId, preference)) : false,
           inFlight: playableId ? audioCacheInFlight.has(playableId) : false,
         };
       })
     );
     const playableIds = await resolvePrefetchIds(videoIds, []);
-    const cachedIds = playableIds.filter((id) => Boolean(getExistingAudioCachePath(id)));
+    const cachedIds = playableIds.filter((id) => Boolean(getExistingAudioCachePath(id, preference)));
     return reply.send({
       playableIds,
       cachedIds,
@@ -785,9 +899,10 @@ export async function playerRoutes(app: FastifyInstance) {
     const { videoIds = [], tracks = [] } = parsed.data;
     const playableIds = await resolvePrefetchIds(videoIds, tracks);
     await scheduleAudioCache(playableIds, app);
+    const preference = getEnvConfig().audioQualityPreference;
     return reply.send({
-      scheduled: playableIds.filter((id) => !getExistingAudioCachePath(id)),
-      cachedIds: playableIds.filter((id) => Boolean(getExistingAudioCachePath(id))),
+      scheduled: playableIds.filter((id) => !getExistingAudioCachePath(id, preference)),
+      cachedIds: playableIds.filter((id) => Boolean(getExistingAudioCachePath(id, preference))),
       message: 'Audio cache queued',
     });
   });

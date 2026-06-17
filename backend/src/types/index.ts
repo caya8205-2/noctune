@@ -1,5 +1,7 @@
 // Core domain types for Noctune backend
 
+export type AudioQualityPreference = 'auto' | 'high';
+
 export interface Track {
   id: string;           // playable YouTube videoId
   title: string;
@@ -21,6 +23,9 @@ export interface Track {
 export interface CachedTrack extends Track {
   audioUrl: string;
   audioUrlExpiry: number;   // unix timestamp (ms) — YT URLs expire ~6h
+  audioQualityPreference?: AudioQualityPreference;
+  audioFormat?: string;
+  audioQuality?: string;
   localAudioPath?: string;  // if downloaded locally
   cachedAt: number;
   playCount: number;
@@ -69,6 +74,7 @@ export interface AudioStreamInfo {
   expiry: number;
   format: string;
   quality: string;
+  qualityPreference: AudioQualityPreference;
 }
 
 export interface LyricLine {

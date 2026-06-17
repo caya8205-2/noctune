@@ -100,6 +100,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       queueIndex: idx,
       queueLength: queue.length,
     });
+    void api.lyrics(track).catch((err) => console.warn('[player] lyrics prefetch failed:', err));
 
     try {
       const resolveQuery = track.id.startsWith('spotify:')

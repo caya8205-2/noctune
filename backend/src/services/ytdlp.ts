@@ -1,7 +1,7 @@
 import YTDlpWrap from 'yt-dlp-wrap';
 import fs from 'fs';
 import path from 'path';
-import { Track, AudioStreamInfo } from '../types/index.js';
+import { Track, AudioStreamInfo, AudioQualityPreference } from '../types/index.js';
 
 function firstExistingPath(paths: string[]): string | undefined {
   return paths.find((candidate) => {
@@ -105,7 +105,10 @@ interface YTPlaylistInfo {
   entries?: YTInfo[];
 }
 
-function pickBestAudioFormat(info: YTInfo): { url: string; format: string; quality: string } {
+function pickBestAudioFormat(
+  info: YTInfo,
+  preference: AudioQualityPreference = 'auto'
+): { url: string; format: string; quality: string; qualityPreference: AudioQualityPreference } {
   const formats = info.formats ?? [];
   const audioOnly = formats
     .filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
@@ -118,7 +121,9 @@ function pickBestAudioFormat(info: YTInfo): { url: string; format: string; quali
     return ext === 'm4a' || ext === 'mp4' || codec.includes('aac') || codec.includes('mp4a');
   });
 
-  const best = compatible ?? audioOnly[0] ?? formats[0];
+  const best = preference === 'high'
+    ? audioOnly[0] ?? compatible ?? formats[0]
+    : compatible ?? audioOnly[0] ?? formats[0];
   if (!best?.url && !info.url) {
     throw new Error(`No playable format found for ${info.id}`);
   }
@@ -127,6 +132,7 @@ function pickBestAudioFormat(info: YTInfo): { url: string; format: string; quali
     url: best?.url ?? info.url!,
     format: best?.ext ?? 'webm',
     quality: best?.abr ? `${best.abr}kbps` : 'unknown',
+    qualityPreference: preference,
   };
 }
 
@@ -249,23 +255,34 @@ export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promi
 }
 
 /** Resolve a full audio stream URL for a videoId. */
-export async function resolveAudioUrl(videoId: string): Promise<AudioStreamInfo> {
+export async function resolveAudioUrl(
+  videoId: string,
+  preference: AudioQualityPreference = 'auto'
+): Promise<AudioStreamInfo> {
   const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
-  const { url, format, quality } = pickBestAudioFormat(info);
+  const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
 
   // YT URLs are typically valid for ~6h; we conservatively expire at 5h45m
   const expiry = Date.now() + (5 * 60 + 45) * 60 * 1000;
 
-  return { videoId, url, expiry, format, quality };
+  return { videoId, url, expiry, format, quality, qualityPreference };
 }
 
 /** Get Track metadata + audio URL in one call (used on first play). */
 export async function resolveTrack(videoId: string, originalQuery: string): Promise<{
   track: Track;
   audio: AudioStreamInfo;
+}>;
+export async function resolveTrack(
+  videoId: string,
+  originalQuery: string,
+  preference: AudioQualityPreference = 'auto'
+): Promise<{
+  track: Track;
+  audio: AudioStreamInfo;
 }> {
   const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
-  const { url, format, quality } = pickBestAudioFormat(info);
+  const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
 
   const track: Track = {
     id: info.id,
@@ -282,6 +299,7 @@ export async function resolveTrack(videoId: string, originalQuery: string): Prom
     expiry: Date.now() + (5 * 60 + 45) * 60 * 1000,
     format,
     quality,
+    qualityPreference,
   };
 
   return { track, audio };

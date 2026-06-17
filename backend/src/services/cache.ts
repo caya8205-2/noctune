@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { CacheStore, CachedTrack, Track } from '../types/index.js';
+import { AudioQualityPreference, CacheStore, CachedTrack, Track } from '../types/index.js';
 
 const CACHE_VERSION = 1;
 const URL_TTL_MS = 6 * 60 * 60 * 1000;        // 6 hours — YT URL expiry
@@ -101,12 +101,22 @@ export function isUrlFresh(track: CachedTrack): boolean {
   return Date.now() < track.audioUrlExpiry;
 }
 
+export function cacheMatchesAudioQuality(
+  track: CachedTrack,
+  preference: AudioQualityPreference
+): boolean {
+  return (track.audioQualityPreference ?? 'auto') === preference;
+}
+
 /** Store or update a track after resolving audio metadata. Playback history is updated only by recordPlay(). */
 export function upsertTrack(
   query: string,
   track: Track,
   audioUrl: string,
-  localAudioPath?: string
+  localAudioPath?: string,
+  audioQualityPreference: AudioQualityPreference = 'auto',
+  audioFormat?: string,
+  audioQuality?: string
 ): CachedTrack {
   const store = getStore();
   const hash = hashQuery(query);
@@ -116,6 +126,9 @@ export function upsertTrack(
     ...track,
     audioUrl,
     audioUrlExpiry: Date.now() + URL_TTL_MS,
+    audioQualityPreference,
+    audioFormat: audioFormat ?? existing?.audioFormat,
+    audioQuality: audioQuality ?? existing?.audioQuality,
     localAudioPath,
     cachedAt: existing?.cachedAt ?? Date.now(),
     playCount: existing?.playCount ?? 0,
@@ -134,12 +147,25 @@ export function upsertTrack(
 }
 
 /** Refresh only the audio URL (called when URL expired but track is known). */
-export function refreshTrackUrl(videoId: string, audioUrl: string): void {
+export function refreshTrackUrl(
+  videoId: string,
+  audioUrl: string,
+  audioQualityPreference: AudioQualityPreference = 'auto',
+  audioFormat?: string,
+  audioQuality?: string
+): void {
   const store = getStore();
   const track = store.tracks[videoId];
   if (!track) return;
+  const previousPreference = track.audioQualityPreference ?? 'auto';
   track.audioUrl = audioUrl;
   track.audioUrlExpiry = Date.now() + URL_TTL_MS;
+  track.audioQualityPreference = audioQualityPreference;
+  track.audioFormat = audioFormat ?? track.audioFormat;
+  track.audioQuality = audioQuality ?? track.audioQuality;
+  if (previousPreference !== audioQualityPreference) {
+    track.localAudioPath = undefined;
+  }
   saveStore(store);
 }
 
