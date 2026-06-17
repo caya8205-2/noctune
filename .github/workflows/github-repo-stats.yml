@@ -1,0 +1,20 @@
+name: GitHub Repository Stats
+
+on:
+  schedule:
+    # Run once per day near the end of the UTC day.
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+concurrency: github-repo-stats
+
+jobs:
+  collect-repository-stats:
+    name: Collect repository traffic stats
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate repository stats report
+        uses: jgehrcke/github-repo-stats@v1.4.2
+        with:
+          ghtoken: ${{ secrets.GHRS_GITHUB_API_TOKEN }}
+          ghpagesprefix: https://caya8205-2.github.io/noctune

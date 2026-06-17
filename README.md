@@ -18,8 +18,20 @@ Noctune is a local-first desktop music player built for fast local playback, cle
 [![LRCLIB](https://img.shields.io/badge/LRCLIB-Lyrics-9B5CFF)](https://lrclib.net/)
 [![Kuroshiro](https://img.shields.io/badge/Kuroshiro-Romaji_lyrics-F7B733)](https://github.com/hexenq/kuroshiro)
 [![MIT](https://img.shields.io/badge/License-MIT-white)](./LICENSE)
+[![Traffic Report](https://img.shields.io/badge/Traffic_Report-Latest-2F80ED?logo=github&logoColor=white)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
+[![Stats Data](https://img.shields.io/badge/Stats_Data-github--repo--stats-111111?logo=github&logoColor=white)](https://github.com/caya8205-2/noctune/tree/github-repo-stats)
+
+[![Repository traffic](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 
 Noctune uses Spotify for metadata and discovery, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, and desktop update checks through GitHub Releases.
+
+## Repository Insights
+
+| Traffic card | Traffic report | Stored snapshots | Refresh |
+|---|---|---|---|
+| [README SVG](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg) | [Latest HTML report](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html) | [`github-repo-stats` branch](https://github.com/caya8205-2/noctune/tree/github-repo-stats) | Daily at `23:00 UTC` |
+
+The card highlights repository views and clones from the public traffic snapshots, while the full report includes popular paths, referrers, stars, and forks.
 
 ## Highlights
 

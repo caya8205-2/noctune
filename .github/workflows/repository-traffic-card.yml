@@ -1,0 +1,49 @@
+name: Repository Traffic Card
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - GitHub Repository Stats
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency: repository-traffic-card
+
+jobs:
+  render-card:
+    name: Render repository traffic card
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout stats branch
+        uses: actions/checkout@v4
+        with:
+          ref: github-repo-stats
+          path: stats
+          token: ${{ secrets.GHRS_GITHUB_API_TOKEN }}
+
+      - name: Render SVG traffic card
+        run: |
+          node source/scripts/generate-repo-traffic-card.js \
+            --stats-dir stats/caya8205-2/noctune \
+            --out stats/caya8205-2/noctune/repository-traffic-card.svg \
+            --repo caya8205-2/noctune \
+            --report-url https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html
+
+      - name: Commit traffic card
+        working-directory: stats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add caya8205-2/noctune/repository-traffic-card.svg
+          git diff --cached --quiet || git commit -m "Update repository traffic card"
+          git push
