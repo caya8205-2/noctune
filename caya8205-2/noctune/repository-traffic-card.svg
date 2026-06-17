@@ -1,0 +1,10 @@
+<svg width="620" height="280" viewBox="0 0 620 280" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Repository traffic for caya8205-2/noctune</title>
+  <desc id="desc">Traffic data has not been generated yet</desc>
+  <rect width="620" height="280" rx="22" fill="#0B1020"/>
+  <rect x="1" y="1" width="618" height="278" rx="21" stroke="#263247"/>
+  <text x="28" y="54" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Repository Traffic</text>
+  <text x="28" y="85" fill="#94A3B8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14">caya8205-2/noctune</text>
+  <text x="28" y="150" fill="#CBD5E1" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18">Traffic data has not been generated yet</text>
+  <text x="28" y="184" fill="#64748B" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13">Run the stats workflow once to publish the first card.</text>
+</svg>
