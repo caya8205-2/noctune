@@ -10,6 +10,7 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
+    "dev:backend:lan": "powershell -NoProfile -Command \"$env:HOST='0.0.0.0'; npm run dev --workspace=backend\"",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "tauri": "npm run build --workspace=backend && concurrently \"npm run dev:backend\" \"tauri dev\"",

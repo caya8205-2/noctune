@@ -1,30 +1,32 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:noctune/main.dart';
+import 'package:noctune/src/core/api/noctune_api.dart';
+import 'package:noctune/src/core/models/noctune_models.dart';
+import 'package:noctune/src/app/noctune_app.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('Noctune mobile shell renders', (WidgetTester tester) async {
+    await tester.pumpWidget(NoctuneApp(api: _FakeNoctuneApi()));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Noctune mobile'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Library'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Queue'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
   });
+}
+
+class _FakeNoctuneApi extends NoctuneApi {
+  _FakeNoctuneApi() : super(baseUrl: 'http://localhost:3131');
+
+  @override
+  Future<HomePayload> home() async {
+    return const HomePayload(
+      playlists: [],
+      recentTracks: [],
+      newReleases: [],
+    );
+  }
 }

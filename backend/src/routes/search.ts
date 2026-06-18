@@ -10,6 +10,7 @@ import { debugSpotifyYoutubeMatch } from '../services/youtubeMatcher.js';
 const SearchQuery = z.object({
   q: z.string().min(1).max(200),
   limit: z.coerce.number().min(1).max(50).default(25),
+  source: z.enum(['spotify', 'youtube']).optional(),
 });
 
 const DebugMatchQuery = z.object({
@@ -69,7 +70,7 @@ export async function searchRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Invalid query', issues: parsed.error.issues });
     }
-    const { q, limit } = parsed.data;
+    const { q, limit, source } = parsed.data;
     const parsedUrl = parseMediaUrl(q);
 
     if (parsedUrl?.kind === 'youtube-video') {
@@ -89,9 +90,14 @@ export async function searchRoutes(app: FastifyInstance) {
     const cached = getCachedByQuery(q);
 
     const { searchEngine } = getEnvConfig();
+    const activeSearchEngine = source === 'spotify'
+      ? 'spotify'
+      : source === 'youtube'
+        ? 'ytdlp'
+        : searchEngine;
 
     try {
-      const tracks = searchEngine === 'spotify'
+      const tracks = activeSearchEngine === 'spotify'
         ? await searchSpotify(q, limit)
         : await searchTracks(q, limit);
       return reply.send({
