@@ -64,8 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ConnectionCard(baseUrl: widget.api.baseUrl),
-              const SizedBox(height: 22),
               if (data.recentTracks.isNotEmpty) ...[
                 const SectionHeader('Recently played'),
                 ...data.recentTracks.take(6).map(
@@ -88,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       final track = data.newReleases[index];
                       return _ReleaseCard(
                         track: track,
-                        onTap: () => widget.onPlay(track, data.newReleases),
+                        onTap: () => widget.onPlay(track, const []),
                       );
                     },
                   ),
@@ -206,45 +204,6 @@ class _BackendConnectPanelState extends State<_BackendConnectPanel> {
                 child: const Text('Try again'),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionCard extends StatelessWidget {
-  const _ConnectionCard({required this.baseUrl});
-
-  final String baseUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: noctuneGold.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: noctuneGold.withValues(alpha: 0.28)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.lan, color: noctuneGold),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Desktop backend', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  baseUrl,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: noctuneMuted),
-                ),
-              ],
-            ),
           ),
         ],
       ),

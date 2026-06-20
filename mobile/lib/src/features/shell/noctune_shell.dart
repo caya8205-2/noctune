@@ -84,7 +84,7 @@ class _NoctuneShellState extends State<NoctuneShell> {
   void _openFullPlayer(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const FullPlayerScreen(),
+        builder: (_) => FullPlayerScreen(api: widget.api, onPlay: _play),
       ),
     );
   }

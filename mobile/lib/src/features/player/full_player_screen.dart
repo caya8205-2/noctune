@@ -1,13 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:noctune/src/core/api/noctune_api.dart';
 import 'package:noctune/src/core/models/noctune_models.dart';
 import 'package:noctune/src/core/state/player_controller.dart';
+import 'package:noctune/src/features/browse/album_view.dart';
+import 'package:noctune/src/features/browse/artist_view.dart';
 import 'package:noctune/src/shared/theme/noctune_theme.dart';
 import 'package:noctune/src/shared/widgets/track_artwork.dart';
 
 class FullPlayerScreen extends StatelessWidget {
-  const FullPlayerScreen({super.key});
+  const FullPlayerScreen({
+    required this.api,
+    required this.onPlay,
+    super.key,
+  });
+
+  final NoctuneApi api;
+  final void Function(Track track, List<Track> queue) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +109,12 @@ class FullPlayerScreen extends StatelessWidget {
                         const SizedBox(height: 24),
                         _LyricsPanel(player: player),
                         const SizedBox(height: 16),
-                        _TrackDetailsPanel(track: track, player: player),
+                        _TrackDetailsPanel(
+                          api: api,
+                          track: track,
+                          player: player,
+                          onPlay: onPlay,
+                        ),
                       ],
                     ),
             ),
@@ -342,10 +357,17 @@ class _LyricsPanelState extends State<_LyricsPanel> {
 }
 
 class _TrackDetailsPanel extends StatelessWidget {
-  const _TrackDetailsPanel({required this.track, required this.player});
+  const _TrackDetailsPanel({
+    required this.api,
+    required this.track,
+    required this.player,
+    required this.onPlay,
+  });
 
+  final NoctuneApi api;
   final Track track;
   final PlayerController player;
+  final void Function(Track track, List<Track> queue) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -362,57 +384,135 @@ class _TrackDetailsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline_rounded, color: noctuneGold),
-              const SizedBox(width: 8),
-              Text('Track details', style: Theme.of(context).textTheme.titleMedium),
+              TrackArtwork(url: track.thumbnail, size: 76),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: noctuneGold, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Track details',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      track.album ?? 'Unknown album',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: noctuneMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoPill(
+                icon: Icons.timer_outlined,
+                label: _formatDuration(player.duration),
+              ),
+              _InfoPill(
+                icon: Icons.offline_bolt_rounded,
+                label: resolved == null ? 'Resolving' : 'Ready',
+              ),
+              _InfoPill(
+                icon: Icons.hub_rounded,
+                label: resolved?.source ?? (track.spotifyId == null ? 'YouTube' : 'Spotify'),
+              ),
+              if (track.trackNumber != null)
+                _InfoPill(
+                  icon: Icons.format_list_numbered_rounded,
+                  label: 'Track ${track.trackNumber}',
+                ),
             ],
           ),
           const SizedBox(height: 14),
-          _DetailRow(label: 'Artist', value: track.artist),
-          _DetailRow(label: 'Album', value: track.album ?? 'Unknown album'),
-          _DetailRow(label: 'Duration', value: _formatDuration(player.duration)),
-          _DetailRow(
-            label: 'Cache',
-            value: resolved == null ? 'Resolving' : 'Ready',
-          ),
-          _DetailRow(
-            label: 'Source',
-            value: resolved?.source ?? (track.spotifyId == null ? 'YouTube' : 'Spotify'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: track.albumId == null ? null : () => _openAlbum(context),
+                  icon: const Icon(Icons.album_rounded),
+                  label: const Text('Album'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed:
+                      track.artistId == null ? null : () => _openArtist(context),
+                  icon: const Icon(Icons.person_rounded),
+                  label: const Text('Artist'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  void _openAlbum(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AlbumView(
+          api: api,
+          albumId: track.albumId!,
+          onPlay: onPlay,
+        ),
+      ),
+    );
+  }
+
+  void _openArtist(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ArtistView(
+          api: api,
+          artistId: track.artistId!,
+          onPlay: onPlay,
+        ),
+      ),
+    );
+  }
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.icon, required this.label});
 
+  final IconData icon;
   final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: noctuneSurface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 76,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: noctuneMuted),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
+          Icon(icon, size: 15, color: noctuneGold),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
         ],
       ),
     );

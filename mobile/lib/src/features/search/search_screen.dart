@@ -64,7 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(4),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: noctuneSurfaceRaised,
               borderRadius: BorderRadius.circular(18),
@@ -86,7 +86,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ButtonSegment(
                   value: 'spotify',
                   label: Text('Spotify'),
-                  icon: Icon(Icons.graphic_eq_rounded),
+                  icon: Icon(Icons.album_rounded),
                 ),
                 ButtonSegment(
                   value: 'youtube',

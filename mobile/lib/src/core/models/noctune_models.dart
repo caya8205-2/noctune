@@ -7,19 +7,29 @@ class Track {
     required this.thumbnail,
     required this.query,
     this.album,
+    this.artistId,
+    this.albumId,
     this.spotifyId,
     this.youtubeId,
+    this.spotifyUrl,
+    this.trackNumber,
+    this.popularity,
   });
 
   final String id;
   final String title;
   final String artist;
   final String? album;
+  final String? artistId;
+  final String? albumId;
   final int duration;
   final String thumbnail;
   final String query;
   final String? spotifyId;
   final String? youtubeId;
+  final String? spotifyUrl;
+  final int? trackNumber;
+  final int? popularity;
 
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
@@ -27,11 +37,16 @@ class Track {
       title: json['title']?.toString() ?? 'Unknown track',
       artist: json['artist']?.toString() ?? 'Unknown artist',
       album: json['album']?.toString(),
+      artistId: json['artistId']?.toString(),
+      albumId: json['albumId']?.toString(),
       duration: _readInt(json['duration']),
       thumbnail: json['thumbnail']?.toString() ?? '',
       query: json['query']?.toString() ?? json['title']?.toString() ?? '',
       spotifyId: json['spotifyId']?.toString(),
       youtubeId: json['youtubeId']?.toString(),
+      spotifyUrl: json['spotifyUrl']?.toString(),
+      trackNumber: _readNullableInt(json['trackNumber']),
+      popularity: _readNullableInt(json['popularity']),
     );
   }
 }
@@ -46,8 +61,13 @@ class CachedTrack extends Track {
     required super.query,
     required this.streamUrl,
     super.album,
+    super.artistId,
+    super.albumId,
     super.spotifyId,
     super.youtubeId,
+    super.spotifyUrl,
+    super.trackNumber,
+    super.popularity,
     this.source,
     this.audioQualityPreference,
   });
@@ -62,11 +82,16 @@ class CachedTrack extends Track {
       title: json['title']?.toString() ?? 'Unknown track',
       artist: json['artist']?.toString() ?? 'Unknown artist',
       album: json['album']?.toString(),
+      artistId: json['artistId']?.toString(),
+      albumId: json['albumId']?.toString(),
       duration: _readInt(json['duration']),
       thumbnail: json['thumbnail']?.toString() ?? '',
       query: json['query']?.toString() ?? json['title']?.toString() ?? '',
       spotifyId: json['spotifyId']?.toString(),
       youtubeId: json['youtubeId']?.toString(),
+      spotifyUrl: json['spotifyUrl']?.toString(),
+      trackNumber: _readNullableInt(json['trackNumber']),
+      popularity: _readNullableInt(json['popularity']),
       streamUrl: json['audioUrl']?.toString() ?? '',
       source: json['source']?.toString(),
       audioQualityPreference: json['audioQualityPreference']?.toString(),
@@ -171,6 +196,155 @@ class LyricLine {
   }
 }
 
+class SettingsPayload {
+  const SettingsPayload({
+    required this.searchEngine,
+    required this.audioQualityPreference,
+  });
+
+  final String searchEngine;
+  final String audioQualityPreference;
+
+  factory SettingsPayload.fromJson(Map<String, dynamic> json) {
+    return SettingsPayload(
+      searchEngine: json['searchEngine']?.toString() ?? 'spotify',
+      audioQualityPreference:
+          json['audioQualityPreference']?.toString() ?? 'auto',
+    );
+  }
+}
+
+class ArtistBrowse {
+  const ArtistBrowse({
+    required this.id,
+    required this.name,
+    required this.genres,
+    required this.topTracks,
+    required this.albums,
+    this.popularity,
+    this.followers,
+    this.image,
+    this.spotifyUrl,
+  });
+
+  final String id;
+  final String name;
+  final List<String> genres;
+  final int? popularity;
+  final int? followers;
+  final String? image;
+  final String? spotifyUrl;
+  final List<Track> topTracks;
+  final List<AlbumSummary> albums;
+
+  factory ArtistBrowse.fromJson(Map<String, dynamic> json) {
+    final rawGenres = json['genres'];
+    return ArtistBrowse(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Artist',
+      genres: rawGenres is List
+          ? rawGenres.map((item) => item.toString()).toList(growable: false)
+          : const [],
+      popularity: _readNullableInt(json['popularity']),
+      followers: _readNullableInt(json['followers']),
+      image: json['image']?.toString(),
+      spotifyUrl: json['spotifyUrl']?.toString(),
+      topTracks: _readList(json['topTracks'], Track.fromJson),
+      albums: _readList(json['albums'], AlbumSummary.fromJson),
+    );
+  }
+}
+
+class AlbumSummary {
+  const AlbumSummary({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.totalTracks,
+    this.releaseDate,
+    this.image,
+    this.spotifyUrl,
+  });
+
+  final String id;
+  final String name;
+  final String type;
+  final String? releaseDate;
+  final int totalTracks;
+  final String? image;
+  final String? spotifyUrl;
+
+  factory AlbumSummary.fromJson(Map<String, dynamic> json) {
+    return AlbumSummary(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Album',
+      type: json['type']?.toString() ?? 'album',
+      releaseDate: json['releaseDate']?.toString(),
+      totalTracks: _readInt(json['totalTracks']),
+      image: json['image']?.toString(),
+      spotifyUrl: json['spotifyUrl']?.toString(),
+    );
+  }
+}
+
+class AlbumBrowse {
+  const AlbumBrowse({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.totalTracks,
+    required this.artists,
+    required this.tracks,
+    this.releaseDate,
+    this.label,
+    this.popularity,
+    this.image,
+    this.spotifyUrl,
+  });
+
+  final String id;
+  final String name;
+  final String type;
+  final String? releaseDate;
+  final int totalTracks;
+  final String? label;
+  final int? popularity;
+  final String? image;
+  final String? spotifyUrl;
+  final List<ArtistSummary> artists;
+  final List<Track> tracks;
+
+  factory AlbumBrowse.fromJson(Map<String, dynamic> json) {
+    return AlbumBrowse(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Album',
+      type: json['type']?.toString() ?? 'album',
+      releaseDate: json['releaseDate']?.toString(),
+      totalTracks: _readInt(json['totalTracks']),
+      label: json['label']?.toString(),
+      popularity: _readNullableInt(json['popularity']),
+      image: json['image']?.toString(),
+      spotifyUrl: json['spotifyUrl']?.toString(),
+      artists: _readList(json['artists'], ArtistSummary.fromJson),
+      tracks: _readList(json['tracks'], Track.fromJson),
+    );
+  }
+}
+
+class ArtistSummary {
+  const ArtistSummary({required this.name, this.id});
+
+  final String? id;
+  final String name;
+
+  factory ArtistSummary.fromJson(Map<String, dynamic> json) {
+    return ArtistSummary(
+      id: json['id']?.toString(),
+      name: json['name']?.toString() ?? 'Artist',
+    );
+  }
+}
+
 List<T> _readList<T>(
   Object? value,
   T Function(Map<String, dynamic>) fromJson,
@@ -186,4 +360,11 @@ int _readInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.round();
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+int? _readNullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.round();
+  return int.tryParse(value.toString());
 }

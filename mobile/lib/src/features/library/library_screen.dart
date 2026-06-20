@@ -5,6 +5,7 @@ import 'package:noctune/src/features/shell/noctune_shell.dart';
 import 'package:noctune/src/features/library/playlist_detail_screen.dart';
 import 'package:noctune/src/shared/theme/noctune_theme.dart';
 import 'package:noctune/src/shared/widgets/async_panel.dart';
+import 'package:noctune/src/shared/widgets/track_artwork.dart';
 import 'package:noctune/src/shared/widgets/track_tile.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -45,10 +46,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ScreenFrame(
       eyebrow: 'Library',
       title: 'Saved for later.',
-      trailing: IconButton.filledTonal(
-        onPressed: _reload,
-        icon: const Icon(Icons.refresh),
-      ),
+      onRefresh: _refresh,
       child: FutureBuilder<_LibraryPayload>(
         future: _future,
         builder: (context, snapshot) {
@@ -108,6 +106,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     });
   }
 
+  Future<void> _refresh() async {
+    final next = _load();
+    setState(() => _future = next);
+    await next;
+  }
+
   void _openPlaylist(Playlist playlist) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -145,7 +149,7 @@ class _PlaylistRow extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.queue_music, color: noctuneGold),
+                _PlaylistCover(playlist: playlist),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -166,6 +170,39 @@ class _PlaylistRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PlaylistCover extends StatelessWidget {
+  const _PlaylistCover({required this.playlist});
+
+  final Playlist playlist;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = playlist.coverDataUrl;
+    if (cover != null && cover.isNotEmpty) {
+      return TrackArtwork(url: cover);
+    }
+    String? firstTrackCover;
+    for (final track in playlist.tracks) {
+      if (track.thumbnail.isNotEmpty) {
+        firstTrackCover = track.thumbnail;
+        break;
+      }
+    }
+    if (firstTrackCover != null) {
+      return TrackArtwork(url: firstTrackCover);
+    }
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: noctuneGold.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Icon(Icons.queue_music_rounded, color: noctuneGold),
     );
   }
 }
