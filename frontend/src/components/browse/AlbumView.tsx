@@ -3,6 +3,7 @@ import { ArrowLeft, Disc3, ExternalLink, Music2 } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 export function AlbumView({ albumId }: { albumId: string }) {
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
@@ -150,6 +151,10 @@ export function AlbumView({ albumId }: { albumId: string }) {
                 <span className="flex-shrink-0 font-mono text-xs text-muted">
                   {formatDuration(track.duration)}
                 </span>
+                <TrackActionButtons
+                  track={track}
+                  className="hidden sm:flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                />
               </div>
             );
           })}

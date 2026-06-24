@@ -15,13 +15,12 @@ import {
   SkipBack,
   SkipForward,
   Zap,
-  ListPlus,
   Loader2,
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { Visualizer } from './Visualizer';
-import { LikeButton } from './LikeButton';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
 import { api, type LyricsResult, type Track } from '../../utils/api';
 import { lyricsQueryOptions } from '../../hooks/useLyrics';
@@ -188,7 +187,6 @@ export function PlayerView() {
     queueIndex,
     shuffle,
     repeat,
-    addToQueue,
     togglePlay,
     prev,
     next,
@@ -291,15 +289,14 @@ export function PlayerView() {
                     {sourceMeta[currentTrack.source].label}
                   </span>
                 )}
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 text-xs text-soft px-2.5 py-1 rounded-full border border-base-600/40 bg-base-900/60 hover:text-white hover:border-base-500 transition-colors"
-                  onClick={() => addToQueue(currentTrack)}
-                >
-                  <ListPlus size={12} />
-                  Queue
-                </button>
-                <LikeButton track={currentTrack} className="rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60" />
+                <TrackActionButtons
+                  track={currentTrack}
+                  className="contents"
+                  buttonClassName="h-[30px] min-w-[42px] justify-center rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60 gap-1.5"
+                  iconSize={15}
+                  showQueue={false}
+                  showClearCache={false}
+                />
               </div>
 
               <div className="mt-6 flex items-center justify-center gap-3 md:hidden">

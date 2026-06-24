@@ -1,8 +1,11 @@
 import { create } from 'zustand';
-import type { CachedTrack, Track } from '../utils/api';
+import type { CachedTrack, PersonalMix, Track } from '../utils/api';
 import { api } from '../utils/api';
 
 export type RepeatMode = 'off' | 'all' | 'one';
+
+const AUTOQUEUE_TOP_UP_THRESHOLD = 5;
+const AUTOQUEUE_TOP_UP_LIMIT = 10;
 
 interface PlayerState {
   // ── Playback ────────────────────────────────────────────────────────────────
@@ -19,10 +22,12 @@ interface PlayerState {
   // ── Queue ───────────────────────────────────────────────────────────────────
   queue: Track[];
   queueIndex: number;     // index of currentTrack in queue
+  isAutoQueueLoading: boolean;
 
   // ── UI ──────────────────────────────────────────────────────────────────────
   activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album';
   activePlaylistId: string | null;
+  activePersonalMix: PersonalMix | null;
   activeArtistId: string | null;
   activeAlbumId: string | null;
   showTrackDetails: boolean;
@@ -41,6 +46,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   addToQueue: (track: Track, source?: Track['queueSource']) => void;
+  topUpQueue: () => Promise<void>;
   removeFromQueue: (index: number) => void;
   removePlayedTracks: () => void;
   shuffleQueue: () => void;
@@ -51,6 +57,7 @@ interface PlayerState {
   toggleTrackDetails: () => void;
   toggleShortcutsHelp: () => void;
   setView: (view: PlayerState['activeView'], id?: string) => void;
+  openPersonalMix: (mix: PersonalMix) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
 }
@@ -67,8 +74,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   repeat: 'off',
   queue: [],
   queueIndex: -1,
+  isAutoQueueLoading: false,
   activeView: 'home',
   activePlaylistId: null,
+  activePersonalMix: null,
   activeArtistId: null,
   activeAlbumId: null,
   showTrackDetails: true,
@@ -217,6 +226,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   togglePlay: () => set(s => ({ isPlaying: !s.isPlaying })),
 
   next: async () => {
+    await get().topUpQueue();
     const { queue, queueIndex, shuffle, repeat } = get();
     if (queue.length === 0) return;
     let nextIdx: number;
@@ -286,6 +296,58 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   addToQueue: (track, source = 'manual') =>
     set(s => ({ queue: [...s.queue, { ...track, queueSource: source }] })),
+
+  topUpQueue: async () => {
+    const state = get();
+    if (state.isAutoQueueLoading || !state.currentTrack || state.queue.length === 0 || state.queueIndex < 0) {
+      return;
+    }
+
+    const upcomingCount = state.queue.length - state.queueIndex - 1;
+    if (upcomingCount > AUTOQUEUE_TOP_UP_THRESHOLD) {
+      return;
+    }
+
+    const seed = state.queue[state.queueIndex] ?? state.currentTrack;
+    const existingIds = new Set(
+      state.queue
+        .flatMap((track) => [track.id, track.spotifyId ?? '', track.youtubeId ?? ''])
+        .filter(Boolean)
+    );
+
+    set({ isAutoQueueLoading: true });
+    try {
+      const excludeIds = [...existingIds];
+      let candidates = (await api.recommend(seed, excludeIds, AUTOQUEUE_TOP_UP_LIMIT)).tracks;
+
+      if (candidates.length === 0) {
+        const personal = await api.nightlyMixes(1, AUTOQUEUE_TOP_UP_LIMIT);
+        candidates = personal.mixes[0]?.tracks ?? [];
+      }
+
+      const additions = candidates
+        .filter((track) => !existingIds.has(track.id) && !existingIds.has(track.spotifyId ?? '') && !existingIds.has(track.youtubeId ?? ''))
+        .slice(0, AUTOQUEUE_TOP_UP_LIMIT)
+        .map((track) => ({ ...track, queueSource: 'autoqueue' as const }));
+
+      if (additions.length === 0) return;
+
+      set((current) => ({
+        queue: [...current.queue, ...additions],
+      }));
+
+      api.prefetchTracks(additions.slice(0, 5)).catch(() => {});
+      console.info('[player] autoqueue top-up done', {
+        seed: `${seed.title} - ${seed.artist}`,
+        added: additions.length,
+        next: additions.slice(0, 5).map((track) => `${track.title} - ${track.artist}`),
+      });
+    } catch (err) {
+      console.warn('[player] autoqueue top-up failed:', err);
+    } finally {
+      set({ isAutoQueueLoading: false });
+    }
+  },
 
   removeFromQueue: (index) =>
     set((s) => {
@@ -381,11 +443,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleShortcutsHelp: () => set((s) => ({ showShortcutsHelp: !s.showShortcutsHelp })),
 
   setView: (view, id) =>
-    set({
+    set((state) => ({
       activeView: view,
       activePlaylistId: view === 'playlist' ? (id ?? null) : null,
+      activePersonalMix:
+        view === 'playlist' && id && state.activePersonalMix && `nightly:${state.activePersonalMix.id}` === id
+          ? state.activePersonalMix
+          : null,
       activeArtistId: view === 'artist' ? (id ?? null) : null,
       activeAlbumId: view === 'album' ? (id ?? null) : null,
+    })),
+
+  openPersonalMix: (mix) =>
+    set({
+      activeView: 'playlist',
+      activePlaylistId: `nightly:${mix.id}`,
+      activePersonalMix: mix,
+      activeArtistId: null,
+      activeAlbumId: null,
     }),
 }));
 

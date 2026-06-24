@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, HardDrive, ListPlus, Music2, X } from 'lucide-react';
+import { Clock3, Music2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
-import { LikeButton } from '../player/LikeButton';
-import { useClearTrackCache } from '../../hooks/useClearTrackCache';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 function playedLabel(value?: number): string {
   if (!value) return 'Unknown';
@@ -21,9 +20,8 @@ function playedLabel(value?: number): string {
 }
 
 export function HistoryView() {
-  const { currentTrack, isPlaying, playTrack, addToQueue } = usePlayerStore();
+  const { currentTrack, isPlaying, playTrack } = usePlayerStore();
   const qc = useQueryClient();
-  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
     queryFn: api.history,
@@ -48,7 +46,6 @@ export function HistoryView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {clearTrackCacheModal}
       <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <p className="section-label text-accent">History</p>
@@ -129,42 +126,24 @@ export function HistoryView() {
               </span>
 
               <div className="flex flex-shrink-0 items-center gap-1">
-                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      addToQueue(track, 'recommendation');
-                    }}
-                    title="Add to queue"
-                  >
-                    <ListPlus size={14} />
-                  </button>
-
-                  <LikeButton track={track} className="p-1.5" />
-
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      requestClearTrackCache(track);
-                    }}
-                    title="Clear track cache"
-                  >
-                    <HardDrive size={14} />
-                  </button>
-
-                  <button
-                    className="btn-ghost p-1.5 text-muted hover:text-red-400"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveHistoryItem(track);
-                    }}
-                    title="Remove from history"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+                <TrackActionButtons
+                  track={track}
+                  queueSource="recommendation"
+                  className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  trailingActions={
+                    <button
+                      type="button"
+                      className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveHistoryItem(track);
+                      }}
+                      title="Remove from history"
+                    >
+                      <X size={14} />
+                    </button>
+                  }
+                />
 
                 <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
                   {formatDuration(track.duration)}

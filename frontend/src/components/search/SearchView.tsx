@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Download, HardDrive, ListPlus, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Download, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
 import { api, apiUrl, type DebugMatchResult, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
-import { LikeButton } from '../player/LikeButton';
-import { useClearTrackCache } from '../../hooks/useClearTrackCache';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -42,9 +41,7 @@ export function SearchView() {
   const [debugResult, setDebugResult] = useState<{ source: Track; result: DebugMatchResult } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const playlistUrl = useMemo(() => isPlaylistUrl(query), [query]);
-  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
-
-  const { playTrack, currentTrack, isPlaying, addToQueue, setView } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
   useEffect(() => {
     apiUrl('/settings')
@@ -164,7 +161,6 @@ export function SearchView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {clearTrackCacheModal}
       <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
         <div className="flex items-end justify-between gap-4 mb-5">
           <div>
@@ -421,44 +417,29 @@ export function SearchView() {
               </div>
 
               <div className="flex flex-shrink-0 items-center gap-1">
-                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      addToQueue(track);
-                    }}
-                    title="Add to queue"
-                  >
-                    <ListPlus size={14} />
-                  </button>
-
-                  <LikeButton track={track} className="p-1.5" />
-
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      requestClearTrackCache(track);
-                    }}
-                    title="Clear track cache"
-                  >
-                    <HardDrive size={14} />
-                  </button>
-
-                  {debugSearch && track.spotifyId && (
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleDebugMatch(track);
-                    }}
-                    title="Debug YouTube match"
-                  >
-                    {debugBusyId === track.id ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-                  </button>
-                  )}
-                </div>
+                <TrackActionButtons
+                  track={track}
+                  className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  trailingActions={
+                    debugSearch && track.spotifyId ? (
+                      <button
+                        type="button"
+                        className="btn-ghost p-1.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDebugMatch(track);
+                        }}
+                        title="Debug YouTube match"
+                      >
+                        {debugBusyId === track.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Wrench size={14} />
+                        )}
+                      </button>
+                    ) : null
+                  }
+                />
 
                 <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
                   {formatDuration(track.duration)}

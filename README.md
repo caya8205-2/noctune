@@ -15,6 +15,7 @@ Noctune is a local-first desktop music player built for fast local playback, cle
 [![SQLite](https://img.shields.io/badge/SQLite-Local-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![YouTube.js](https://img.shields.io/badge/YouTube.js-Resolver-FF0000)](https://github.com/LuanRT/YouTube.js)
 [![Spotify Web API](https://img.shields.io/badge/Spotify_Web_API-Metadata-1DB954?logo=spotify&logoColor=white)](https://developer.spotify.com/documentation/web-api)
+[![Last.fm API](https://img.shields.io/badge/Last.fm_API-Personalized_mixes-D51007?logo=lastdotfm&logoColor=white)](https://www.last.fm/api)
 [![LRCLIB](https://img.shields.io/badge/LRCLIB-Lyrics-9B5CFF)](https://lrclib.net/)
 [![Kuroshiro](https://img.shields.io/badge/Kuroshiro-Romaji_lyrics-F7B733)](https://github.com/hexenq/kuroshiro)
 [![MIT](https://img.shields.io/badge/License-MIT-white)](./LICENSE)
@@ -23,7 +24,7 @@ Noctune is a local-first desktop music player built for fast local playback, cle
 
 [![Repository traffic](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 
-Noctune uses Spotify for metadata and discovery, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, and desktop update checks through GitHub Releases.
+Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.
 
 ## Repository Insights
 
@@ -37,6 +38,8 @@ The card highlights repository views and clones from the public traffic snapshot
 
 - **Spotify metadata search** for clean titles, artists, duration, artwork, albums, and release discovery.
 - **Direct YouTube search** for users who want raw YouTube-style results.
+- **Nightly Mixes** generated from local listening history, top tracks, and optional Last.fm similar-track signals, cached for several hours so Home stays fast and API-friendly.
+- **Smarter autoqueue** that can top itself up near the end of the queue and uses recommendation signals instead of stopping after a short fixed list.
 - **Local YouTube resolver** powered primarily by `youtubei.js`, with `yt-dlp` kept as a fallback path.
 - **Smart Spotify-to-YouTube matching** with scoring for official uploads, Topic/VEVO channels, duration accuracy, and penalties for reactions, live/tour versions, piano/drum/instrumental covers, karaoke, nightcore, sped-up/slowed edits, and unrelated videos.
 - **Queue-aware playback** where Search starts an autoqueue, while Playlist playback keeps the full playlist order.
@@ -60,11 +63,13 @@ Search
   -> Play selected track
   -> Resolve playable YouTube audio
   -> Stream through local backend proxy
-  -> Prefetch next queue candidates
+  -> Prefetch next queue candidates and recommendations
   -> Cache metadata, mappings, lyrics, and audio files locally
 ```
 
 For Spotify-backed tracks, Noctune keeps the Spotify metadata visible in the UI while mapping the track to a playable YouTube stream behind the scenes.
+
+For personalized recommendations, Noctune blends local playback history with Last.fm similar-track results when `LAST_FM_KEY` is configured. The generated Nightly Mix cards are cached on the client for several hours, so opening Home does not repeatedly call the recommendation API.
 
 The desktop frontend talks to the local backend through a small port resolver. It prefers the normal backend port, but can follow a compatible backend sidecar when that port is already occupied.
 
@@ -94,6 +99,7 @@ Noctune ranks YouTube candidates with lightweight heuristics:
 | Queue workers | p-queue |
 | Local database | SQLite via better-sqlite3 |
 | Lyrics | LRCLIB, Kuroshiro, Kuromoji |
+| Recommendations | Local playback history, Last.fm API |
 | External metadata | Spotify Web API, GitHub Releases API |
 | Runtime cache | SQLite, JSON files, and audio files in local data storage |
 
@@ -106,6 +112,8 @@ npm install
 ```
 
 Spotify credentials are optional but recommended for metadata search, Spotify playlist import, album and artist discovery, and new releases. Add your Client ID and Client Secret from the app Settings screen.
+
+Last.fm credentials are optional but recommended for better Nightly Mixes and autoqueue recommendations. Set `LAST_FM_KEY` in `.env` to enable Last.fm similar-track lookup. `LAST_FM_SECRET` is included in `.env.example` for completeness, but current recommendation lookup only needs the API key.
 
 `yt-dlp` is optional for the fallback resolver. The main resolver path uses `youtubei.js`, so Noctune does not require users to install `yt-dlp` for the primary playback path.
 
@@ -164,12 +172,13 @@ Noctune stores runtime data locally and ignores it from git:
 - `noctune.db` - local playlists and liked songs
 - `audio-cache/` - optional cached audio files
 - lyrics cache - local LRCLIB lookup results
+- Nightly Mix cache - frontend cache for generated personalized mixes
 
 Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
 
 ## Repository Description
 
-Local-first desktop music player with Spotify metadata, YouTube stream resolving, synced and Romaji lyrics, smart queueing, local playlists, album and artist browsing, adaptive visualizer, GitHub Releases update checks, and cache-first playback.
+Local-first desktop music player with Spotify metadata, YouTube stream resolving, Last.fm-assisted Nightly Mixes, synced and Romaji lyrics, smart queueing, local playlists, album and artist browsing, adaptive visualizer, GitHub Releases update checks, and cache-first playback.
 
 ## Changelog
 

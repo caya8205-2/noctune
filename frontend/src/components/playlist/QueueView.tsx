@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, HardDrive, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
-import { LikeButton } from '../player/LikeButton';
 import { api, type Track } from '../../utils/api';
-import { useClearTrackCache } from '../../hooks/useClearTrackCache';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 function queueSourceLabel(source: Track['queueSource']): string {
   if (source === 'manual') return 'Manual';
@@ -18,6 +17,73 @@ function queueSourceLabel(source: Track['queueSource']): string {
 
 function isMobileViewport(): boolean {
   return window.matchMedia('(max-width: 639px)').matches;
+}
+
+function QueueTrackTitle({
+  track,
+  isActive,
+  setView,
+}: {
+  track: Track;
+  isActive: boolean;
+  setView: ReturnType<typeof usePlayerStore.getState>['setView'];
+}) {
+  const needsSpotifyNavigation = Boolean(track.spotifyId && (!track.albumId || !track.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track.spotifyId],
+    queryFn: () => api.spotifyMetadata(track.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const albumViewId = track.albumId ?? spotifyMetadata?.album.id;
+  const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id;
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-start">
+      {albumViewId ? (
+        <button
+          type="button"
+          className={clsx(
+            'max-w-full truncate text-left text-sm transition-colors hover:text-accent',
+            isActive ? 'font-medium text-accent' : track.playbackError ? 'text-red-300' : 'text-white'
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('album', albumViewId);
+          }}
+          title={`Go to album: ${track.album ?? spotifyMetadata?.album.name ?? track.title}`}
+        >
+          {track.title}
+        </button>
+      ) : (
+        <p
+          className={clsx(
+            'max-w-full truncate text-sm',
+            isActive ? 'font-medium text-accent' : track.playbackError ? 'text-red-300' : 'text-white'
+          )}
+        >
+          {track.title}
+        </p>
+      )}
+      {track.playbackError ? (
+        <p className="max-w-full truncate text-xs text-muted">{track.playbackError}</p>
+      ) : artistViewId ? (
+        <button
+          type="button"
+          className="mt-0.5 max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('artist', artistViewId);
+          }}
+          title={`Go to artist: ${track.artist}`}
+        >
+          {track.artist}
+        </button>
+      ) : (
+        <p className="max-w-full truncate text-xs text-muted">{track.artist}</p>
+      )}
+    </div>
+  );
 }
 
 export function QueueView() {
@@ -33,10 +99,10 @@ export function QueueView() {
     reorderQueue,
     removeFromQueue,
     dismissPlaybackNotice,
+    setView,
   } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [hideFailed, setHideFailed] = useState(false);
-  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
   const { data: audioCache } = useQuery({
     queryKey: ['audio-cache-status', queue.map((track) => track.id).join('|')],
     queryFn: () => api.audioCacheStatus(queue),
@@ -61,7 +127,6 @@ export function QueueView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {clearTrackCacheModal}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4">
         <div>
           <p className="section-label text-accent">Queue</p>
@@ -153,19 +218,7 @@ export function QueueView() {
                 className="w-9 h-9 mr-3 rounded-lg object-cover flex-shrink-0"
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
-              <div className="flex-1 min-w-0">
-                <p
-                  className={clsx(
-                    'text-sm truncate',
-                    isActive ? 'text-accent font-medium' : track.playbackError ? 'text-red-300' : 'text-white'
-                  )}
-                >
-                  {track.title}
-                </p>
-                <p className="text-xs text-muted truncate">
-                  {track.playbackError ? track.playbackError : track.artist}
-                </p>
-              </div>
+              <QueueTrackTitle track={track} isActive={isActive} setView={setView} />
               {track.playbackError ? (
                 <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
                   <AlertTriangle size={10} className="mr-1" />
@@ -186,29 +239,25 @@ export function QueueView() {
               </span>
               )}
               <div className="flex flex-shrink-0 items-center gap-1">
-                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <LikeButton track={track} className="p-1.5" />
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      requestClearTrackCache(track);
-                    }}
-                    title="Clear track cache"
-                  >
-                    <HardDrive size={13} />
-                  </button>
-                  <button
-                    className="btn-ghost p-1.5 text-muted hover:text-red-400"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeFromQueue(i);
-                    }}
-                    title="Remove from queue"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
+                <TrackActionButtons
+                  track={track}
+                  className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  iconSize={13}
+                  showQueue={false}
+                  trailingActions={
+                    <button
+                      type="button"
+                      className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeFromQueue(i);
+                      }}
+                      title="Remove from queue"
+                    >
+                      <X size={13} />
+                    </button>
+                  }
+                />
                 <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
                   {formatDuration(track.duration)}
                 </span>

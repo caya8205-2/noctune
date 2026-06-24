@@ -42,7 +42,6 @@ const positiveTitleKeywords = [
   'lyric video',
   'mv',
   'original',
-  'audio',
 ];
 
 const positiveChannelKeywords = ['official', 'vevo', 'topic'];

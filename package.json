@@ -1,19 +1,19 @@
 {
   "name": "noctune",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "workspaces": [
     "frontend",
     "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "node scripts/dev-server.mjs",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:backend:lan": "powershell -NoProfile -Command \"$env:HOST='0.0.0.0'; npm run dev --workspace=backend\"",
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
-    "tauri": "npm run build --workspace=backend && concurrently \"npm run dev:backend\" \"tauri dev\"",
+    "tauri": "node scripts/tauri-dev.mjs",
     "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build",
     "version:sync": "node scripts/sync-version.js"
   },

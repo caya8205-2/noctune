@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { LikeButton } from './LikeButton';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 export function PlayerBar() {
   const seekDragging = useRef(false);
@@ -242,7 +243,7 @@ export function PlayerBar() {
         </div>
 
         {/* Time + Volume */}
-        <div className="hidden w-72 items-center justify-end gap-3 sm:flex">
+        <div className="hidden w-80 items-center justify-end gap-3 sm:flex">
           <span className="w-28 whitespace-nowrap text-right font-mono text-xs tabular-nums text-muted">
             {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>
@@ -256,6 +257,18 @@ export function PlayerBar() {
 
           {currentTrack && <LikeButton track={currentTrack} />}
 
+          {currentTrack && (
+            <TrackActionButtons
+              track={currentTrack}
+              className="contents"
+              buttonClassName="p-1.5"
+              iconSize={16}
+              showQueue={false}
+              showLike={false}
+              showClearCache={false}
+            />
+          )}
+
           <button
             onClick={toggleTrackDetails}
             className={clsx('btn-ghost', showTrackDetails && 'text-accent')}
@@ -265,7 +278,7 @@ export function PlayerBar() {
           </button>
 
           <div
-            className="group/vol relative flex h-4 w-24 cursor-pointer items-center"
+            className="group/vol relative flex h-4 w-24 flex-shrink-0 cursor-pointer items-center"
             onMouseDown={handleVolDown}
           >
             <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/10" />

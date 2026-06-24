@@ -98,6 +98,8 @@ export const api = {
 
   home: () =>
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[]; newReleases: Track[] }>('/home'),
+  nightlyMixes: (limit = 4, tracks = 8) =>
+    request<{ mixes: PersonalMix[] }>(`/home/nightly-mix?limit=${limit}&tracks=${tracks}`),
   history: () =>
     request<{ tracks: CachedTrack[] }>('/history'),
   clearHistory: () =>
@@ -253,6 +255,15 @@ export interface Playlist {
   updatedAt: number;
   trackIds: string[];
   tracks?: Track[];
+}
+
+export interface PersonalMix {
+  id: string;
+  name: string;
+  description: string;
+  cover: string;
+  seed: Track;
+  tracks: Track[];
 }
 
 export interface LyricLine {

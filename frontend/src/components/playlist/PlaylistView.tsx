@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, ListPlus, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
+import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { clsx } from 'clsx';
-import { LikeButton } from '../player/LikeButton';
-import { useClearTrackCache } from '../../hooks/useClearTrackCache';
+import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
 const CROP_VIEWPORT_SIZE = 320;
@@ -284,17 +283,24 @@ export function PlaylistView() {
   const [trackFilter, setTrackFilter] = useState('');
   const [sortMode, setSortMode] = useState<PlaylistSort>('custom');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { activePlaylistId, playTrack, currentTrack, addToQueue, setView } = usePlayerStore();
-  const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
+  const { activePlaylistId, activePersonalMix, playTrack, currentTrack, setView } = usePlayerStore();
   const qc = useQueryClient();
+  const hasVirtualPlaylistId = Boolean(activePlaylistId?.startsWith('nightly:'));
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', activePlaylistId],
     queryFn: () => api.getPlaylist(activePlaylistId!),
-    enabled: Boolean(activePlaylistId),
+    enabled: Boolean(activePlaylistId) && !activePersonalMix && !hasVirtualPlaylistId,
   });
 
-  const tracks = playlist?.tracks ?? [];
+  const isNightlyMix = Boolean(activePersonalMix);
+  const tracks = activePersonalMix?.tracks ?? playlist?.tracks ?? [];
   const isLikedPlaylist = activePlaylistId === LIKED_PLAYLIST_ID;
+  const playlistName = activePersonalMix?.name ?? playlist?.name ?? 'Playlist';
+  const playlistCover = activePersonalMix?.cover ?? playlist?.coverDataUrl ?? '';
+  const playlistLabel = isNightlyMix ? 'Nightly Mix' : 'Playlist';
+  const queueSource = isNightlyMix ? 'recommendation' : 'playlist';
+  const isPlaylistLoading = !isNightlyMix && isLoading;
+  const canEditPlaylist = !isLikedPlaylist && !isNightlyMix;
   const visibleTracks = tracks
     .map((track, originalIndex) => ({ track, originalIndex }))
     .filter(({ track }) => {
@@ -310,10 +316,10 @@ export function PlaylistView() {
     });
 
   useEffect(() => {
-    setDraftName(playlist?.name ?? '');
+    setDraftName(playlistName);
     setTrackFilter('');
     setSortMode('custom');
-  }, [playlist?.id, playlist?.name]);
+  }, [activePlaylistId, playlistName]);
 
   useEffect(() => {
     return () => {
@@ -323,17 +329,18 @@ export function PlaylistView() {
 
   function handlePlay(track: Track) {
     playTrack(
-      { ...track, queueSource: 'playlist' },
-      tracks.map((playlistTrack) => ({ ...playlistTrack, queueSource: 'playlist' })),
-      { queueSource: 'playlist' }
+      { ...track, queueSource },
+      tracks.map((playlistTrack) => ({ ...playlistTrack, queueSource })),
+      { queueSource }
     );
   }
 
   function handlePlayAll() {
     if (tracks.length === 0) return;
     playTrack(
-      { ...tracks[0], queueSource: 'playlist' },
-      tracks.map((track) => ({ ...track, queueSource: 'playlist' }))
+      { ...tracks[0], queueSource },
+      tracks.map((track) => ({ ...track, queueSource })),
+      { queueSource }
     );
   }
 
@@ -357,7 +364,7 @@ export function PlaylistView() {
 
   async function handleReorder(fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return;
-    if (!activePlaylistId) return;
+    if (!activePlaylistId || isNightlyMix) return;
     try {
       await api.reorderPlaylistTracks(activePlaylistId, fromIndex, toIndex);
       qc.invalidateQueries({ queryKey: ['playlist', activePlaylistId] });
@@ -368,7 +375,7 @@ export function PlaylistView() {
   }
 
   async function handleRemove(track: Track) {
-    if (!activePlaylistId || isLikedPlaylist) return;
+    if (!activePlaylistId || isLikedPlaylist || isNightlyMix) return;
     try {
       await api.removeTrack(activePlaylistId, playlistTrackId(track));
       qc.invalidateQueries({ queryKey: ['playlist', activePlaylistId] });
@@ -380,7 +387,7 @@ export function PlaylistView() {
 
   async function handleRename(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activePlaylistId || isLikedPlaylist || !playlist) return;
+    if (!activePlaylistId || isLikedPlaylist || isNightlyMix || !playlist) return;
     const name = draftName.trim();
     if (!name || name === playlist.name) return;
     setSavingDetails(true);
@@ -399,7 +406,7 @@ export function PlaylistView() {
   async function handleCoverFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !activePlaylistId || isLikedPlaylist) return;
+    if (!file || !activePlaylistId || isLikedPlaylist || isNightlyMix) return;
     if (!file.type.startsWith('image/')) return;
     try {
       const source = await readCropSource(file);
@@ -413,7 +420,7 @@ export function PlaylistView() {
   }
 
   async function handleApplyCover(image: HTMLImageElement, crop: { x: number; y: number; zoom: number }) {
-    if (!activePlaylistId || isLikedPlaylist || !cropSource) return;
+    if (!activePlaylistId || isLikedPlaylist || isNightlyMix || !cropSource) return;
     setSavingDetails(true);
     try {
       const coverDataUrl = createCoverDataUrl(image, cropSource, crop);
@@ -431,7 +438,7 @@ export function PlaylistView() {
   }
 
   async function handleRemoveCover() {
-    if (!activePlaylistId || isLikedPlaylist) return;
+    if (!activePlaylistId || isLikedPlaylist || isNightlyMix) return;
     setSavingDetails(true);
     try {
       await api.updatePlaylist(activePlaylistId, { coverDataUrl: null });
@@ -456,7 +463,6 @@ export function PlaylistView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {clearTrackCacheModal}
       {cropSource && (
         <CoverCropModal
           source={cropSource}
@@ -471,8 +477,8 @@ export function PlaylistView() {
       <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="flex items-end gap-5 min-w-0">
           <div className="w-28 h-28 rounded-xl bg-base-800 border border-base-600/60 flex items-center justify-center text-muted overflow-hidden flex-shrink-0">
-            {playlist?.coverDataUrl ? (
-              <img src={playlist.coverDataUrl} alt="" className="w-full h-full object-cover" />
+            {playlistCover ? (
+              <img src={playlistCover} alt="" className="w-full h-full object-cover" />
             ) : isLikedPlaylist ? (
               <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
             ) : (
@@ -480,8 +486,8 @@ export function PlaylistView() {
             )}
           </div>
           <div className="min-w-0">
-            <p className="section-label text-accent">Playlist</p>
-            {editing && !isLikedPlaylist ? (
+            <p className="section-label text-accent">{playlistLabel}</p>
+            {editing && canEditPlaylist ? (
               <form onSubmit={handleRename} className="mt-2 flex items-center gap-2">
                 <input
                   value={draftName}
@@ -500,13 +506,13 @@ export function PlaylistView() {
               </form>
             ) : (
               <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2 truncate">
-                {playlist?.name ?? 'Playlist'}
+                {playlistName}
               </h1>
             )}
             <p className="text-xs text-muted mt-2">
-              {isLoading ? 'Loading tracks' : tracks.length + ' tracks'}
+              {isPlaylistLoading ? 'Loading tracks' : tracks.length + ' tracks'}
             </p>
-            {editing && !isLikedPlaylist && (
+            {editing && canEditPlaylist && (
               <div className="flex items-center gap-2 mt-4">
                 <input
                   ref={fileInputRef}
@@ -524,7 +530,7 @@ export function PlaylistView() {
                   <ImagePlus size={14} />
                   Upload cover
                 </button>
-                {playlist?.coverDataUrl && (
+                {playlistCover && (
                   <button
                     type="button"
                     onClick={handleRemoveCover}
@@ -547,19 +553,21 @@ export function PlaylistView() {
             className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
-            Cache playlist
+            {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
           </button>
-          <button
-            type="button"
-            onClick={() => setEditing((value) => !value)}
-            className={clsx(
-              'btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40',
-              editing && 'text-accent border-accent/30 bg-accent/10'
-            )}
-          >
-            {editing ? <X size={14} /> : <Pencil size={14} />}
-            {editing ? 'Done' : 'Edit playlist'}
-          </button>
+          {canEditPlaylist && (
+            <button
+              type="button"
+              onClick={() => setEditing((value) => !value)}
+              className={clsx(
+                'btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40',
+                editing && 'text-accent border-accent/30 bg-accent/10'
+              )}
+            >
+              {editing ? <X size={14} /> : <Pencil size={14} />}
+              {editing ? 'Done' : 'Edit playlist'}
+            </button>
+          )}
           <button
             type="button"
             onClick={handlePlayAll}
@@ -581,7 +589,7 @@ export function PlaylistView() {
       )}
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-6">
-        {!isLoading && tracks.length === 0 && (
+        {!isPlaylistLoading && tracks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
               <Music2 size={28} strokeWidth={1.2} />
@@ -671,41 +679,26 @@ export function PlaylistView() {
                 <PlaylistTrackTitle track={track} isActive={isActive} setView={setView} />
               </div>
               <div className="flex flex-shrink-0 items-center gap-1">
-                <div className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      addToQueue(track, 'playlist');
-                    }}
-                    title="Add to queue"
-                  >
-                    <ListPlus size={14} />
-                  </button>
-                  <LikeButton track={track} className="p-1.5" />
-                  <button
-                    className="btn-ghost p-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      requestClearTrackCache(track);
-                    }}
-                    title="Clear track cache"
-                  >
-                    <HardDrive size={14} />
-                  </button>
-                  {editing && !isLikedPlaylist && (
-                    <button
-                      className="btn-ghost p-1.5 text-muted hover:text-red-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemove(track);
-                      }}
-                      title="Remove from playlist"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
+                <TrackActionButtons
+                  track={track}
+                  queueSource={queueSource}
+                  className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  trailingActions={
+                    editing && canEditPlaylist ? (
+                      <button
+                        type="button"
+                        className="btn-ghost p-1.5 text-muted hover:text-red-400"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemove(track);
+                        }}
+                        title="Remove from playlist"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : null
+                  }
+                />
                 <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">
                   {formatDuration(track.duration)}
                 </span>
