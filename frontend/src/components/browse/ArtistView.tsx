@@ -10,6 +10,65 @@ function compactNumber(n: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n);
 }
 
+function ArtistTrackText({
+  track,
+  isActive,
+  setView,
+}: {
+  track: Track;
+  isActive: boolean;
+  setView: ReturnType<typeof usePlayerStore.getState>['setView'];
+}) {
+  const needsSpotifyNavigation = Boolean(track.spotifyId && !track.albumId);
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track.spotifyId],
+    queryFn: () => api.spotifyMetadata(track.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const albumViewId = track.albumId ?? spotifyMetadata?.album.id;
+  const albumName = track.album ?? spotifyMetadata?.album.name;
+
+  return (
+    <div className="min-w-0 flex-1">
+      {albumViewId ? (
+        <button
+          type="button"
+          className={`block max-w-full truncate text-left text-sm transition-colors hover:text-accent ${
+            isActive ? 'font-medium text-accent' : 'text-white'
+          }`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('album', albumViewId);
+          }}
+          title={`Go to album: ${albumName ?? track.title}`}
+        >
+          {track.title}
+        </button>
+      ) : (
+        <p className={`truncate text-sm ${isActive ? 'font-medium text-accent' : 'text-white'}`}>
+          {track.title}
+        </p>
+      )}
+      {albumName && albumViewId ? (
+        <button
+          type="button"
+          className="mt-0.5 block max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('album', albumViewId);
+          }}
+          title={`Go to album: ${albumName}`}
+        >
+          {albumName}
+        </button>
+      ) : albumName ? (
+        <p className="truncate text-xs text-muted">{albumName}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ArtistView({ artistId }: { artistId: string }) {
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
@@ -137,32 +196,16 @@ export function ArtistView({ artistId }: { artistId: string }) {
                     className="h-9 w-9 flex-shrink-0 rounded-md object-cover"
                     onError={e => (e.currentTarget.style.display = 'none')}
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className={`truncate text-sm ${isActive ? 'font-medium text-accent' : 'text-white'}`}>
-                      {track.title}
-                    </p>
-                    {/* Album name clickable */}
-                    {track.album && (
-                      <button
-                        className="truncate text-xs text-muted hover:text-accent transition-colors"
-                        onClick={e => {
-                          e.stopPropagation();
-                          if ((track as Track & { albumId?: string }).albumId) {
-                            usePlayerStore.getState().setView('album' as never, (track as Track & { albumId?: string }).albumId);
-                          }
-                        }}
-                      >
-                        {track.album}
-                      </button>
-                    )}
+                  <ArtistTrackText track={track} isActive={isActive} setView={setView} />
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <TrackActionButtons
+                      track={track}
+                      className="hidden sm:flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
+                    <span className="block w-12 flex-shrink-0 text-right font-mono text-xs tabular-nums text-muted">
+                      {formatDuration(track.duration)}
+                    </span>
                   </div>
-                  <span className="flex-shrink-0 font-mono text-xs text-muted">
-                    {formatDuration(track.duration)}
-                  </span>
-                  <TrackActionButtons
-                    track={track}
-                    className="hidden sm:flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
                 </div>
               );
             })}

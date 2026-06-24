@@ -70,6 +70,8 @@ pub fn run() {
                         "DISCORD_RPC_SMALL_IMAGE_KEY",
                         option_env!("DISCORD_RPC_SMALL_IMAGE_KEY").unwrap_or(""),
                     )
+                    .env("LAST_FM_KEY", option_env!("LAST_FM_KEY").unwrap_or(""))
+                    .env("LAST_FM_SECRET", option_env!("LAST_FM_SECRET").unwrap_or(""))
                     .spawn()
                     .expect("failed to spawn noctune-backend sidecar");
 

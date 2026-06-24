@@ -5,6 +5,62 @@ import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 
+function AlbumTrackText({
+  track,
+  albumId,
+  fallbackArtistId,
+  isActive,
+  setView,
+}: {
+  track: Track;
+  albumId: string;
+  fallbackArtistId?: string;
+  isActive: boolean;
+  setView: ReturnType<typeof usePlayerStore.getState>['setView'];
+}) {
+  const needsSpotifyNavigation = Boolean(track.spotifyId && !track.artistId);
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track.spotifyId],
+    queryFn: () => api.spotifyMetadata(track.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+  const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id ?? fallbackArtistId;
+
+  return (
+    <div className="min-w-0 flex-1">
+      <button
+        type="button"
+        className={`block max-w-full truncate text-left text-sm transition-colors hover:text-accent ${
+          isActive ? 'font-medium text-accent' : 'text-white'
+        }`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setView('album', albumId);
+        }}
+        title="Go to album"
+      >
+        {track.title}
+      </button>
+      {artistViewId ? (
+        <button
+          type="button"
+          className="mt-0.5 block max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
+          onClick={(event) => {
+            event.stopPropagation();
+            setView('artist', artistViewId);
+          }}
+          title={`Go to artist: ${track.artist}`}
+        >
+          {track.artist}
+        </button>
+      ) : (
+        <p className="truncate text-xs text-muted">{track.artist}</p>
+      )}
+    </div>
+  );
+}
+
 export function AlbumView({ albumId }: { albumId: string }) {
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
@@ -142,19 +198,22 @@ export function AlbumView({ albumId }: { albumId: string }) {
                     : track.trackNumber
                   }
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`truncate text-sm ${isActive ? 'font-medium text-accent' : 'text-white'}`}>
-                    {track.title}
-                  </p>
-                  <p className="truncate text-xs text-muted">{track.artist}</p>
-                </div>
-                <span className="flex-shrink-0 font-mono text-xs text-muted">
-                  {formatDuration(track.duration)}
-                </span>
-                <TrackActionButtons
+                <AlbumTrackText
                   track={track}
-                  className="hidden sm:flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  albumId={albumId}
+                  fallbackArtistId={data.artists[0]?.id}
+                  isActive={isActive}
+                  setView={setView}
                 />
+                <div className="flex flex-shrink-0 items-center gap-1">
+                  <TrackActionButtons
+                    track={track}
+                    className="hidden sm:flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                  <span className="block w-12 flex-shrink-0 text-right font-mono text-xs tabular-nums text-muted">
+                    {formatDuration(track.duration)}
+                  </span>
+                </div>
               </div>
             );
           })}

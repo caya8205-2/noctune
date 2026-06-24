@@ -27,6 +27,8 @@ fn load_dotenv(path: &Path) {
                 | "DISCORD_RPC_ENABLED"
                 | "DISCORD_RPC_LARGE_IMAGE_KEY"
                 | "DISCORD_RPC_SMALL_IMAGE_KEY"
+                | "LAST_FM_KEY"
+                | "LAST_FM_SECRET"
         ) {
             continue;
         }
