@@ -39,11 +39,16 @@ function buildStatus() {
 }
 
 function resolveFrontendDir() {
+  const executableDir = path.dirname(process.execPath);
   const candidates = [
+    process.env.NOCTUNE_FRONTEND_DIR,
     path.resolve(process.cwd(), 'frontend'),
     path.resolve(process.cwd(), '..', 'frontend'),
+    path.resolve(__dirname, '..', '..', '..', 'frontend'),
+    path.resolve(executableDir, 'frontend'),
+    path.resolve(executableDir, '..', 'frontend'),
   ];
-  return candidates.find((candidate) => existsSync(path.join(candidate, 'package.json')));
+  return candidates.find((candidate) => candidate && existsSync(path.join(candidate, 'package.json')));
 }
 
 export async function debugRoutes(app: FastifyInstance) {
