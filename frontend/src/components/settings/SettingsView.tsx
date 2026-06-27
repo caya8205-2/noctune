@@ -12,8 +12,10 @@ import {
   ListMusic,
   Loader2,
   Keyboard,
+  Play,
   RefreshCw,
   ShieldAlert,
+  Square,
   Sparkles,
   Trash2,
   Zap,
@@ -80,6 +82,7 @@ function formatBytes(bytes = 0): string {
 }
 
 const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
+const DEBUG_DASHBOARD_URL = 'http://localhost:4173/debug';
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export function SettingsView() {
@@ -99,6 +102,9 @@ export function SettingsView() {
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [debugSearch, setDebugSearch] = useState(false);
+  const [previewRunning, setPreviewRunning] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState<'start' | 'stop' | 'open' | null>(null);
+  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
 
@@ -116,6 +122,7 @@ export function SettingsView() {
     loadSettings().catch(console.error);
     api.status().then(setDiagnostics).catch(console.error);
     api.checkForUpdates().then(setUpdateInfo).catch(console.error);
+    api.debugPreviewStatus().then((status) => setPreviewRunning(status.running)).catch(console.error);
     setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
@@ -389,6 +396,66 @@ export function SettingsView() {
     localStorage.setItem(DEBUG_SEARCH_KEY, enabled ? '1' : '0');
   }
 
+  async function waitForDebugDashboard() {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        const res = await fetch(DEBUG_DASHBOARD_URL, { mode: 'no-cors' });
+        if (res.type === 'opaque' || res.ok) return true;
+      } catch {
+        // still starting
+      }
+    }
+    return false;
+  }
+
+  async function handleStartDebugPreview() {
+    setPreviewBusy('start');
+    setPreviewMessage(null);
+    try {
+      const result = await api.startDebugPreview();
+      const ready = await waitForDebugDashboard();
+      setPreviewRunning(true);
+      setPreviewMessage(
+        ready
+          ? result.already ? 'Preview server is already running.' : 'Preview server started.'
+          : 'Preview server started, but the dashboard did not respond yet.'
+      );
+    } catch (err) {
+      console.error('Failed to start debug preview:', err);
+      setPreviewMessage((err as Error).message);
+    } finally {
+      setPreviewBusy(null);
+    }
+  }
+
+  async function handleOpenDebugDashboard() {
+    setPreviewBusy('open');
+    try {
+      await openExternalUrl(DEBUG_DASHBOARD_URL);
+    } catch (err) {
+      console.error('Failed to open debug dashboard:', err);
+      setPreviewMessage((err as Error).message);
+    } finally {
+      setPreviewBusy(null);
+    }
+  }
+
+  async function handleStopDebugPreview() {
+    setPreviewBusy('stop');
+    setPreviewMessage(null);
+    try {
+      const result = await api.stopDebugPreview();
+      setPreviewRunning(false);
+      setPreviewMessage(result.was_running ? 'Preview server stopped.' : 'Preview server was not running.');
+    } catch (err) {
+      console.error('Failed to stop debug preview:', err);
+      setPreviewMessage((err as Error).message);
+    } finally {
+      setPreviewBusy(null);
+    }
+  }
+
   async function handleDiscordRpcToggle(enabled: boolean) {
     setDiscordRpcEnabled(enabled);
     try {
@@ -503,9 +570,9 @@ export function SettingsView() {
           <button
             type="button"
             onClick={() => openExternalUrl('https://developer.spotify.com/dashboard').catch(console.error)}
-            className="flex items-center gap-2 text-xs text-muted hover:text-accent transition-colors"
+            className="inline-flex self-start items-center gap-2 text-xs text-muted transition-colors hover:text-white"
           >
-            <ExternalLink size={12} />
+            <ExternalLink size={12} className="flex-shrink-0" />
             Get credentials at developer.spotify.com/dashboard
           </button>
 
@@ -769,6 +836,59 @@ export function SettingsView() {
             />
           </span>
         </button>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${previewRunning ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]' : 'bg-base-500'}`}
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium text-white">Debug Dashboard</span>
+              </div>
+              <span className="block text-xs text-muted mt-1">
+                {previewRunning ? 'Server running on localhost:4173.' : 'Preview server is stopped.'}
+                {previewMessage ? ` ${previewMessage}` : ''}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleStartDebugPreview()}
+                disabled={!!previewBusy || previewRunning}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+              >
+                {previewBusy === 'start'
+                  ? <><Loader2 size={12} className="animate-spin" /> Starting</>
+                  : <><Play size={12} /> Start</>
+                }
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleOpenDebugDashboard()}
+                disabled={!!previewBusy}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+              >
+                {previewBusy === 'open'
+                  ? <><Loader2 size={12} className="animate-spin" /> Opening</>
+                  : <><ExternalLink size={12} /> Open</>
+                }
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleStopDebugPreview()}
+                disabled={!!previewBusy || !previewRunning}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
+              >
+                {previewBusy === 'stop'
+                  ? <><Loader2 size={12} className="animate-spin" /> Stopping</>
+                  : <><Square size={12} /> Stop</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Cache */}

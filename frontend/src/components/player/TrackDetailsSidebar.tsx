@@ -135,9 +135,9 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
         <button
           type="button"
           onClick={() => openExternalUrl(metadata.spotifyUrl!).catch(console.error)}
-          className="btn-ghost border border-base-600/50 px-3 py-2 text-xs justify-center"
+          className="btn-ghost items-center justify-center gap-1.5 border border-base-600/50 px-3 py-2 text-xs"
         >
-          <ExternalLink size={13} />
+          <ExternalLink size={13} className="flex-shrink-0" />
           Open in Spotify
         </button>
       )}

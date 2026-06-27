@@ -160,6 +160,12 @@ export const api = {
     request<{ ok: boolean; blacklist: { cleared: number } }>('/settings/resolver-blacklist', { method: 'DELETE' }),
   clearResolverMatchCache: () =>
     request<{ ok: boolean; matchCache: { cleared: number } }>('/settings/resolver-match-cache', { method: 'DELETE' }),
+  startDebugPreview: () =>
+    request<{ ok: boolean; already: boolean }>('/debug/preview/start', { method: 'POST' }),
+  stopDebugPreview: () =>
+    request<{ ok: boolean; was_running: boolean }>('/debug/preview/stop', { method: 'POST' }),
+  debugPreviewStatus: () =>
+    request<{ running: boolean }>('/debug/preview/status'),
   checkForUpdates: (force = false) =>
     request<UpdateInfo>(`/updates/latest${force ? '?force=true' : ''}`),
 

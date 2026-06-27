@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import {
   debugSpotifyYoutubeMatch,
   listMatchCache,
@@ -33,6 +36,14 @@ function buildStatus() {
     discordRpc: getDiscordRpcStatus(),
     demoMode: isDemoMode(),
   };
+}
+
+function resolveFrontendDir() {
+  const candidates = [
+    path.resolve(process.cwd(), 'frontend'),
+    path.resolve(process.cwd(), '..', 'frontend'),
+  ];
+  return candidates.find((candidate) => existsSync(path.join(candidate, 'package.json')));
 }
 
 export async function debugRoutes(app: FastifyInstance) {
@@ -81,4 +92,65 @@ export async function debugRoutes(app: FastifyInstance) {
 
   // ── Full status snapshot ────────────────────────────────────────────────────
   app.get('/debug/status', async () => buildStatus());
+
+  // ── Debug preview server ────────────────────────────────────────────────────
+  let previewProc: ChildProcess | null = null;
+
+  function stopPreviewProc() {
+    if (!previewProc || previewProc.exitCode !== null) {
+      previewProc = null;
+      return false;
+    }
+
+    if (process.platform === 'win32' && previewProc.pid) {
+      const taskkill = spawn('taskkill', ['/pid', String(previewProc.pid), '/t', '/f'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      taskkill.on('error', (err) => {
+        console.error('[debug-preview] stop error:', err.message);
+      });
+    } else {
+      previewProc.kill();
+    }
+
+    previewProc = null;
+    return true;
+  }
+
+  app.post('/debug/preview/start', async (_req, reply) => {
+    if (previewProc && previewProc.exitCode === null) {
+      return reply.send({ ok: true, already: true });
+    }
+    const frontendDir = resolveFrontendDir();
+    if (!frontendDir) {
+      return reply.status(500).send({ ok: false, error: 'Frontend workspace not found' });
+    }
+
+    const isWindows = process.platform === 'win32';
+    previewProc = isWindows
+      ? spawn('cmd.exe', ['/d', '/s', '/c', 'npm.cmd run preview'], {
+        cwd: frontendDir,
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+      : spawn('npm', ['run', 'preview'], {
+        cwd: frontendDir,
+        stdio: 'ignore',
+      });
+    previewProc.on('error', (err) => {
+      console.error('[debug-preview] error:', err.message);
+      previewProc = null;
+    });
+    previewProc.on('exit', () => { previewProc = null; });
+    return reply.send({ ok: true, already: false });
+  });
+
+  app.post('/debug/preview/stop', async (_req, reply) => {
+    return reply.send({ ok: true, was_running: stopPreviewProc() });
+  });
+
+  app.get('/debug/preview/status', async () => {
+    return { running: !!previewProc && previewProc.exitCode === null };
+  });
 }
