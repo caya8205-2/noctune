@@ -1,6 +1,5 @@
-#[cfg(not(debug_assertions))]
-use tauri::Manager;
 use std::process::Command;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
 
@@ -27,6 +26,27 @@ fn open_external_url(url: String) -> Result<(), String> {
     result.map(|_| ()).map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn open_debug_dashboard(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("debug-dashboard") {
+        window.set_focus().map_err(|err| err.to_string())?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(
+        &app,
+        "debug-dashboard",
+        WebviewUrl::App("debug.html".into()),
+    )
+    .title("Noctune Debug Dashboard")
+    .inner_size(1120.0, 720.0)
+    .min_inner_size(900.0, 560.0)
+    .resizable(true)
+    .build()
+    .map(|_| ())
+    .map_err(|err| err.to_string())
+}
+
 #[cfg(not(debug_assertions))]
 fn kill_backend_sidecar<R: tauri::Runtime>(manager: &impl Manager<R>) {
     if let Some(state) = manager.try_state::<BackendProcess>() {
@@ -41,7 +61,7 @@ fn kill_backend_sidecar<R: tauri::Runtime>(manager: &impl Manager<R>) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![open_external_url])
+        .invoke_handler(tauri::generate_handler![open_external_url, open_debug_dashboard])
         .setup(|_app| {
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.

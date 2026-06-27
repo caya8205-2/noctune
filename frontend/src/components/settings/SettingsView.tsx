@@ -82,7 +82,7 @@ function formatBytes(bytes = 0): string {
 }
 
 const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
-const DEBUG_DASHBOARD_URL = 'http://localhost:4173/debug';
+const DEBUG_DASHBOARD_URL = 'http://localhost:4173/debug.html';
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export function SettingsView() {
@@ -122,7 +122,9 @@ export function SettingsView() {
     loadSettings().catch(console.error);
     api.status().then(setDiagnostics).catch(console.error);
     api.checkForUpdates().then(setUpdateInfo).catch(console.error);
-    api.debugPreviewStatus().then((status) => setPreviewRunning(status.running)).catch(console.error);
+    if (!IS_TAURI) {
+      api.debugPreviewStatus().then((status) => setPreviewRunning(status.running)).catch(console.error);
+    }
     setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
@@ -432,7 +434,12 @@ export function SettingsView() {
   async function handleOpenDebugDashboard() {
     setPreviewBusy('open');
     try {
-      await openExternalUrl(DEBUG_DASHBOARD_URL);
+      if (IS_TAURI) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_debug_dashboard');
+      } else {
+        await openExternalUrl(DEBUG_DASHBOARD_URL);
+      }
     } catch (err) {
       console.error('Failed to open debug dashboard:', err);
       setPreviewMessage((err as Error).message);
@@ -842,28 +849,32 @@ export function SettingsView() {
             <div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${previewRunning ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]' : 'bg-base-500'}`}
+                  className={`h-2.5 w-2.5 rounded-full ${IS_TAURI || previewRunning ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]' : 'bg-base-500'}`}
                   aria-hidden="true"
                 />
                 <span className="text-sm font-medium text-white">Debug Dashboard</span>
               </div>
               <span className="block text-xs text-muted mt-1">
-                {previewRunning ? 'Server running on localhost:4173.' : 'Preview server is stopped.'}
+                {IS_TAURI
+                  ? 'Opens the bundled debug dashboard in a separate app window.'
+                  : previewRunning ? 'Server running on localhost:4173.' : 'Preview server is stopped.'}
                 {previewMessage ? ` ${previewMessage}` : ''}
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void handleStartDebugPreview()}
-                disabled={!!previewBusy || previewRunning}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
-              >
-                {previewBusy === 'start'
-                  ? <><Loader2 size={12} className="animate-spin" /> Starting</>
-                  : <><Play size={12} /> Start</>
-                }
-              </button>
+              {!IS_TAURI && (
+                <button
+                  type="button"
+                  onClick={() => void handleStartDebugPreview()}
+                  disabled={!!previewBusy || previewRunning}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+                >
+                  {previewBusy === 'start'
+                    ? <><Loader2 size={12} className="animate-spin" /> Starting</>
+                    : <><Play size={12} /> Start</>
+                  }
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleOpenDebugDashboard()}
@@ -875,17 +886,19 @@ export function SettingsView() {
                   : <><ExternalLink size={12} /> Open</>
                 }
               </button>
-              <button
-                type="button"
-                onClick={() => void handleStopDebugPreview()}
-                disabled={!!previewBusy || !previewRunning}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
-              >
-                {previewBusy === 'stop'
-                  ? <><Loader2 size={12} className="animate-spin" /> Stopping</>
-                  : <><Square size={12} /> Stop</>
-                }
-              </button>
+              {!IS_TAURI && (
+                <button
+                  type="button"
+                  onClick={() => void handleStopDebugPreview()}
+                  disabled={!!previewBusy || !previewRunning}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
+                >
+                  {previewBusy === 'stop'
+                    ? <><Loader2 size={12} className="animate-spin" /> Stopping</>
+                    : <><Square size={12} /> Stop</>
+                  }
+                </button>
+              )}
             </div>
           </div>
         </div>
