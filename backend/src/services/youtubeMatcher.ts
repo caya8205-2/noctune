@@ -65,6 +65,10 @@ const negativeKeywords = [
   'clips',
   'shorts',
   'cover',
+  'covered',
+  'covers',
+  'covering',
+  'covered by',
   'ai cover',
   'piano cover',
   'piano version',
@@ -150,6 +154,7 @@ const fanUploadKeywords = [
   'sings',
   'singing',
   'sung by',
+  'covered by',
 ];
 
 const liveVersionKeywords = [
@@ -212,6 +217,10 @@ function getStore(): MatchCacheStore {
 
 export function getMatchCacheStats(): { total: number } {
   return { total: Object.keys(getStore().matches).length };
+}
+
+export function listMatchCache(): MatchCacheEntry[] {
+  return Object.values(getStore().matches).sort((a, b) => b.matchedAt - a.matchedAt);
 }
 
 export function clearMatchCache(): { cleared: number } {
@@ -416,6 +425,19 @@ function fromCache(spotifyTrack: Track): Track | null {
   if (!cached) return null;
   if (isPlaybackBlacklisted(cached.youtubeId)) return null;
 
+  if (cached.score < 100) {
+    console.log(
+      `[matcher] cache rejected (low score) ${JSON.stringify({
+        spotifyId: spotifyTrack.spotifyId,
+        youtubeId: cached.youtubeId,
+        score: cached.score,
+      })}`
+    );
+    delete getStore().matches[spotifyTrack.spotifyId];
+    saveStore(getStore());
+    return null;
+  }
+
   console.log(
     `[matcher] cache hit ${JSON.stringify({
       spotifyId: spotifyTrack.spotifyId,
@@ -456,11 +478,43 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
   const cached = fromCache(spotifyTrack);
   if (cached) return cached;
 
-  const query = `${spotifyTrack.title} - ${spotifyTrack.artist}`;
+  const stripPunctuation = (value: string): string =>
+    value.replace(/[!?.…]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const canonical = stripPunctuation(`${spotifyTrack.title} - ${spotifyTrack.artist}`);
+  const titleOnly = stripPunctuation(spotifyTrack.title);
+  const artistOnly = stripPunctuation(spotifyTrack.artist);
+  const titleWithoutSuffix = titleOnly.replace(/\s*[-–~|]\s*[^-–~|]+$/, '').trim();
+
+  // Strip CJK / non‑Latin characters for a pure‑ASCII fallback
+  const asciiTitle = titleOnly.replace(/[^\x00-\x7F]/g, '').trim().replace(/\s+/g, ' ');
+  const asciiArtist = artistOnly.replace(/[^\x00-\x7F]/g, '').trim().replace(/\s+/g, ' ');
+  const asciiTitleOnly = asciiTitle.replace(/\s*[-–~|]\s*[^-–~|]+$/, '').trim();
+
+  const queries = [...new Set([
+    canonical,
+    titleOnly,
+    `${asciiTitle} ${artistOnly}`,
+    `${asciiTitle} ${asciiArtist}`,
+    asciiTitle,
+    asciiTitleOnly,
+    `${asciiTitleOnly} ${artistOnly}`,
+    `${asciiTitleOnly} ${asciiArtist}`,
+    artistOnly,
+    asciiArtist,
+  ])].filter((q) => q.length > 0);
 
   const result = await matchQueue.add<Track | null>(async () => {
     const startedAt = Date.now();
-    const candidates = await searchTracks(query, 12);
+    let candidates: Track[] = [];
+    let usedQuery = queries[0];
+
+    for (const query of queries) {
+      candidates = await searchTracks(query, 12);
+      usedQuery = query;
+      if (candidates.length > 0) break;
+    }
+
     const ranked = candidates
       .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
       .map((candidate) => scoreCandidate(spotifyTrack, candidate))
@@ -470,7 +524,9 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     console.log(
       `[matcher] spotify->youtube ${JSON.stringify({
         spotifyId: spotifyTrack.spotifyId,
-        query,
+        query: usedQuery,
+        fallbackTried: queries.indexOf(usedQuery),
+        candidateCount: candidates.length,
         bestId: best?.track.id,
         bestTitle: best?.track.title,
         score: best?.score,
@@ -486,7 +542,7 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     return {
       ...spotifyTrack,
       id: best.track.id,
-      query,
+      query: usedQuery,
       youtubeId: best.track.id,
       youtubeTitle: best.track.title,
       youtubeArtist: best.track.artist,

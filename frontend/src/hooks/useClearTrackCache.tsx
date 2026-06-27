@@ -42,7 +42,10 @@ export function useClearTrackCache() {
   }
 
   const clearTrackCacheModal = pending ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -88,7 +91,10 @@ export function useClearTrackCache() {
           </button>
           <button
             type="button"
-            onClick={confirmClear}
+            onClick={(e) => {
+              e.preventDefault();
+              confirmClear();
+            }}
             disabled={isClearing}
             className="btn-accent px-4 py-2 text-xs disabled:opacity-40"
           >

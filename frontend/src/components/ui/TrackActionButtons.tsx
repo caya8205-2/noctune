@@ -91,6 +91,7 @@ export function TrackActionButtons({
             type="button"
             className={clsx('btn-ghost', buttonClassName)}
             onClick={(event) => {
+              event.preventDefault();
               event.stopPropagation();
               requestClearTrackCache(track);
             }}

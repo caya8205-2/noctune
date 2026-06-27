@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
+import pretty from 'pino-pretty';
 import { searchRoutes } from './routes/search.js';
 import { playerRoutes } from './routes/player.js';
 import { playlistRoutes } from './routes/playlists.js';
@@ -14,6 +15,7 @@ import { metadataRoutes } from './routes/metadata.js';
 import { rpcRoutes } from './routes/rpc.js';
 import { browseRoutes } from './routes/browse.js';
 import { updateRoutes } from './routes/updates.js';
+import { debugRoutes } from './routes/debug.js';
 import { initDb } from './services/playlist.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
@@ -41,13 +43,38 @@ const PREFERRED_PORT = Number(process.env.PORT ?? 3131);
 const MAX_PORT_ATTEMPTS = 10;
 const HOST = process.env.HOST ?? '127.0.0.1';
 
+function decodeFormValue(value: string): string {
+  const withSpaces = value.replace(/\+/g, ' ');
+  const latin1 = withSpaces.replace(/%([0-9A-Fa-f]{2})/g, (_: string, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  return Buffer.from(latin1, 'latin1').toString('utf8');
+}
+
+function querystringParser(value: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (!value) return params;
+  for (const pair of value.split('&')) {
+    const eq = pair.indexOf('=');
+    if (eq === -1) {
+      params[decodeFormValue(pair)] = '';
+    } else {
+      params[decodeFormValue(pair.slice(0, eq))] = decodeFormValue(pair.slice(eq + 1));
+    }
+  }
+  return params;
+}
+
 async function bootstrap() {
   const app = Fastify({
+    querystringParser,
     logger: {
-      transport: {
-        target: 'pino-pretty',
-        options: { colorize: true, translateTime: 'HH:MM:ss' },
-      },
+      level: 'info',
+      stream: pretty({
+        colorize: true,
+        translateTime: 'HH:MM:ss',
+        destination: process.stdout,
+      }),
     },
   });
 
@@ -79,6 +106,7 @@ async function bootstrap() {
   await app.register(rpcRoutes);
   await app.register(browseRoutes);
   await app.register(updateRoutes);
+  await app.register(debugRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({

@@ -14,6 +14,7 @@ import {
   upsertTrack,
 } from '../services/cache.js';
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
+import { getSpotifyTrackById } from '../services/spotify.js';
 import { Readable } from 'stream';
 import { clearMatchCacheForSpotifyId, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { CachedTrack, Track } from '../types/index.js';
@@ -113,11 +114,31 @@ async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?
   if (!videoId.startsWith('spotify:')) return isYoutubeVideoId(videoId) ? videoId : null;
   if (youtubeId && isYoutubeVideoId(youtubeId)) return youtubeId;
   const spotifyId = videoId.replace(/^spotify:/, '');
+
+  let trackTitle = query;
+  let trackArtist = '';
+  let trackDuration = 0;
+  const cachedSpotify = getCachedBySpotifyId(spotifyId);
+  if (cachedSpotify) {
+    trackTitle = cachedSpotify.title;
+    trackArtist = cachedSpotify.artist;
+    trackDuration = cachedSpotify.duration;
+  } else {
+    try {
+      const spotifyTrack = await getSpotifyTrackById(spotifyId, query);
+      trackTitle = spotifyTrack.title;
+      trackArtist = spotifyTrack.artist;
+      trackDuration = spotifyTrack.duration;
+    } catch {
+      // Spotify lookup failed — fall back to query-as-title (best effort).
+    }
+  }
+
   const matched = await matchSpotifyTrackToYoutube({
     id: videoId,
-    title: query,
-    artist: '',
-    duration: 0,
+    title: trackTitle,
+    artist: trackArtist,
+    duration: trackDuration,
     thumbnail: '',
     query,
     spotifyId,
@@ -136,9 +157,9 @@ function normalizeLookup(value: string): string {
 }
 
 function hasLiveVersionSignal(value: string): boolean {
-  const normalized = normalizeLookup(value);
+  const tokens = new Set(normalizeLookup(value).split(' ').filter(Boolean));
   return ['live', 'concert', 'stage', 'showcase', 'tour'].some((keyword) =>
-    normalized.includes(keyword)
+    tokens.has(keyword)
   );
 }
 

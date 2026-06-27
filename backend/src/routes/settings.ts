@@ -158,7 +158,8 @@ export async function settingsRoutes(app: FastifyInstance) {
         clearLyricsCacheStore();
         const audio = clearAudioCache();
         const prefetch = clearPrefetchCache();
-        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio, prefetch });
+        const matchCache = clearMatchCache();
+        return reply.send({ ok: true, cache: getCacheStats(), lyrics: getLyricsCacheStats(), audio, prefetch, matchCache });
     });
 
     // DELETE /settings/cache/tracks — clear only learned track metadata
