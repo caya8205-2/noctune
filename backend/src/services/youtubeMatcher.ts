@@ -28,7 +28,7 @@ export interface ScoredCandidate {
 }
 
 const CACHE_FILE = path.join(getDataDir(), 'spotify-youtube-map.json');
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
 const matchQueue = new PQueue({ concurrency: 2 });
 
 const positiveTitleKeywords = [
@@ -101,6 +101,7 @@ const negativeKeywords = [
   'parody',
   'meme',
   'karaoke',
+  'カラオケ',
   'instrumental',
   'sped up',
   'slowed',
@@ -253,6 +254,18 @@ function words(value: string): string[] {
     .filter((word) => word.length > 1);
 }
 
+function titleWordStats(spotifyTitle: string, candidateTitle: string): { matched: number; total: number; ratio: number } {
+  const titleWords = words(spotifyTitle);
+  if (titleWords.length === 0) return { matched: 0, total: 0, ratio: 0 };
+
+  const matched = titleWords.filter((word) => candidateTitle.includes(word)).length;
+  return {
+    matched,
+    total: titleWords.length,
+    ratio: matched / titleWords.length,
+  };
+}
+
 function keywordAllowed(keyword: string, spotifyTitle: string): boolean {
   return hasKeyword(normalize(spotifyTitle), keyword);
 }
@@ -289,15 +302,20 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   const spotifyArtist = normalize(spotifyTrack.artist);
   const candidateTitle = normalize(candidate.title);
   const candidateArtist = normalize(candidate.artist);
+  const spotifyTitleCompact = spotifyTitle.replace(/\s+/g, '');
+  const candidateTitleCompact = candidateTitle.replace(/\s+/g, '');
   const combined = `${candidateTitle} ${candidateArtist}`;
   const reasons: string[] = [];
   let score = 0;
   let hasArtistChannelMatch = false;
+  const titleStats = titleWordStats(spotifyTrack.title, candidateTitle);
 
-  for (const word of words(spotifyTrack.title)) {
-    if (candidateTitle.includes(word)) {
-      score += 10;
-    }
+  if (titleStats.matched > 0) {
+    score += titleStats.matched * 10;
+  }
+
+  if (titleStats.total > 0 && (titleStats.ratio >= 0.67 || titleStats.matched >= 3)) {
+    reasons.push(`title-word-match:${titleStats.matched}/${titleStats.total}`);
   }
 
   for (const artistName of splitArtistNames(spotifyTrack.artist)) {
@@ -314,6 +332,15 @@ function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate 
   if (candidateTitle.includes(spotifyTitle)) {
     score += 60;
     reasons.push('title-phrase');
+  }
+
+  if (
+    spotifyTitleCompact.length >= 2 &&
+    spotifyTitleCompact !== spotifyTitle &&
+    candidateTitleCompact.includes(spotifyTitleCompact)
+  ) {
+    score += 60;
+    reasons.push('title-compact');
   }
 
   for (const keyword of positiveTitleKeywords) {
@@ -410,6 +437,18 @@ function hasArtistChannelMatch(candidate: ScoredCandidate): boolean {
   return candidate.reasons.includes('artist-channel-match');
 }
 
+function hasTitleEvidence(candidate: ScoredCandidate): boolean {
+  return (
+    candidate.reasons.includes('title-phrase') ||
+    candidate.reasons.includes('title-compact') ||
+    candidate.reasons.some((reason) => reason.startsWith('title-word-match:'))
+  );
+}
+
+function isAcceptableCandidate(candidate: ScoredCandidate | undefined): candidate is ScoredCandidate {
+  return Boolean(candidate && candidate.score >= 100 && hasTitleEvidence(candidate));
+}
+
 function compareCandidates(a: ScoredCandidate, b: ScoredCandidate): number {
   const aArtistChannelMatch = hasArtistChannelMatch(a);
   const bArtistChannelMatch = hasArtistChannelMatch(b);
@@ -425,12 +464,25 @@ function fromCache(spotifyTrack: Track): Track | null {
   if (!cached) return null;
   if (isPlaybackBlacklisted(cached.youtubeId)) return null;
 
-  if (cached.score < 100) {
+  const rescored = scoreCandidate(spotifyTrack, {
+    ...spotifyTrack,
+    id: cached.youtubeId,
+    youtubeId: cached.youtubeId,
+    youtubeTitle: cached.youtubeTitle,
+    youtubeArtist: cached.youtubeArtist,
+    title: cached.youtubeTitle,
+    artist: cached.youtubeArtist,
+    duration: 0,
+  });
+
+  if (cached.score < 100 || !isAcceptableCandidate(rescored)) {
     console.log(
-      `[matcher] cache rejected (low score) ${JSON.stringify({
+      `[matcher] cache rejected ${JSON.stringify({
         spotifyId: spotifyTrack.spotifyId,
         youtubeId: cached.youtubeId,
         score: cached.score,
+        rescored: rescored.score,
+        reasons: rescored.reasons,
       })}`
     );
     delete getStore().matches[spotifyTrack.spotifyId];
@@ -502,50 +554,60 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     `${asciiTitleOnly} ${asciiArtist}`,
     artistOnly,
     asciiArtist,
-  ])].filter((q) => q.length > 0);
+  ].map((q) => q.trim()))].filter((q) => q.length > 0);
 
   const result = await matchQueue.add<Track | null>(async () => {
     const startedAt = Date.now();
-    let candidates: Track[] = [];
+    let accepted: ScoredCandidate | null = null;
+    let lastBest: ScoredCandidate | undefined;
     let usedQuery = queries[0];
+    let usedFallbackIndex = 0;
+    let usedCandidateCount = 0;
 
     for (const query of queries) {
-      candidates = await searchTracks(query, 12);
+      const candidates = await searchTracks(query, 12);
+      const ranked = candidates
+        .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
+        .map((candidate) => scoreCandidate(spotifyTrack, candidate))
+        .sort(compareCandidates);
+      const best = ranked[0];
+      lastBest = best ?? lastBest;
       usedQuery = query;
-      if (candidates.length > 0) break;
-    }
+      usedFallbackIndex = queries.indexOf(query);
+      usedCandidateCount = candidates.length;
 
-    const ranked = candidates
-      .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
-      .map((candidate) => scoreCandidate(spotifyTrack, candidate))
-      .sort(compareCandidates);
-    const best = ranked[0];
+      if (isAcceptableCandidate(best)) {
+        accepted = best;
+        break;
+      }
+    }
 
     console.log(
       `[matcher] spotify->youtube ${JSON.stringify({
         spotifyId: spotifyTrack.spotifyId,
         query: usedQuery,
-        fallbackTried: queries.indexOf(usedQuery),
-        candidateCount: candidates.length,
-        bestId: best?.track.id,
-        bestTitle: best?.track.title,
-        score: best?.score,
-        reasons: best?.reasons,
+        fallbackTried: usedFallbackIndex,
+        candidateCount: usedCandidateCount,
+        bestId: accepted?.track.id ?? lastBest?.track.id,
+        bestTitle: accepted?.track.title ?? lastBest?.track.title,
+        score: accepted?.score ?? lastBest?.score,
+        reasons: accepted?.reasons ?? lastBest?.reasons,
+        accepted: Boolean(accepted),
         elapsedMs: Date.now() - startedAt,
       })}`
     );
 
-    if (!best || best.score < 20) return null;
+    if (!accepted) return null;
 
-    writeCache(spotifyTrack, best);
+    writeCache(spotifyTrack, accepted);
 
     return {
       ...spotifyTrack,
-      id: best.track.id,
+      id: accepted.track.id,
       query: usedQuery,
-      youtubeId: best.track.id,
-      youtubeTitle: best.track.title,
-      youtubeArtist: best.track.artist,
+      youtubeId: accepted.track.id,
+      youtubeTitle: accepted.track.title,
+      youtubeArtist: accepted.track.artist,
     };
   });
 

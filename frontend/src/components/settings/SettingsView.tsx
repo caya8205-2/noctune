@@ -24,6 +24,7 @@ import {
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { api, apiUrl, type BackendStatus, type UpdateInfo } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
+import { usePlayerStore } from '../../store/player';
 
 const APP_VERSION = __APP_VERSION__;
 
@@ -107,6 +108,7 @@ export function SettingsView() {
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const setView = usePlayerStore((state) => state.setView);
 
   async function loadSettings() {
     const res = await fetch(await apiUrl('/settings'));
@@ -435,8 +437,7 @@ export function SettingsView() {
     setPreviewBusy('open');
     try {
       if (IS_TAURI) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('open_debug_dashboard');
+        setView('debug');
       } else {
         await openExternalUrl(DEBUG_DASHBOARD_URL);
       }
@@ -673,15 +674,14 @@ export function SettingsView() {
         </section>
       )}
 
-      {/* Playback */}
+      {/* Playback & Presence */}
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Playback
+            Playback & presence
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Choose how aggressively the local YouTube resolver should prefer audio stream quality.
-            Spotify is still used only for metadata.
+            Tune playback resolver behavior{IS_TAURI ? ' and what Noctune shares outside the app.' : '.'}
           </p>
         </div>
 
@@ -711,27 +711,16 @@ export function SettingsView() {
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Discord Rich Presence */}
-      {IS_TAURI && (
-        <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
-          <div>
-            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Discord Rich Presence
-            </h2>
-            <p className="text-xs text-muted leading-relaxed mt-2">
-              Show music that you're listening to on your Discord profile
-            </p>
-          </div>
-
+        {IS_TAURI && (
           <button
             type="button"
             onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
             className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
           >
             <span>
-              <span className="block text-sm font-medium text-white">Enable Discord RPC</span>
+              <span className="block text-sm font-medium text-white">Discord Rich Presence</span>
+              <span className="block text-xs text-muted mt-1">Show what you're listening to on your Discord profile.</span>
             </span>
             <span
               className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
@@ -748,8 +737,8 @@ export function SettingsView() {
               />
             </span>
           </button>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Diagnostics */}
       <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">

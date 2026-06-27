@@ -25,7 +25,7 @@ interface PlayerState {
   isAutoQueueLoading: boolean;
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album';
+  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'debug';
   activePlaylistId: string | null;
   activePersonalMix: PersonalMix | null;
   activeArtistId: string | null;

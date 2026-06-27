@@ -13,6 +13,7 @@ import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ArtistView } from './components/browse/ArtistView';
 import { AlbumView } from './components/browse/AlbumView';
+import DebugApp from './debug/DebugApp';
 import { usePlayerStore } from './store/player';
 import { getShortcutsByCategory } from './constants/keyboardShortcuts';
 import { useAudio } from './hooks/useAudio';
@@ -197,8 +198,9 @@ function AppInner() {
             {activeView === 'playlist' && <PlaylistView />}
             {activeView === 'artist' && activeArtistId && <ArtistView artistId={activeArtistId} />}
             {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
+            {activeView === 'debug' && <DebugApp />}
           </main>
-          {showTrackDetails && <TrackDetailsSidebar />}
+          {showTrackDetails && activeView !== 'debug' && <TrackDetailsSidebar />}
         </div>
       </div>
 

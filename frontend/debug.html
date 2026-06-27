@@ -3,10 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Noctune Debug</title>
+    <title>Debug Dashboard</title>
   </head>
   <body>
-    <div id="debug-root"></div>
+    <div
+      id="debug-root"
+      style="min-height:100vh;display:grid;place-items:center;background:#07080b;color:#d7dbe4;font-family:system-ui,sans-serif"
+    >
+      <div style="max-width:420px;padding:24px;text-align:center">
+        <h1 style="margin:0 0 8px;font-size:18px;color:#fff">Debug Dashboard</h1>
+        <p style="margin:0;color:#8b93a5;font-size:13px;line-height:1.6">
+          Loading debug dashboard. If this file was opened directly from disk, run it through Noctune or the preview server instead.
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/debug/main.tsx"></script>
   </body>
 </html>

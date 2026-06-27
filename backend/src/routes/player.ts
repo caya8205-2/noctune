@@ -144,8 +144,7 @@ async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?
     spotifyId,
   });
   if (matched?.id && isYoutubeVideoId(matched.id)) return matched.id;
-  const [match] = await searchTracks(query, 1);
-  return match?.id && isYoutubeVideoId(match.id) ? match.id : null;
+  return null;
 }
 
 function normalizeLookup(value: string): string {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
-import { debugApi, type DebugMatchResult, type MatchCacheEntry, type DebugStatus } from './api';
+import { debugApi, discoverBackend, type DebugMatchResult, type MatchCacheEntry, type DebugStatus } from './api';
+import { usePlayerStore } from '../store/player';
 
 type Tab = 'matcher' | 'cache' | 'status';
 
@@ -84,7 +85,7 @@ function MatcherPanel() {
       <div className="surface-panel p-5">
         <div className="mb-4 flex items-center gap-2">
           <Terminal size={16} className="text-accent" />
-          <h2 className="font-display text-lg text-white">Matcher Inspector</h2>
+          <h2 className="text-base font-semibold text-white">Matcher Inspector</h2>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <div>
@@ -190,7 +191,7 @@ function MatcherPanel() {
                       <div className="truncate text-sm text-white">{c.track.title}</div>
                       <div className="truncate text-xs text-muted">{c.track.artist} · {c.track.id}</div>
                     </div>
-                    <span className={`flex-shrink-0 font-mono text-sm font-semibold ${scoreColor(c.score)}`}>
+                    <span className={`flex-shrink-0 text-sm font-semibold tabular-nums ${scoreColor(c.score)}`}>
                       {c.score}
                     </span>
                   </button>
@@ -293,7 +294,7 @@ function CachePanel() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Database size={16} className="text-accent" />
-            <h2 className="font-display text-lg text-white">Match Cache</h2>
+            <h2 className="text-base font-semibold text-white">Match Cache</h2>
             <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
               {entries.length} entries
               {lowScoreCount > 0 && <span className="ml-1.5 text-amber-400">({lowScoreCount} low)</span>}
@@ -362,7 +363,7 @@ function CachePanel() {
                     <span className="ml-1.5 text-muted/60">{formatRelative(e.matchedAt)}</span>
                   </div>
                 </div>
-                <span className={`flex-shrink-0 font-mono text-sm font-semibold ${scoreColor(e.score)}`}>
+                <span className={`flex-shrink-0 text-sm font-semibold tabular-nums ${scoreColor(e.score)}`}>
                   {e.score}
                 </span>
                 <button
@@ -430,7 +431,7 @@ function StatusPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity size={16} className="text-accent" />
-          <h2 className="font-display text-lg text-white">Backend Status</h2>
+          <h2 className="text-base font-semibold text-white">Backend Status</h2>
         </div>
         <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -441,7 +442,7 @@ function StatusPanel() {
         {cards.map((c) => (
           <div key={c.label} className="surface-panel p-4">
             <div className="section-label mb-1.5">{c.label}</div>
-            <div className={`font-display text-3xl font-semibold ${c.color}`}>{c.value}</div>
+            <div className={`text-3xl font-semibold tabular-nums ${c.color}`}>{c.value}</div>
             <div className="mt-0.5 text-xs text-muted">{c.sub}</div>
           </div>
         ))}
@@ -494,11 +495,12 @@ function StatusPanel() {
 export default function DebugApp() {
   const [tab, setTab] = useState<Tab>('matcher');
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const setView = usePlayerStore((state) => state.setView);
 
   useEffect(() => {
     (async () => {
       try {
-        const base = await (await import('./api')).discoverBackend();
+        const base = await discoverBackend();
         setBackendOk(Boolean(base));
       } catch {
         setBackendOk(false);
@@ -513,14 +515,12 @@ export default function DebugApp() {
   ];
 
   return (
-    <div className="relative z-10 flex h-screen flex-col overflow-hidden text-white">
+    <div className="relative z-10 flex h-full flex-col overflow-hidden text-white">
       <div className="ambient-glow -top-40 left-1/4 h-72 w-72 bg-accent/10 animate-float" aria-hidden="true" />
 
       {/* Header */}
       <div className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-5 backdrop-blur-xl">
-        <span className="font-display text-[15px] font-medium tracking-tight text-white/90">
-          Noctune <span className="text-accent">Debug</span>
-        </span>
+        <span className="text-sm font-semibold text-white/90">Debug Dashboard</span>
         <div className="ml-2 flex items-center gap-1">
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -553,12 +553,13 @@ export default function DebugApp() {
               <AlertCircle size={13} /> Backend not found
             </span>
           )}
-          <a
-            href="/"
+          <button
+            type="button"
+            onClick={() => setView('settings')}
             className="rounded-lg px-3 py-1.5 text-xs text-muted transition-colors hover:bg-white/[0.04] hover:text-soft"
           >
-            ← Back to app
-          </a>
+            Back to settings
+          </button>
         </div>
       </div>
 
