@@ -13,16 +13,15 @@
       line-height: 1.15;
       fill: url(#forest-gradient);
       font-weight: bold;
-      text-anchor: middle;
     }
   </style>
 
   <!-- xml:space="preserve" wajib dipasang di sini agar spasi awal tidak dibuang -->
-  <text x="250" y="25" xml:space="preserve" class="ascii-text">
-    <tspan x="250" dy="0">  _   _  ___   ____ _____ _   _ _   _ _____&#160;</tspan>
-    <tspan x="250" dy="1.2em"> | \ | |/ _ \ / ___|_   _| | | | \ | | ____|</tspan>
-    <tspan x="250" dy="1.2em"> |  \| | | | | |     | | | | | |  \| |  _|&#160;&#160;</tspan>
-    <tspan x="250" dy="1.2em"> | |\  | |_| | |___  | | | |_| | |\  | |___&#160;</tspan>
-    <tspan x="250" dy="1.2em"> |_| \_|\___/ \____| |_|  \___/|_| \_|_____|</tspan>
+  <text x="65" y="25" xml:space="preserve" class="ascii-text">
+    <tspan x="65" dy="0">  _   _  ___   ____ _____ _   _ _   _ _____ </tspan>
+    <tspan x="65" dy="1.2em"> | \ | |/ _ \ / ___|_   _| | | | \ | | ____|</tspan>
+    <tspan x="65" dy="1.2em"> |  \| | | | | |     | | | | | |  \| |  _|  </tspan>
+    <tspan x="65" dy="1.2em"> | |\  | |_| | |___  | | | |_| | |\  | |___ </tspan>
+    <tspan x="65" dy="1.2em"> |_| \_|\___/ \____| |_|  \___/|_| \_|_____|</tspan>
   </text>
 </svg>
