@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Noctune CLI Logo" width="450" />
+  <img src="assets/logo.svg" alt="Noctune ASCII Logo" width="450" />
 </p>
 
-<p align="center">A lightweight desktop music player perfect for playing youtube background noise without the memory-eater browser or spotify with no ads</p> 
+<p align="center">A lightweight desktop music player perfect for playing youtube background noise without the memory-eating browser or spotify with no ads</p> 
+
+<div align="center">
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111111)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -21,6 +23,8 @@
 [![MIT](https://img.shields.io/badge/License-MIT-white)](./LICENSE)
 [![Traffic Report](https://img.shields.io/badge/Traffic_Report-Latest-2F80ED?logo=github&logoColor=white)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 [![Stats Data](https://img.shields.io/badge/Stats_Data-github--repo--stats-111111?logo=github&logoColor=white)](https://github.com/caya8205-2/noctune/tree/github-repo-stats)
+
+</div>
 
 Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.
 
