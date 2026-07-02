@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Disc3, Heart, ListOrdered, Music2, Radio, Search, Sparkles } from 'lucide-react';
-import { api, type PersonalMix, type Playlist, type Track } from '../../utils/api';
+import { api, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -36,6 +36,60 @@ function writeNightlyMixCache(data: NightlyMixCache['data'], updatedAt: number) 
     localStorage.setItem(NIGHTLY_MIX_CACHE_KEY, JSON.stringify({ data, updatedAt }));
   } catch {
     // Cache is only a speed/rate-limit helper; failing to persist should not break Home.
+  }
+}
+
+const HOME_LOCAL_CACHE_KEY = 'noctune:home-local:v1';
+const HOME_NEW_RELEASES_CACHE_KEY = 'noctune:home-new-releases:v1';
+const HOME_REFRESH_MS = 1000 * 60 * 5;
+
+interface HomeLocalCache {
+  updatedAt: number;
+  data: { playlists: Playlist[]; recentTracks: CachedTrack[] };
+}
+
+interface NewReleasesCache {
+  updatedAt: number;
+  data: { newReleases: Track[] };
+}
+
+function readHomeLocalCache(): HomeLocalCache | null {
+  try {
+    const raw = localStorage.getItem(HOME_LOCAL_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Partial<HomeLocalCache>;
+    if (!cache.updatedAt || !cache.data || !Array.isArray(cache.data.recentTracks)) return null;
+    return cache as HomeLocalCache;
+  } catch {
+    return null;
+  }
+}
+
+function writeHomeLocalCache(data: HomeLocalCache['data'], updatedAt: number) {
+  try {
+    localStorage.setItem(HOME_LOCAL_CACHE_KEY, JSON.stringify({ data, updatedAt }));
+  } catch {
+    // best-effort cache; ignore failures
+  }
+}
+
+function readNewReleasesCache(): NewReleasesCache | null {
+  try {
+    const raw = localStorage.getItem(HOME_NEW_RELEASES_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Partial<NewReleasesCache>;
+    if (!cache.updatedAt || !cache.data || !Array.isArray(cache.data.newReleases)) return null;
+    return cache as NewReleasesCache;
+  } catch {
+    return null;
+  }
+}
+
+function writeNewReleasesCache(data: NewReleasesCache['data'], updatedAt: number) {
+  try {
+    localStorage.setItem(HOME_NEW_RELEASES_CACHE_KEY, JSON.stringify({ data, updatedAt }));
+  } catch {
+    // best-effort cache; ignore failures
   }
 }
 
@@ -147,9 +201,27 @@ function PersonalMixCard({
 export function HomeView() {
   const { currentTrack, queue, playTrack, setView, openPersonalMix } = usePlayerStore();
   const cachedNightlyMix = useMemo(() => readNightlyMixCache(), []);
-  const { data, isLoading } = useQuery({
+  const cachedHomeLocal = useMemo(() => readHomeLocalCache(), []);
+  const cachedNewReleases = useMemo(() => readNewReleasesCache(), []);
+  const { data: homeLocalData, dataUpdatedAt: homeLocalUpdatedAt, isLoading: homeLoading } = useQuery({
     queryKey: ['home'],
     queryFn: api.home,
+    staleTime: HOME_REFRESH_MS,
+    refetchOnWindowFocus: false,
+    initialData: cachedHomeLocal?.data,
+    initialDataUpdatedAt: cachedHomeLocal?.updatedAt,
+  });
+  const {
+    data: newReleasesData,
+    dataUpdatedAt: newReleasesUpdatedAt,
+    isLoading: newReleasesLoading,
+  } = useQuery({
+    queryKey: ['home-new-releases'],
+    queryFn: api.homeNewReleases,
+    staleTime: HOME_REFRESH_MS,
+    refetchOnWindowFocus: false,
+    initialData: cachedNewReleases?.data,
+    initialDataUpdatedAt: cachedNewReleases?.updatedAt,
   });
   const {
     data: nightlyMixData,
@@ -166,9 +238,9 @@ export function HomeView() {
     initialDataUpdatedAt: cachedNightlyMix?.updatedAt,
   });
 
-  const recentTracks = data?.recentTracks ?? [];
-  const newReleases = data?.newReleases ?? [];
-  const playlists = data?.playlists ?? [];
+  const recentTracks = homeLocalData?.recentTracks ?? [];
+  const playlists = homeLocalData?.playlists ?? [];
+  const newReleases = newReleasesData?.newReleases ?? [];
   const nightlyMixes = nightlyMixData?.mixes ?? [];
 
   useEffect(() => {
@@ -176,6 +248,22 @@ export function HomeView() {
       writeNightlyMixCache(nightlyMixData, nightlyMixUpdatedAt);
     }
   }, [nightlyMixData, nightlyMixUpdatedAt]);
+
+  useEffect(() => {
+    if (
+      homeLocalData &&
+      (homeLocalData.recentTracks.length > 0 || homeLocalData.playlists.length > 0) &&
+      homeLocalUpdatedAt
+    ) {
+      writeHomeLocalCache(homeLocalData, homeLocalUpdatedAt);
+    }
+  }, [homeLocalData, homeLocalUpdatedAt]);
+
+  useEffect(() => {
+    if (newReleasesData?.newReleases.length && newReleasesUpdatedAt) {
+      writeNewReleasesCache(newReleasesData, newReleasesUpdatedAt);
+    }
+  }, [newReleasesData, newReleasesUpdatedAt]);
 
   function handlePlay(track: Track) {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
@@ -297,7 +385,7 @@ export function HomeView() {
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="section-label">Recently played</h2>
-          {isLoading && <span className="text-xs text-muted">Loading</span>}
+          {homeLoading && recentTracks.length === 0 && <span className="text-xs text-muted">Loading</span>}
         </div>
         {recentTracks.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
@@ -314,14 +402,27 @@ export function HomeView() {
       </section>
 
       <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles size={14} className="text-accent" />
-          <h2 className="section-label">New releases</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-accent" />
+            <h2 className="section-label">New releases</h2>
+          </div>
+          {newReleasesLoading && newReleases.length === 0 && <span className="text-xs text-muted">Loading</span>}
         </div>
         {newReleases.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {newReleases.map((track) => (
               <TrackCard key={track.spotifyId ?? track.id} track={track} onPlay={handlePlay} />
+            ))}
+          </div>
+        ) : newReleasesLoading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="rounded-2xl border border-white/[0.06] bg-base-800/60 p-3">
+                <div className="mb-3 aspect-square rounded-xl bg-base-700/70 animate-pulse" />
+                <div className="h-4 w-24 rounded bg-base-700 animate-pulse" />
+                <div className="mt-2 h-3 w-full rounded bg-base-700/70 animate-pulse" />
+              </div>
             ))}
           </div>
         ) : (

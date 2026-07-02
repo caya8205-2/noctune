@@ -63,26 +63,55 @@ export interface ScoredCandidate {
   reasons: string[];
 }
 
-export interface DebugMatchResult {
-  query: string;
-  cached: {
-    spotifyId: string;
-    youtubeId: string;
-    youtubeTitle: string;
-    youtubeArtist: string;
-    score: number;
-    matchedAt: number;
-  } | null;
-  candidates: ScoredCandidate[];
-}
-
 export interface MatchCacheEntry {
   spotifyId: string;
+  spotifyTitle?: string;
+  spotifyArtist?: string;
   youtubeId: string;
   youtubeTitle: string;
   youtubeArtist: string;
   score: number;
   matchedAt: number;
+}
+
+export interface QueryAttempt {
+  query: string;
+  fallbackIndex: number;
+  candidateCount: number;
+  best: ScoredCandidate | null;
+  candidates: ScoredCandidate[];
+}
+
+export interface DebugMatchResult {
+  queries: string[];
+  cached: MatchCacheEntry | null;
+  attempts: QueryAttempt[];
+  accepted: ScoredCandidate | null;
+  lastBest: ScoredCandidate | null;
+  candidates: ScoredCandidate[];
+}
+
+export interface LearnedTrack extends DebugTrack {
+  audioUrl?: string;
+  audioUrlExpiry?: number;
+  cachedAt?: number;
+  playCount?: number;
+  lastPlayed?: number;
+  localAudioPath?: string | null;
+  audioFormat?: string;
+  audioQuality?: string;
+  audioQualityPreference?: string;
+  source?: string;
+}
+
+export interface ResolverSnapshot {
+  spotifyId: string | null;
+  youtubeId: string | null;
+  matchCache: MatchCacheEntry | null;
+  learned: LearnedTrack | null;
+  audioCache: { cached: boolean };
+  blacklist: { blacklisted: boolean };
+  prefetch: { prefetched: boolean; prefetching: boolean };
 }
 
 export interface DebugStatus {
@@ -113,4 +142,36 @@ export const debugApi = {
   clearCacheEntry: (spotifyId: string) =>
     req<{ ok: boolean; cleared: number; youtubeId?: string }>(`/debug/cache/${encodeURIComponent(spotifyId)}`, { method: 'DELETE' }),
   status: () => req<DebugStatus>('/debug/status'),
+  resolverSnapshot: (params: { spotifyId?: string; youtubeId?: string }) => {
+    const q = new URLSearchParams();
+    if (params.spotifyId) q.set('spotifyId', params.spotifyId);
+    if (params.youtubeId) q.set('youtubeId', params.youtubeId);
+    return req<ResolverSnapshot>(`/debug/resolver-snapshot?${q.toString()}`);
+  },
+  resolveAgain: (body: {
+    spotifyId?: string;
+    youtubeId?: string;
+    title: string;
+    artist: string;
+    duration: number;
+    thumbnail?: string;
+  }) =>
+    req<{ ok: boolean; error?: string; resolved?: unknown; snapshot?: ResolverSnapshot }>(`/debug/resolve-again`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  clearTrack: (track: {
+    id: string;
+    title: string;
+    artist: string;
+    query: string;
+    spotifyId?: string;
+    youtubeId?: string;
+  }) =>
+    req<{ ok: boolean }>('/player/cache/clear-track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(track),
+    }),
 };

@@ -91,13 +91,11 @@ export const api = {
     request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
     ),
-  debugMatch: (track: Track, limit = 10) =>
-    request<DebugMatchResult>(
-      `/search/debug-match?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}&spotifyId=${encodeURIComponent(track.spotifyId ?? '')}&thumbnail=${encodeURIComponent(track.thumbnail ?? '')}&limit=${limit}`
-    ),
 
   home: () =>
-    request<{ playlists: Playlist[]; recentTracks: CachedTrack[]; newReleases: Track[] }>('/home'),
+    request<{ playlists: Playlist[]; recentTracks: CachedTrack[] }>('/home'),
+  homeNewReleases: () =>
+    request<{ newReleases: Track[] }>('/home/new-releases'),
   nightlyMixes: (limit = 4, tracks = 8) =>
     request<{ mixes: PersonalMix[] }>(`/home/nightly-mix?limit=${limit}&tracks=${tracks}`),
   history: () =>
@@ -331,6 +329,8 @@ export interface AudioCacheStatus {
     playableId: string | null;
     cached: boolean;
     inFlight: boolean;
+    prefetched: boolean;
+    prefetching: boolean;
   }>;
 }
 
@@ -365,23 +365,6 @@ export interface BackendStatus {
   matchCache?: { total: number };
   discordRpc?: { enabled: boolean; ready: boolean };
   features?: { updates?: boolean; lyricsRomanization?: boolean; audioQualityPreference?: boolean };
-}
-
-export interface DebugMatchResult {
-  query: string;
-  cached: {
-    spotifyId: string;
-    youtubeId: string;
-    youtubeTitle: string;
-    youtubeArtist: string;
-    score: number;
-    matchedAt: number;
-  } | null;
-  candidates: Array<{
-    track: Track;
-    score: number;
-    reasons: string[];
-  }>;
 }
 
 // ── Browse types ─────────────────────────────────────────────────────────────

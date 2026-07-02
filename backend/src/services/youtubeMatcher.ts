@@ -8,6 +8,8 @@ import { isPlaybackBlacklisted } from './playbackBlacklist.js';
 
 interface MatchCacheEntry {
   spotifyId: string;
+  spotifyTitle?: string;
+  spotifyArtist?: string;
   youtubeId: string;
   youtubeTitle: string;
   youtubeArtist: string;
@@ -64,6 +66,7 @@ const negativeKeywords = [
   'clip',
   'clips',
   'shorts',
+  'beat saber',
   'cover',
   'covered',
   'covers',
@@ -297,7 +300,7 @@ function hasLiveVisualSignal(value: string): boolean {
   return lower.includes('live映像') || lower.includes('ライブ映像') || lower.includes('ライブ') || lower.includes('公演');
 }
 
-function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate {
+export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate {
   const spotifyTitle = normalize(spotifyTrack.title);
   const spotifyArtist = normalize(spotifyTrack.artist);
   const candidateTitle = normalize(candidate.title);
@@ -437,7 +440,7 @@ function hasArtistChannelMatch(candidate: ScoredCandidate): boolean {
   return candidate.reasons.includes('artist-channel-match');
 }
 
-function hasTitleEvidence(candidate: ScoredCandidate): boolean {
+export function hasTitleEvidence(candidate: ScoredCandidate): boolean {
   return (
     candidate.reasons.includes('title-phrase') ||
     candidate.reasons.includes('title-compact') ||
@@ -445,7 +448,7 @@ function hasTitleEvidence(candidate: ScoredCandidate): boolean {
   );
 }
 
-function isAcceptableCandidate(candidate: ScoredCandidate | undefined): candidate is ScoredCandidate {
+export function isAcceptableCandidate(candidate: ScoredCandidate | undefined): candidate is ScoredCandidate {
   return Boolean(candidate && candidate.score >= 100 && hasTitleEvidence(candidate));
 }
 
@@ -512,11 +515,18 @@ function getCachedMatch(spotifyTrack: Track): MatchCacheEntry | null {
   return getStore().matches[spotifyTrack.spotifyId] ?? null;
 }
 
+export function getMatchCacheEntry(spotifyId: string): MatchCacheEntry | null {
+  if (!spotifyId) return null;
+  return getStore().matches[spotifyId] ?? null;
+}
+
 function writeCache(spotifyTrack: Track, candidate: ScoredCandidate) {
   if (!spotifyTrack.spotifyId) return;
   const current = getStore();
   current.matches[spotifyTrack.spotifyId] = {
     spotifyId: spotifyTrack.spotifyId,
+    spotifyTitle: spotifyTrack.title,
+    spotifyArtist: spotifyTrack.artist,
     youtubeId: candidate.track.id,
     youtubeTitle: candidate.track.title,
     youtubeArtist: candidate.track.artist,
@@ -526,24 +536,34 @@ function writeCache(spotifyTrack: Track, candidate: ScoredCandidate) {
   saveStore(current);
 }
 
-export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<Track | null> {
-  const cached = fromCache(spotifyTrack);
-  if (cached) return cached;
+export interface QueryAttempt {
+  query: string;
+  fallbackIndex: number;
+  candidateCount: number;
+  best: ScoredCandidate | null;
+  candidates: ScoredCandidate[];
+}
 
+export interface MatcherChainResult {
+  attempts: QueryAttempt[];
+  accepted: ScoredCandidate | null;
+  lastBest: ScoredCandidate | null;
+}
+
+export function buildMatcherQueries(spotifyTrack: Track): string[] {
   const stripPunctuation = (value: string): string =>
     value.replace(/[!?.…]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   const canonical = stripPunctuation(`${spotifyTrack.title} - ${spotifyTrack.artist}`);
   const titleOnly = stripPunctuation(spotifyTrack.title);
   const artistOnly = stripPunctuation(spotifyTrack.artist);
-  const titleWithoutSuffix = titleOnly.replace(/\s*[-–~|]\s*[^-–~|]+$/, '').trim();
 
   // Strip CJK / non‑Latin characters for a pure‑ASCII fallback
   const asciiTitle = titleOnly.replace(/[^\x00-\x7F]/g, '').trim().replace(/\s+/g, ' ');
   const asciiArtist = artistOnly.replace(/[^\x00-\x7F]/g, '').trim().replace(/\s+/g, ' ');
   const asciiTitleOnly = asciiTitle.replace(/\s*[-–~|]\s*[^-–~|]+$/, '').trim();
 
-  const queries = [...new Set([
+  return [...new Set([
     canonical,
     titleOnly,
     `${asciiTitle} ${artistOnly}`,
@@ -555,39 +575,67 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
     artistOnly,
     asciiArtist,
   ].map((q) => q.trim()))].filter((q) => q.length > 0);
+}
+
+async function runMatcherChain(
+  spotifyTrack: Track,
+  queries: string[],
+  limit: number
+): Promise<MatcherChainResult> {
+  const attempts: QueryAttempt[] = [];
+  let accepted: ScoredCandidate | null = null;
+  let lastBest: ScoredCandidate | undefined;
+
+  for (const query of queries) {
+    const candidates = await searchTracks(query, limit);
+    const ranked = candidates
+      .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
+      .map((candidate) => scoreCandidate(spotifyTrack, candidate))
+      .sort(compareCandidates);
+    const best = ranked[0];
+    lastBest = best ?? lastBest;
+    attempts.push({
+      query,
+      fallbackIndex: queries.indexOf(query),
+      candidateCount: candidates.length,
+      best: best ?? null,
+      candidates: ranked,
+    });
+    if (isAcceptableCandidate(best)) {
+      accepted = best ?? null;
+      break;
+    }
+  }
+
+  return { attempts, accepted, lastBest: lastBest ?? null };
+}
+
+export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<Track | null> {
+  const cached = fromCache(spotifyTrack);
+  if (cached) return cached;
+
+  const queries = buildMatcherQueries(spotifyTrack);
 
   const result = await matchQueue.add<Track | null>(async () => {
     const startedAt = Date.now();
-    let accepted: ScoredCandidate | null = null;
-    let lastBest: ScoredCandidate | undefined;
-    let usedQuery = queries[0];
-    let usedFallbackIndex = 0;
-    let usedCandidateCount = 0;
-
-    for (const query of queries) {
-      const candidates = await searchTracks(query, 12);
-      const ranked = candidates
-        .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
-        .map((candidate) => scoreCandidate(spotifyTrack, candidate))
-        .sort(compareCandidates);
-      const best = ranked[0];
-      lastBest = best ?? lastBest;
-      usedQuery = query;
-      usedFallbackIndex = queries.indexOf(query);
-      usedCandidateCount = candidates.length;
-
-      if (isAcceptableCandidate(best)) {
-        accepted = best;
-        break;
-      }
-    }
+    const { attempts, accepted, lastBest } = await runMatcherChain(spotifyTrack, queries, 12);
+    const usedQuery = attempts.length > 0 ? attempts[attempts.length - 1].query : queries[0];
 
     console.log(
       `[matcher] spotify->youtube ${JSON.stringify({
         spotifyId: spotifyTrack.spotifyId,
         query: usedQuery,
-        fallbackTried: usedFallbackIndex,
-        candidateCount: usedCandidateCount,
+        fallbackTried: attempts.length - 1,
+        queriesTried: attempts.map((a) => ({
+          query: a.query,
+          fallbackIndex: a.fallbackIndex,
+          candidateCount: a.candidateCount,
+          bestId: a.best?.track.id,
+          bestTitle: a.best?.track.title,
+          bestScore: a.best?.score,
+          bestReasons: a.best?.reasons,
+          acceptable: isAcceptableCandidate(a.best ?? undefined),
+        })),
         bestId: accepted?.track.id ?? lastBest?.track.id,
         bestTitle: accepted?.track.title ?? lastBest?.track.title,
         score: accepted?.score ?? lastBest?.score,
@@ -614,25 +662,30 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
   return result ?? null;
 }
 
+export interface MatcherDebugResult {
+  queries: string[];
+  cached: MatchCacheEntry | null;
+  attempts: QueryAttempt[];
+  accepted: ScoredCandidate | null;
+  lastBest: ScoredCandidate | null;
+  candidates: ScoredCandidate[];
+}
+
 export async function debugSpotifyYoutubeMatch(
   spotifyTrack: Track,
   limit = 10
-): Promise<{
-  query: string;
-  cached: MatchCacheEntry | null;
-  candidates: ScoredCandidate[];
-}> {
-  const query = `${spotifyTrack.title} - ${spotifyTrack.artist}`;
-  const candidates = await searchTracks(query, limit);
-  const ranked = candidates
-    .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
-    .map((candidate) => scoreCandidate(spotifyTrack, candidate))
-    .sort(compareCandidates);
+): Promise<MatcherDebugResult> {
+  const queries = buildMatcherQueries(spotifyTrack);
+  const { attempts, accepted, lastBest } = await runMatcherChain(spotifyTrack, queries, limit);
+  const primaryAttempt = attempts.find((a) => Boolean(a.best) && isAcceptableCandidate(a.best ?? undefined)) ?? attempts[0];
 
   return {
-    query,
+    queries,
     cached: getCachedMatch(spotifyTrack),
-    candidates: ranked,
+    attempts,
+    accepted,
+    lastBest,
+    candidates: primaryAttempt?.candidates ?? [],
   };
 }
 

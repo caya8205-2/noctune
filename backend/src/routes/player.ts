@@ -841,6 +841,8 @@ export async function playerRoutes(app: FastifyInstance) {
           playableId: playableId ?? null,
           cached: playableId ? Boolean(getExistingAudioCachePath(playableId, preference)) : false,
           inFlight: playableId ? audioCacheInFlight.has(playableId) : false,
+          prefetched: playableId ? Boolean(getPrefetched(playableId)) : false,
+          prefetching: playableId ? isPrefetching(playableId) : false,
         };
       })
     );

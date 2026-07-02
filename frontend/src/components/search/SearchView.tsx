@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Download, Loader2, Music, Search, Wrench, XCircle, Zap } from 'lucide-react';
-import { api, apiUrl, type DebugMatchResult, type Track } from '../../utils/api';
+import { CheckCircle, Download, Loader2, Music, Search, X, XCircle, Zap } from 'lucide-react';
+import { api, apiUrl, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -10,8 +10,10 @@ interface SettingsData {
 }
 
 const RECENT_SEARCHES_KEY = 'noctune:recent-searches';
-const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
 const SEARCH_RESULT_LIMIT = 25;
+const MINI_RESULT_LIMIT = 6;
+const MINI_DEBOUNCE_MS = 250;
+const MINI_MIN_QUERY = 2;
 
 function isPlaylistUrl(value: string): boolean {
   try {
@@ -36,10 +38,11 @@ export function SearchView() {
   const [savingEngine, setSavingEngine] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [debugSearch, setDebugSearch] = useState(false);
-  const [debugBusyId, setDebugBusyId] = useState<string | null>(null);
-  const [debugResult, setDebugResult] = useState<{ source: Track; result: DebugMatchResult } | null>(null);
+  const [miniResults, setMiniResults] = useState<Track[]>([]);
+  const [miniSearching, setMiniSearching] = useState(false);
+  const [miniOpen, setMiniOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const containerRef = useRef<HTMLDivElement>(null);
   const playlistUrl = useMemo(() => isPlaylistUrl(query), [query]);
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
@@ -54,8 +57,19 @@ export function SearchView() {
     } catch {
       setRecentSearches([]);
     }
-    setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
+
+  // Close mini dropdown when clicking outside the search container.
+  useEffect(() => {
+    if (!miniOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setMiniOpen(false);
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [miniOpen]);
 
   async function handleEngineChange(nextEngine: 'ytdlp' | 'spotify') {
     if (nextEngine === engine || savingEngine) return;
@@ -68,7 +82,7 @@ export function SearchView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchEngine: nextEngine }),
       });
-      if (query.trim()) void doSearch(query);
+      if (query.trim()) void doFullSearch(query);
     } catch (err) {
       console.error('Search engine save failed:', err);
       setEngine(previous);
@@ -77,18 +91,39 @@ export function SearchView() {
     }
   }
 
-  const doSearch = useCallback(async (q: string) => {
+  const runMiniSearch = useCallback(async (q: string) => {
+    const cleanQuery = q.trim();
+    if (cleanQuery.length < MINI_MIN_QUERY || isPlaylistUrl(cleanQuery)) {
+      setMiniResults([]);
+      setMiniSearching(false);
+      setMiniOpen(false);
+      return;
+    }
+    setMiniSearching(true);
+    setMiniOpen(true);
+    try {
+      const res = await api.search(cleanQuery, MINI_RESULT_LIMIT);
+      setMiniResults(res.tracks);
+    } catch (err) {
+      console.error('Mini search error:', err);
+    } finally {
+      setMiniSearching(false);
+    }
+  }, []);
+
+  const doFullSearch = useCallback(async (q: string) => {
     const cleanQuery = q.trim();
     if (!cleanQuery) {
       setResults([]);
       setSearched(false);
+      setMiniOpen(false);
       return;
     }
     setIsSearching(true);
+    setMiniOpen(false);
     try {
       const res = await api.search(cleanQuery, SEARCH_RESULT_LIMIT);
       setResults(res.tracks);
-      setDebugResult(null);
       setFromCache(res.fromCache);
       setSearched(true);
       setRecentSearches((current) => {
@@ -107,20 +142,46 @@ export function SearchView() {
     const val = e.target.value;
     setQuery(val);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(val), 400);
+    if (!val.trim()) {
+      setMiniResults([]);
+      setMiniSearching(false);
+      setMiniOpen(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => void runMiniSearch(val), MINI_DEBOUNCE_MS);
+  }
+
+  function clearQuery() {
+    clearTimeout(debounceRef.current);
+    setQuery('');
+    setMiniResults([]);
+    setMiniSearching(false);
+    setMiniOpen(false);
+    setResults([]);
+    setSearched(false);
+    setImportMessage(null);
   }
 
   function runRecentSearch(value: string) {
     setQuery(value);
     clearTimeout(debounceRef.current);
-    void doSearch(value);
+    setMiniOpen(false);
+    void doFullSearch(value);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') {
+      e.preventDefault();
       clearTimeout(debounceRef.current);
-      doSearch(query);
+      void doFullSearch(query);
+    } else if (e.key === 'Escape' && miniOpen) {
+      setMiniOpen(false);
     }
+  }
+
+  function handleMiniPick(track: Track) {
+    setMiniOpen(false);
+    playTrack(track, [track], { autoQueue: true, queueSource: 'search' });
   }
 
   function handlePlay(track: Track) {
@@ -147,17 +208,7 @@ export function SearchView() {
     }
   }
 
-  async function handleDebugMatch(track: Track) {
-    setDebugBusyId(track.id);
-    try {
-      const result = await api.debugMatch(track, 10);
-      setDebugResult({ source: track, result });
-    } catch (err) {
-      console.error('Debug match failed:', err);
-    } finally {
-      setDebugBusyId(null);
-    }
-  }
+  const rightSlotBusy = isSearching || miniSearching;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -174,7 +225,7 @@ export function SearchView() {
           )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="text"
@@ -185,10 +236,67 @@ export function SearchView() {
             className="input-base pl-9 pr-10 h-12"
             autoFocus
           />
-          {isSearching && (
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted">
+          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted">
+            {rightSlotBusy ? (
               <Loader2 size={14} className="animate-spin" />
-            </span>
+            ) : query ? (
+              <button
+                type="button"
+                onClick={clearQuery}
+                className="text-muted hover:text-white transition-colors"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            ) : null}
+          </span>
+
+          {miniOpen && (miniSearching || miniResults.length > 0) && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-30 max-h-80 overflow-y-auto rounded-xl border border-base-600/70 bg-base-900 shadow-2xl shadow-black/40">
+              {miniSearching && miniResults.length === 0 ? (
+                <div className="flex items-center justify-center gap-2 px-4 py-3 text-xs text-muted">
+                  <Loader2 size={13} className="animate-spin" /> Searching
+                </div>
+              ) : (
+                <>
+                  {miniResults.map((track, i) => {
+                    const isActive =
+                      currentTrack?.id === track.id ||
+                      Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+                    return (
+                      <button
+                        key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
+                        type="button"
+                        onClick={() => handleMiniPick(track)}
+                        className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-base-800 ${
+                          isActive ? 'bg-base-800' : ''
+                        }`}
+                      >
+                        <img
+                          src={track.thumbnail}
+                          alt=""
+                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                          onError={(e) => (e.currentTarget.style.display = 'none')}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-xs truncate ${isActive ? 'text-accent font-medium' : 'text-white'}`}>
+                            {track.title}
+                          </p>
+                          <p className="text-[11px] text-muted truncate">{track.artist}</p>
+                        </div>
+                        <span className="text-[11px] font-mono tabular-nums text-muted flex-shrink-0">
+                          {formatDuration(track.duration)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <div className="border-t border-base-700/60 px-3 py-2 text-[11px] text-muted">
+                    Press <span className="font-mono text-soft">Enter</span> for all results
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
@@ -241,12 +349,6 @@ export function SearchView() {
           ) : null}
         </div>
 
-        {debugSearch && (
-          <div className="mt-2 rounded-lg border border-base-600/70 bg-base-900 px-3 py-2 text-xs text-muted">
-            Debug mode is on. Use the debug button on Spotify results to inspect YouTube candidate scoring.
-          </div>
-        )}
-
         {playlistUrl && (
           <div className="mt-3 flex flex-col gap-3 rounded-lg border border-base-600/70 bg-base-800 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -279,42 +381,6 @@ export function SearchView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 sm:px-6 lg:px-9">
-        {debugSearch && debugResult && (
-          <div className="mb-4 rounded-lg border border-accent/25 bg-base-900 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="section-label text-accent">Scoring debug</p>
-                <p className="text-sm font-semibold text-white truncate mt-1">
-                  {debugResult.source.title}
-                </p>
-                <p className="text-xs text-muted truncate mt-1">{debugResult.result.query}</p>
-              </div>
-              {debugResult.result.cached && (
-                <span className="rounded-full border border-base-600 px-2 py-1 text-[10px] uppercase tracking-wide text-muted">
-                  Cached {debugResult.result.cached.score}
-                </span>
-              )}
-            </div>
-            <div className="mt-3 flex flex-col gap-2">
-              {debugResult.result.candidates.slice(0, 5).map((candidate, index) => (
-                <div key={candidate.track.id} className="rounded-lg border border-base-600/60 bg-base-950 px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 text-xs text-muted">{index + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-white truncate">{candidate.track.title}</p>
-                      <p className="text-[11px] text-muted truncate">{candidate.track.artist}</p>
-                    </div>
-                    <span className="font-mono text-xs text-accent">{candidate.score}</span>
-                  </div>
-                  <p className="mt-1 pl-8 text-[11px] text-muted truncate">
-                    {candidate.reasons.length > 0 ? candidate.reasons.join(', ') : 'no scoring reasons'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {!searched && !isSearching && (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-muted">
             <div className="w-14 h-14 rounded-xl bg-base-800 border border-base-600/30 flex items-center justify-center">
@@ -420,25 +486,6 @@ export function SearchView() {
                 <TrackActionButtons
                   track={track}
                   className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  trailingActions={
-                    debugSearch && track.spotifyId ? (
-                      <button
-                        type="button"
-                        className="btn-ghost p-1.5"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDebugMatch(track);
-                        }}
-                        title="Debug YouTube match"
-                      >
-                        {debugBusyId === track.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Wrench size={14} />
-                        )}
-                      </button>
-                    ) : null
-                  }
                 />
 
                 <span className="block w-12 text-right text-xs font-mono tabular-nums text-muted flex-shrink-0">

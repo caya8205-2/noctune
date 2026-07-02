@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X, Zap } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
@@ -219,25 +219,40 @@ export function QueueView() {
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
               <QueueTrackTitle track={track} isActive={isActive} setView={setView} />
-              {track.playbackError ? (
-                <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
-                  <AlertTriangle size={10} className="mr-1" />
-                  Failed
-                </span>
-              ) : cacheStatus?.cached || cacheStatus?.inFlight ? (
-                <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-accent/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-accent">
-                  {cacheStatus.cached ? (
-                    <CheckCircle2 size={10} className="mr-1" />
-                  ) : (
-                    <Loader2 size={10} className="mr-1 animate-spin" />
+              <div className="hidden md:flex items-center justify-end gap-1.5 flex-shrink-0 mr-4">
+                {track.playbackError ? (
+                  <span className="inline-flex w-20 items-center justify-center rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
+                    <AlertTriangle size={10} className="mr-1" />
+                    Failed
+                  </span>
+                ) : cacheStatus?.cached || cacheStatus?.inFlight ? (
+                  <span className="inline-flex w-20 items-center justify-center rounded-full border border-accent/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-accent">
+                    {cacheStatus.cached ? (
+                      <CheckCircle2 size={10} className="mr-1" />
+                    ) : (
+                      <Loader2 size={10} className="mr-1 animate-spin" />
+                    )}
+                    {cacheStatus.cached ? 'Cached' : 'Caching'}
+                  </span>
+                ) : null}
+                <span
+                  className={clsx(
+                    'inline-flex w-24 items-center justify-center rounded-full border px-1 py-0.5 text-[10px] uppercase tracking-wide',
+                    cacheStatus?.prefetched
+                      ? 'border-accent/40 bg-accent/15 text-accent'
+                      : cacheStatus?.prefetching
+                        ? 'border-accent/30 text-accent'
+                        : 'border-base-600/60 text-muted'
                   )}
-                  {cacheStatus.cached ? 'Cached' : 'Caching'}
+                >
+                  {cacheStatus?.prefetched ? (
+                    <Zap size={10} className="mr-1" />
+                  ) : cacheStatus?.prefetching ? (
+                    <Loader2 size={10} className="mr-1 animate-spin" />
+                  ) : null}
+                  {queueSourceLabel(track.queueSource)}
                 </span>
-              ) : (
-              <span className="hidden md:inline-flex w-20 items-center justify-center flex-shrink-0 mr-4 rounded-full border border-base-600/60 px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                {queueSourceLabel(track.queueSource)}
-              </span>
-              )}
+              </div>
               <div className="flex flex-shrink-0 items-center gap-1">
                 <TrackActionButtons
                   track={track}

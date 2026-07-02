@@ -14,6 +14,7 @@ import {
   Keyboard,
   Play,
   RefreshCw,
+  Scale,
   ShieldAlert,
   Square,
   Sparkles,
@@ -82,9 +83,49 @@ function formatBytes(bytes = 0): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const DEBUG_SEARCH_KEY = 'noctune:debug-search-scoring';
 const DEBUG_DASHBOARD_URL = 'http://localhost:4173/debug.html';
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const licenseGroups: Array<{ layer: string; items: Array<{ name: string; license: string }> }> = [
+  {
+    layer: 'Frontend',
+    items: [
+      { name: 'React', license: 'MIT' },
+      { name: 'Vite', license: 'MIT' },
+      { name: 'Tailwind CSS', license: 'MIT' },
+      { name: 'Zustand', license: 'MIT' },
+      { name: 'TanStack Query', license: 'MIT' },
+      { name: 'lucide-react', license: 'ISC' },
+      { name: 'clsx', license: 'MIT' },
+      { name: 'audiomotion-analyzer', license: 'AGPL-3.0-or-later' },
+      { name: 'Tauri API', license: 'Apache-2.0 OR MIT' },
+    ],
+  },
+  {
+    layer: 'Backend',
+    items: [
+      { name: 'Fastify', license: 'MIT' },
+      { name: 'better-sqlite3', license: 'MIT' },
+      { name: 'discord-rpc', license: 'MIT' },
+      { name: 'dotenv', license: 'BSD-2-Clause' },
+      { name: 'kuroshiro', license: 'MIT' },
+      { name: 'kuroshiro-analyzer-kuromoji', license: 'MIT' },
+      { name: 'node-cache', license: 'MIT' },
+      { name: 'p-queue', license: 'MIT' },
+      { name: 'pino-pretty', license: 'MIT' },
+      { name: 'youtubei.js', license: 'MIT' },
+      { name: 'yt-dlp-wrap', license: 'MIT' },
+      { name: 'zod', license: 'MIT' },
+    ],
+  },
+  {
+    layer: 'Desktop shell',
+    items: [
+      { name: 'Tauri', license: 'Apache-2.0 OR MIT' },
+      { name: 'Rust', license: 'MIT OR Apache-2.0' },
+    ],
+  },
+];
 
 export function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null);
@@ -102,7 +143,6 @@ export function SettingsView() {
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
-  const [debugSearch, setDebugSearch] = useState(false);
   const [previewRunning, setPreviewRunning] = useState(false);
   const [previewBusy, setPreviewBusy] = useState<'start' | 'stop' | 'open' | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
@@ -127,7 +167,6 @@ export function SettingsView() {
     if (!IS_TAURI) {
       api.debugPreviewStatus().then((status) => setPreviewRunning(status.running)).catch(console.error);
     }
-    setDebugSearch(localStorage.getItem(DEBUG_SEARCH_KEY) === '1');
   }, []);
 
   async function handleSave() {
@@ -395,11 +434,6 @@ export function SettingsView() {
     }
   }
 
-  function handleDebugSearchChange(enabled: boolean) {
-    setDebugSearch(enabled);
-    localStorage.setItem(DEBUG_SEARCH_KEY, enabled ? '1' : '0');
-  }
-
   async function waitForDebugDashboard() {
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 500));
@@ -503,7 +537,7 @@ export function SettingsView() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8 gap-8">
-      <div className="flex flex-col gap-2 max-w-3xl">
+      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <p className="section-label text-accent">Settings</p>
         </div>
@@ -513,7 +547,7 @@ export function SettingsView() {
       </div>
 
       {/* Updates */}
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Updates
@@ -563,7 +597,7 @@ export function SettingsView() {
 
       {/* Spotify API Credentials */}
       {IS_TAURI && (
-        <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+        <section className="surface-panel flex flex-col gap-4 p-5">
           <div>
             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
               Spotify API Credentials
@@ -675,7 +709,7 @@ export function SettingsView() {
       )}
 
       {/* Playback & Presence */}
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Playback & presence
@@ -741,7 +775,7 @@ export function SettingsView() {
       </section>
 
       {/* Diagnostics */}
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Diagnostics
@@ -808,31 +842,6 @@ export function SettingsView() {
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => handleDebugSearchChange(!debugSearch)}
-          className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
-        >
-          <span>
-            <span className="block text-sm font-medium text-white">Search scoring debug</span>
-            <span className="block text-xs text-muted mt-1">Show candidate score and reasons in Search while tuning resolver matches.</span>
-          </span>
-          <span
-            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${debugSearch
-              ? 'border-accent/50 bg-accent/25'
-              : 'border-base-600 bg-base-800'
-              }`}
-            aria-hidden="true"
-          >
-            <span
-              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${debugSearch
-                ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
-                : 'translate-x-1 bg-muted'
-                }`}
-            />
-          </span>
-        </button>
-
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -894,7 +903,7 @@ export function SettingsView() {
       </section>
 
       {/* Cache */}
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
             Cache
@@ -1027,7 +1036,7 @@ export function SettingsView() {
       </section>
 
       {/* Keyboard Shortcuts */}
-      <section className="surface-panel flex flex-col gap-4 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-4 p-5">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
             <Keyboard size={18} />
@@ -1058,7 +1067,7 @@ export function SettingsView() {
       </section>
 
       {/* About */}
-      <section className="surface-panel flex flex-col gap-5 max-w-3xl p-5">
+      <section className="surface-panel flex flex-col gap-5 p-5">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
             <Info size={18} />
@@ -1086,8 +1095,51 @@ export function SettingsView() {
         </div>
       </section>
 
+      {/* Licenses */}
+      <section className="surface-panel flex flex-col gap-4 p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
+            <Scale size={18} />
+          </div>
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              Licenses
+            </h2>
+            <p className="text-xs text-muted leading-relaxed mt-2">
+              Noctune is MIT-licensed and bundles these third-party open source components.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {licenseGroups.map((group) => (
+            <div key={group.layer} className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+              <p className="section-label mb-2">{group.layer}</p>
+              <div className="flex flex-col gap-1">
+                {group.items.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-soft">{item.name}</span>
+                    <span className="flex-shrink-0 rounded border border-base-600/60 bg-base-800 px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                      {item.license}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200 leading-relaxed">
+          The audio visualizer uses <span className="font-mono">audiomotion-analyzer</span> (AGPL-3.0-or-later), a copyleft license — redistributors must preserve its source-availability obligations.
+        </div>
+
+        <p className="text-xs text-muted leading-relaxed">
+          Metadata, lyrics, and streams come from external services — Spotify Web API, Last.fm, LRCLIB, and YouTube — each governed by their own terms. Noctune is an independent project and is not affiliated with or endorsed by these services.
+        </p>
+      </section>
+
       {/* Version */}
-      <section className="max-w-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
+      <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-base-600/50 pt-4 pb-2 text-xs text-muted">
         <span>Noctune</span>
         <span className="font-mono">{APP_VERSION}-Stable</span>
       </section>
