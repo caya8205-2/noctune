@@ -1,8 +1,8 @@
-# Noctune
+<p align="center">
+  <img src="assets/logo.svg" alt="Noctune CLI Logo" width="450" />
+</p>
 
-<img src="app-icon.png" width="128" alt="Noctune logo" />
-
-Noctune is a local-first desktop music player built for fast local playback, clean metadata, smart queueing, synced lyrics, cache-first playback, and a polished full-player experience.
+<p align="center">A lightweight desktop music player perfect for playing youtube background noise without the memory-eater browser or spotify with no ads</p> 
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111111)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -22,9 +22,9 @@ Noctune is a local-first desktop music player built for fast local playback, cle
 [![Traffic Report](https://img.shields.io/badge/Traffic_Report-Latest-2F80ED?logo=github&logoColor=white)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 [![Stats Data](https://img.shields.io/badge/Stats_Data-github--repo--stats-111111?logo=github&logoColor=white)](https://github.com/caya8205-2/noctune/tree/github-repo-stats)
 
-[![Repository traffic](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
-
 Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.
+
+[![Repository traffic](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 
 ## Repository Insights
 
@@ -108,7 +108,7 @@ Noctune ranks YouTube candidates with lightweight heuristics:
 Install dependencies:
 
 ```bash
-npm install
+npm i
 ```
 
 Spotify credentials are optional but recommended for metadata search, Spotify playlist import, album and artist discovery, and new releases. Add your Client ID and Client Secret from the app Settings screen.
@@ -176,13 +176,10 @@ Noctune stores runtime data locally and ignores it from git:
 
 Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
 
-## Repository Description
-
-Local-first desktop music player with Spotify metadata, YouTube stream resolving, Last.fm-assisted Nightly Mixes, synced and Romaji lyrics, smart queueing, local playlists, album and artist browsing, adaptive visualizer, GitHub Releases update checks, and cache-first playback.
 
 ## Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md).
+See [CHANGELOG.md](./CHANGELOG.md) or [Releases](https://github.com/caya8205-2/noctune/releases)
 
 ## License
 

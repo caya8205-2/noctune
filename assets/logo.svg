@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 130" width="100%" height="100%">
+  <defs>
+    <linearGradient id="forest-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#39ff14" />
+      <stop offset="100%" stop-color="#1b5e20" />
+    </linearGradient>
+  </defs>
+
+  <style>
+    .ascii-text {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 14px;
+      line-height: 1.15;
+      fill: url(#forest-gradient);
+      font-weight: bold;
+      text-anchor: middle;
+    }
+  </style>
+
+  <!-- xml:space="preserve" wajib dipasang di sini agar spasi awal tidak dibuang -->
+  <text x="250" y="25" xml:space="preserve" class="ascii-text">
+    <tspan x="250" dy="0">  _   _  ___   ____ _____ _   _ _   _ _____ </tspan>
+    <tspan x="250" dy="1.2em"> | \ | |/ _ \ / ___|_   _| | | | \ | | ____|</tspan>
+    <tspan x="250" dy="1.2em"> |  \| | | | | |     | | | | | |  \| |  _|  </tspan>
+    <tspan x="250" dy="1.2em"> | |\  | |_| | |___  | | | |_| | |\  | |___ </tspan>
+    <tspan x="250" dy="1.2em"> |_| \_|\___/ \____| |_|  \___/|_| \_|_____|</tspan>
+  </text>
+</svg>
