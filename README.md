@@ -26,17 +26,15 @@
 
 </div>
 
-Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.
+<div align="center">
 
 [![Repository traffic](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 
-## Repository Insights
+</div>
 
-| Traffic card | Traffic report | Stored snapshots | Refresh |
-|---|---|---|---|
-| [README SVG](https://raw.githubusercontent.com/caya8205-2/noctune/github-repo-stats/caya8205-2/noctune/repository-traffic-card.svg) | [Latest HTML report](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html) | [`github-repo-stats` branch](https://github.com/caya8205-2/noctune/tree/github-repo-stats) | Daily at `23:00 UTC` |
+<p align="center">Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.</p>
 
-The card highlights repository views and clones from the public traffic snapshots, while the full report includes popular paths, referrers, stars, and forks.
+---
 
 ## Highlights
 
@@ -61,7 +59,7 @@ The card highlights repository views and clones from the public traffic snapshot
 
 ## How It Works
 
-```text
+```bash
 Search
   -> Spotify metadata or direct YouTube results
   -> Play selected track
@@ -149,21 +147,21 @@ npm run tauri:build
 
 ## Project Structure
 
-```text
+```bash
 noctune/
   backend/
     src/
-      routes/          Fastify API routes
-      services/        cache, Spotify, resolver, matcher, lyrics, playlists
-      types/           backend domain types
-    data/              development runtime data, ignored by git
+      routes/          # Fastify API routes
+      services/        # cache, Spotify, resolver, matcher, lyrics, playlists
+      types/           # backend domain types
+    data/              # development runtime data, ignored by git
   frontend/
     src/
-      components/      app views and player UI
-      hooks/           audio engine and keyboard shortcuts
-      store/           Zustand player state
-      utils/           typed API client
-  src-tauri/           Tauri desktop shell
+      components/      # app views and player UI
+      hooks/           # audio engine and keyboard shortcuts
+      store/           # Zustand player state
+      utils/           # typed API client
+  src-tauri/           # Tauri desktop shell
 ```
 
 ## Local Data
