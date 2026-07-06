@@ -13,6 +13,8 @@ import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ArtistView } from './components/browse/ArtistView';
 import { AlbumView } from './components/browse/AlbumView';
+import { StatsView } from './components/stats/StatsView';
+import { LocalFilesView } from './components/local-files/LocalFilesView';
 import DebugApp from './debug/DebugApp';
 import { usePlayerStore } from './store/player';
 import { getShortcutsByCategory } from './constants/keyboardShortcuts';
@@ -196,6 +198,8 @@ function AppInner() {
             {activeView === 'queue' && <QueueView />}
             {activeView === 'settings' && <SettingsView />}
             {activeView === 'playlist' && <PlaylistView />}
+            {activeView === 'stats' && <StatsView />}
+            {activeView === 'local-files' && <LocalFilesView />}
             {activeView === 'artist' && activeArtistId && <ArtistView artistId={activeArtistId} />}
             {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
             {activeView === 'debug' && <DebugApp />}

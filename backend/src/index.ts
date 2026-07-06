@@ -16,7 +16,11 @@ import { rpcRoutes } from './routes/rpc.js';
 import { browseRoutes } from './routes/browse.js';
 import { updateRoutes } from './routes/updates.js';
 import { debugRoutes } from './routes/debug.js';
+import { statsRoutes } from './routes/stats.js';
+import { localFilesRoutes } from './routes/localFiles.js';
+import { radioRoutes } from './routes/radio.js';
 import { initDb } from './services/playlist.js';
+import { initLocalFilesDb } from './services/localFiles.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
 import { getPrefetchStatus } from './services/prefetch.js';
@@ -107,6 +111,9 @@ async function bootstrap() {
   await app.register(browseRoutes);
   await app.register(updateRoutes);
   await app.register(debugRoutes);
+  await app.register(statsRoutes);
+  await app.register(localFilesRoutes);
+  await app.register(radioRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({
@@ -129,6 +136,7 @@ async function bootstrap() {
 
   // Init SQLite schema
   initDb();
+  initLocalFilesDb();
   scheduleDemoStateReset((result, message) => app.log.info(result, message));
   scheduleStartupPrefetch();
 

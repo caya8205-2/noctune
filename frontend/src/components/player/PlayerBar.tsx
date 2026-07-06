@@ -1,5 +1,5 @@
 import { usePlayerStore } from '../../store/player';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
@@ -7,12 +7,14 @@ import { api } from '../../utils/api';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
-  Loader2,
+  Loader2, Timer,
   Info,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { LikeButton } from './LikeButton';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { EqualizerView } from './EqualizerView';
 
 export function PlayerBar() {
   const seekDragging = useRef(false);
@@ -243,15 +245,12 @@ export function PlayerBar() {
         </div>
 
         {/* Time + Volume */}
-        <div className="hidden w-80 items-center justify-end gap-3 sm:flex">
+        <div className="hidden w-80 items-center justify-end gap-2 sm:flex">
           <span className="w-28 whitespace-nowrap text-right font-mono text-xs tabular-nums text-muted">
             {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>
 
-          <button
-            onClick={toggleMute}
-            className="btn-ghost"
-          >
+          <button onClick={toggleMute} className="btn-ghost">
             {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
 
@@ -269,6 +268,9 @@ export function PlayerBar() {
             />
           )}
 
+          {/* More options menu — sleep timer, playback speed, crossfade, EQ */}
+          {currentTrack && <MoreOptionsMenu />}
+
           <button
             onClick={toggleTrackDetails}
             className={clsx('btn-ghost', showTrackDetails && 'text-accent')}
@@ -278,7 +280,7 @@ export function PlayerBar() {
           </button>
 
           <div
-            className="group/vol relative flex h-4 w-24 flex-shrink-0 cursor-pointer items-center"
+            className="group/vol relative flex h-4 w-20 flex-shrink-0 cursor-pointer items-center"
             onMouseDown={handleVolDown}
           >
             <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/10" />
@@ -293,6 +295,128 @@ export function PlayerBar() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "More" dropdown: sleep timer, playback speed, crossfade, equalizer
+ * Consolidates optional controls that don't need permanent buttons.
+ */
+function MoreOptionsMenu() {
+  const {
+    playbackRate, sleepTimerEnd, crossfadeDuration, eqEnabled,
+    setPlaybackRate, setSleepTimer, setCrossfadeDuration,
+  } = usePlayerStore();
+  const [open, setOpen] = useState(false);
+  const [eqPanelOpen, setEqPanelOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+        setEqPanelOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={clsx('btn-ghost', open && 'text-accent')}
+        title="More playback options"
+      >
+        <span className="text-xs font-bold leading-none tracking-wider">···</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full right-0 mb-2 z-50 flex min-w-[200px] flex-col gap-0.5 rounded-xl border border-white/[0.08] bg-base-900 p-2 shadow-xl animate-fade-in">
+          {/* Sleep Timer */}
+          <div className="flex items-center justify-between rounded-lg px-2.5 py-2 hover:bg-white/[0.04]">
+            <span className="text-xs text-soft">Sleep timer</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted">
+                {sleepTimerEnd ? `${Math.max(1, Math.round((sleepTimerEnd - Date.now()) / 60000))}m` : 'Off'}
+              </span>
+              <button
+                onClick={() => {
+                  if (sleepTimerEnd) {
+                    setSleepTimer(null);
+                  } else {
+                    setSleepTimer(30);
+                  }
+                }}
+                className="btn-ghost p-1"
+                title={sleepTimerEnd ? 'Cancel' : 'Set 30m'}
+              >
+                <Timer size={12} />
+              </button>
+            </div>
+          </div>
+
+          {/* Playback Speed */}
+          <div className="rounded-lg px-2.5 py-2 hover:bg-white/[0.04]">
+            <div className="mb-1.5 text-xs text-soft">Speed</div>
+            <div className="flex gap-1">
+              {[0.75, 1, 1.25, 1.5, 2].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setPlaybackRate(r)}
+                  className={clsx(
+                    'rounded px-2 py-1 text-[11px] font-mono transition-colors',
+                    playbackRate === r ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white hover:bg-white/[0.04]'
+                  )}
+                >
+                  {r}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Crossfade */}
+          <div className="rounded-lg px-2.5 py-2 hover:bg-white/[0.04]">
+            <div className="mb-1.5 text-xs text-soft">Crossfade</div>
+            <div className="flex gap-1">
+              {[0, 2, 5, 8, 12].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setCrossfadeDuration(s)}
+                  className={clsx(
+                    'rounded px-2 py-1 text-[11px] font-mono transition-colors',
+                    crossfadeDuration === s ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white hover:bg-white/[0.04]'
+                  )}
+                >
+                  {s === 0 ? 'Off' : `${s}s`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Equalizer */}
+          <div
+            className={clsx(
+              'flex items-center justify-between rounded-lg px-2.5 py-2 cursor-pointer hover:bg-white/[0.04]',
+              eqPanelOpen && 'bg-white/[0.04]'
+            )}
+            onClick={() => setEqPanelOpen(!eqPanelOpen)}
+          >
+            <span className="text-xs text-soft">Equalizer</span>
+            <SlidersHorizontal size={14} className={clsx(eqEnabled ? 'text-accent' : 'text-muted')} />
+          </div>
+          {eqPanelOpen && (
+            <div className="px-1 pb-1">
+              <EqualizerView onClose={() => setEqPanelOpen(false)} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

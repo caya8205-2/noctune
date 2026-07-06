@@ -96,7 +96,7 @@ const PlayedBody = z.object({
   youtubeId: z.string().optional(),
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
-  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation']).optional(),
+  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next']).optional(),
 });
 
 const ClearTrackCacheBody = PlayedBody.partial().extend({
@@ -440,6 +440,37 @@ export async function playerRoutes(app: FastifyInstance) {
       }
 
       const { videoId } = parsed.data;
+
+      // Handle local file playback
+      if (videoId.startsWith('local:')) {
+        const localId = videoId.replace(/^local:/, '');
+        const { getLocalFile } = await import('../services/localFiles.js');
+        const localFile = getLocalFile(localId);
+        if (!localFile) {
+          return reply.status(404).send({ error: 'Local file not found' });
+        }
+
+        // Return a CachedTrack-like object pointing to our stream endpoint
+        return reply.send({
+          id: videoId,
+          title: localFile.title,
+          artist: localFile.artist,
+          album: localFile.album,
+          duration: localFile.duration,
+          thumbnail: localFile.thumbnail,
+          query: localFile.title,
+          audioUrl: `/local-files/${localId}/stream`,
+          audioUrlExpiry: Date.now() + 86400000, // 24 hours
+          audioQualityPreference: 'high',
+          audioFormat: localFile.format,
+          audioQuality: 'local',
+          localAudioPath: localFile.path,
+          cachedAt: Date.now(),
+          playCount: 0,
+          source: 'local',
+        });
+      }
+
       const query = req.query.query ?? videoId;
       const preference = getEnvConfig().audioQualityPreference;
       const startedAt = Date.now();
@@ -636,6 +667,60 @@ export async function playerRoutes(app: FastifyInstance) {
   // Stream audio through backend (bypass CORS for Web Audio API)
   app.get('/player/stream/:videoId', async (req, reply) => {
     const { videoId } = req.params as { videoId: string };
+
+    // Handle local file streaming
+    if (videoId.startsWith('local:')) {
+      const localId = videoId.replace(/^local:/, '');
+      const { getLocalFile } = await import('../services/localFiles.js');
+      const localFile = getLocalFile(localId);
+
+      if (!localFile) {
+        return reply.status(404).send({ error: 'Local file not found' });
+      }
+
+      if (!fs.existsSync(localFile.path)) {
+        return reply.status(404).send({ error: 'Audio file not found on disk' });
+      }
+
+      const stat = fs.statSync(localFile.path);
+      const total = stat.size;
+      const ext = localFile.path.toLowerCase().split('.').pop();
+      const contentType = {
+        mp3: 'audio/mpeg',
+        m4a: 'audio/mp4',
+        flac: 'audio/flac',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        webm: 'audio/webm',
+      }[ext || ''] || 'audio/mpeg';
+
+      const range = req.headers.range;
+      if (range) {
+        const match = range.match(/^bytes=(\d+)-(\d*)$/i);
+        const start = match ? Number(match[1]) : 0;
+        const end = match?.[2] ? Number(match[2]) : total - 1;
+        const safeEnd = Math.min(end, total - 1);
+
+        reply
+          .status(206)
+          .header('Content-Type', contentType)
+          .header('Accept-Ranges', 'bytes')
+          .header('Content-Length', safeEnd - start + 1)
+          .header('Content-Range', `bytes ${start}-${safeEnd}/${total}`)
+          .header('Cache-Control', 'public, max-age=86400');
+
+        return reply.send(fs.createReadStream(localFile.path, { start, end: safeEnd }));
+      }
+
+      reply
+        .header('Content-Type', contentType)
+        .header('Accept-Ranges', 'bytes')
+        .header('Content-Length', total)
+        .header('Cache-Control', 'public, max-age=86400');
+
+      return reply.send(fs.createReadStream(localFile.path));
+    }
+
     const preference = getEnvConfig().audioQualityPreference;
     let cached = getCachedById(videoId);
     if (!cached) {

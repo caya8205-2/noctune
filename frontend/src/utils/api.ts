@@ -217,6 +217,46 @@ export const api = {
 
   removeTrack: (playlistId: string, trackId: string) =>
     request(`/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' }),
+
+  // Local files
+  scanLocalFiles: (path: string) =>
+    request<{ scanned: number; failed: number; total: number; errors: string[] }>('/local-files/scan', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
+  getLocalFiles: (limit = 50, offset = 0) =>
+    request<{ files: LocalFile[]; total: number; limit: number; offset: number }>(
+      `/local-files?limit=${limit}&offset=${offset}`
+    ),
+  deleteLocalFile: (id: string) =>
+    request<{ ok: boolean }>(`/local-files/${id}`, { method: 'DELETE' }),
+
+  stats: {
+    overview: (period: '7d' | '30d' | 'all' = 'all') =>
+      request<StatsOverview>(`/stats/overview?period=${period}`),
+    topTracks: (period: '7d' | '30d' | 'all' = 'all', limit = 20) =>
+      request<StatsTopTrack[]>(`/stats/top-tracks?period=${period}&limit=${limit}`),
+    topArtists: (period: '7d' | '30d' | 'all' = 'all', limit = 20) =>
+      request<StatsTopArtist[]>(`/stats/top-artists?period=${period}&limit=${limit}`),
+    daily: (days = 30) =>
+      request<StatsDailyEntry[]>(`/stats/daily?days=${days}`),
+  },
+
+  // ── Radio ──────────────────────────────────────────────────────────────
+  radio: {
+    start: (seed: Track) =>
+      request<RadioStartResponse>('/radio/start', {
+        method: 'POST',
+        body: JSON.stringify({ seed }),
+      }),
+    next: (sessionId: string) =>
+      request<RadioNextResponse>(`/radio/next?sessionId=${encodeURIComponent(sessionId)}`),
+    feedback: (sessionId: string, trackId: string, action: 'like' | 'dislike') =>
+      request<RadioFeedbackResponse>('/radio/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, trackId, action }),
+      }),
+  },
 };
 
 // ── Types (shared with backend, redeclared here to avoid cross-workspace imports) ──
@@ -236,7 +276,7 @@ export interface Track {
   youtubeId?: string;
   youtubeTitle?: string;
   youtubeArtist?: string;
-  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation';
+  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next';
   playbackError?: string;
 }
 
@@ -408,4 +448,68 @@ export interface AlbumView {
   spotifyUrl: string | null;
   artists: Array<{ id: string; name: string }>;
   tracks: AlbumTrack[];
+}
+
+// ── Stats types ─────────────────────────────────────────────────────────────
+
+export interface StatsOverview {
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueArtists: number;
+  uniqueTracks: number;
+}
+
+export interface StatsTopTrack {
+  track: Track;
+  playCount: number;
+  lastPlayed: number | undefined;
+}
+
+export interface StatsTopArtist {
+  artist: string;
+  artistId: string | null;
+  image?: string | null;
+  playCount: number;
+  tracksCount: number;
+}
+
+export interface StatsDailyEntry {
+  date: string; // YYYY-MM-DD
+  playCount: number;
+  minutes: number;
+}
+
+// ── Local Files types ────────────────────────────────────────────────────────
+
+export interface LocalFile {
+  id: string;
+  path: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  thumbnail: string;
+  trackNumber: number;
+  year: number;
+  genre: string;
+  format: string;
+  fileSize: number;
+  addedAt: number;
+  lastScanned: number;
+}
+
+// ── Radio types ───────────────────────────────────────────────────────────────
+
+export interface RadioStartResponse {
+  sessionId: string;
+  seed: Track;
+  tracks: Track[];
+}
+
+export interface RadioNextResponse {
+  tracks: Track[];
+}
+
+export interface RadioFeedbackResponse {
+  ok: boolean;
 }

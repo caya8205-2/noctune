@@ -14,6 +14,9 @@ export const keyboardShortcuts: KeyboardShortcutDefinition[] = [
   { action: 'prevTrack', code: 'KeyP', key: 'P', keys: 'P', label: 'Previous track', category: 'playback' },
   { action: 'toggleShuffle', code: 'KeyS', key: 'S', keys: 'S', label: 'Toggle shuffle', category: 'playback' },
   { action: 'cycleRepeat', code: 'KeyR', key: 'R', keys: 'R', label: 'Cycle repeat (off → all → one)', category: 'playback' },
+  { action: 'toggleSleepTimer', code: 'KeyT', key: 'T', keys: 'T', label: 'Toggle sleep timer (30 min)', category: 'playback' },
+  { action: 'increasePlaybackRate', code: 'BracketRight', key: ']', keys: ']', label: 'Increase playback speed', category: 'playback' },
+  { action: 'decreasePlaybackRate', code: 'BracketLeft', key: '[', keys: '[', label: 'Decrease playback speed', category: 'playback' },
 
   // ── Seek ──
   { action: 'seekBackward', code: 'ArrowLeft', key: 'Left arrow', keys: '←', label: 'Seek backward 5 seconds', category: 'playback' },

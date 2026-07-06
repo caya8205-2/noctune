@@ -26,7 +26,6 @@ import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { api, apiUrl, type BackendStatus, type UpdateInfo } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { usePlayerStore } from '../../store/player';
-
 const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
@@ -149,7 +148,6 @@ export function SettingsView() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const setView = usePlayerStore((state) => state.setView);
-
   async function loadSettings() {
     const res = await fetch(await apiUrl('/settings'));
     const d = (await res.json()) as SettingsData;
@@ -545,6 +543,8 @@ export function SettingsView() {
           Make global choices feel immediate.
         </h1>
       </div>
+
+      {/* Theme section removed - too complex, not worth it */}
 
       {/* Updates */}
       <section className="surface-panel flex flex-col gap-4 p-5">

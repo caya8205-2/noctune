@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X, Zap } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
@@ -17,6 +17,18 @@ function queueSourceLabel(source: Track['queueSource']): string {
 
 function isMobileViewport(): boolean {
   return window.matchMedia('(max-width: 639px)').matches;
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
 }
 
 function QueueTrackTitle({
@@ -91,6 +103,7 @@ export function QueueView() {
     queue,
     queueIndex,
     currentTrack,
+    queueHistory,
     playbackNotice,
     playTrack,
     clearQueue,
@@ -103,6 +116,7 @@ export function QueueView() {
   } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [hideFailed, setHideFailed] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { data: audioCache } = useQuery({
     queryKey: ['audio-cache-status', queue.map((track) => track.id).join('|')],
     queryFn: () => api.audioCacheStatus(queue),
@@ -280,6 +294,54 @@ export function QueueView() {
             </div>
           );
         })}
+
+        {/* ── Recently Played ────────────────────────────────────────── */}
+        {queueHistory.length > 0 && (
+          <div className="mt-8 border-t border-base-700/50 pt-4">
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              className="flex items-center gap-2 text-xs text-muted hover:text-white transition-colors"
+            >
+              <Clock size={14} />
+              <span>Recently Played ({queueHistory.length})</span>
+              <span className="text-[10px]">{showHistory ? '▲' : '▼'}</span>
+            </button>
+            {showHistory && (
+              <div className="mt-3 space-y-1">
+                {queueHistory.slice(0, 10).map((entry, i) => (
+                  <div
+                    key={`${entry.track.id}-${entry.playedAt}`}
+                    className="group flex items-center px-3 py-2 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100"
+                    onClick={() => playTrack(entry.track, queue)}
+                  >
+                    <span className="w-5 mr-2 text-xs text-muted text-center font-mono tabular-nums flex-shrink-0">
+                      {i + 1}
+                    </span>
+                    {entry.track.thumbnail ? (
+                      <img
+                        src={entry.track.thumbnail}
+                        alt=""
+                        className="w-8 h-8 mr-2.5 rounded object-cover flex-shrink-0"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    ) : (
+                      <div className="w-8 h-8 mr-2.5 rounded bg-base-700 border border-base-600/60 flex items-center justify-center text-muted flex-shrink-0">
+                        <Clock size={12} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm text-soft">{entry.track.title}</p>
+                      <p className="truncate text-xs text-muted">{entry.track.artist}</p>
+                    </div>
+                    <span className="text-[10px] text-muted flex-shrink-0 ml-2">
+                      {formatTimeAgo(entry.playedAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

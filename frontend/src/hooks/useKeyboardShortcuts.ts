@@ -74,6 +74,28 @@ export function useKeyboardShortcuts() {
           cycleRepeat();
           break;
         }
+        case 'toggleSleepTimer': {
+          e.preventDefault();
+          const { sleepTimerEnd, setSleepTimer } = usePlayerStore.getState();
+          setSleepTimer(sleepTimerEnd ? null : 30);
+          break;
+        }
+        case 'increasePlaybackRate': {
+          e.preventDefault();
+          const { playbackRate: pr, setPlaybackRate } = usePlayerStore.getState();
+          const rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+          const idx = rates.findIndex(r => r > pr);
+          if (idx !== -1) setPlaybackRate(rates[idx]);
+          break;
+        }
+        case 'decreasePlaybackRate': {
+          e.preventDefault();
+          const { playbackRate: pr2, setPlaybackRate: spr2 } = usePlayerStore.getState();
+          const rates2 = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+          const idx2 = rates2.findIndex(r => r >= pr2) - 1;
+          if (idx2 >= 0) spr2(rates2[idx2]);
+          break;
+        }
 
         // ── Seek ──
         case 'seekBackward': {

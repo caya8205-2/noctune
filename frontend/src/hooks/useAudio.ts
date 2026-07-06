@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
 import { api, apiUrl } from '../utils/api';
+import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -76,6 +77,9 @@ export function seekAudio(seconds: number) {
  */
 export function useAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const crossfadeActiveRef = useRef(false);
+  const lastCrossfadedTrackIdRef = useRef<string | null>(null);
   const suppressNextErrorRef = useRef(false);
   const recoveryAttemptRef = useRef<string | null>(null);
   const recordedTrackRef = useRef<string | null>(null);
@@ -84,10 +88,13 @@ export function useAudio() {
     currentTrack,
     isPlaying,
     volume,
+    playbackRate,
+    sleepTimerEnd,
     setProgress,
     setDuration,
     setIsPlaying,
     setLoading,
+    setVolume,
     next,
   } = usePlayerStore();
 
@@ -103,7 +110,8 @@ export function useAudio() {
       visAnalyser.smoothingTimeConstant = 0.8;
       const visSrc = visCtx.createMediaElementSource(audio);
       visSrc.connect(visAnalyser);
-      visAnalyser.connect(visCtx.destination);
+      // Insert EQ filters between analyser and destination (dry/wet routing)
+      createEqualizerNodes(visCtx, visAnalyser);
       (window as any).__noctune_analyser = visAnalyser;
       (window as any).__noctune_audioCtx = visCtx;
     } catch {}
@@ -255,6 +263,122 @@ export function useAudio() {
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = outputVolume(volume);
   }, [volume]);
+
+  // Sync playback rate
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  // Sleep timer countdown + fade out
+  useEffect(() => {
+    if (!sleepTimerEnd) return;
+    const FADE_MS = 15_000;
+    const TICK = 1_000;
+
+    const timer = window.setInterval(() => {
+      const remaining = sleepTimerEnd - Date.now();
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        const audio = audioRef.current;
+        if (audio && !audio.paused) {
+          // Fade out over FADE_MS
+          const startVolume = usePlayerStore.getState().volume;
+          const startTime = Date.now();
+          const fadeTimer = window.setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const ratio = Math.max(0, 1 - elapsed / FADE_MS);
+            setVolume(startVolume * ratio);
+            if (ratio <= 0) {
+              window.clearInterval(fadeTimer);
+              audio.pause();
+              setIsPlaying(false);
+              usePlayerStore.setState({ sleepTimerEnd: null });
+              // Restore volume after pause
+              setTimeout(() => setVolume(startVolume), 100);
+            }
+          }, 100);
+        } else {
+          usePlayerStore.setState({ sleepTimerEnd: null });
+        }
+      }
+    }, TICK);
+
+    return () => window.clearInterval(timer);
+  }, [sleepTimerEnd, setVolume, setIsPlaying]);
+
+  // Crossfade: when nearing end of track, start next track and fade
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+
+    const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
+    if (!crossfadeDuration || crossfadeDuration <= 0) return;
+    if (crossfadeActiveRef.current) return;
+    if (lastCrossfadedTrackIdRef.current === currentTrack.id) return;
+
+    const remaining = audio.duration - audio.currentTime;
+    if (remaining > crossfadeDuration || remaining < 0.5) return;
+
+    // Don't crossfade if repeat-one or no next track
+    const state = usePlayerStore.getState();
+    if (state.repeat === 'one') return;
+    const nextIdx = state.queueIndex + 1;
+    if (nextIdx >= state.queue.length) return;
+
+    lastCrossfadedTrackIdRef.current = currentTrack.id;
+    crossfadeActiveRef.current = true;
+
+    const nextTrack = state.queue[nextIdx];
+    const crossfadeMs = crossfadeDuration * 1000;
+    const startVolume = outputVolume(state.volume);
+    const nextAudio = new Audio();
+    nextAudioRef.current = nextAudio;
+    nextAudio.crossOrigin = 'anonymous';
+    nextAudio.preload = 'auto';
+    nextAudio.volume = 0;
+    nextAudio.playbackRate = state.playbackRate;
+
+    apiUrl('/player/stream/' + nextTrack.id).then((src) => {
+      nextAudio.src = src;
+      nextAudio.load();
+      return waitForAudioReady(nextAudio).then(() => {
+        nextAudio.play().catch(() => {});
+        // Start crossfade
+        const fadeStart = Date.now();
+        const fadeInterval = window.setInterval(() => {
+          const elapsed = Date.now() - fadeStart;
+          const t = Math.min(1, elapsed / crossfadeMs);
+          // Use sine easing for smoother crossfade
+          const currentGain = Math.cos(t * Math.PI / 2);
+          const nextGain = Math.sin(t * Math.PI / 2);
+          audio.volume = startVolume * currentGain;
+          nextAudio.volume = startVolume * nextGain;
+
+          if (t >= 1) {
+            window.clearInterval(fadeInterval);
+            // Swap: next becomes active
+            audio.pause();
+            audio.removeAttribute('src');
+            audio.load();
+            // Point activeAudio to the next audio element
+            activeAudio = nextAudio;
+            audioRef.current = nextAudio;
+            nextAudioRef.current = audio; // old audio becomes "next" for reuse
+            crossfadeActiveRef.current = false;
+            lastCrossfadedTrackIdRef.current = null;
+            // Restore volume on the new active audio
+            nextAudio.volume = startVolume;
+            // Advance queue state
+            usePlayerStore.getState().next();
+          }
+        }, 50);
+      });
+    }).catch((err) => {
+      console.warn('[audio] crossfade failed:', err);
+      crossfadeActiveRef.current = false;
+      lastCrossfadedTrackIdRef.current = null;
+    });
+  }, [currentTrack?.id]);
 
   useEffect(() => {
     function handleSeek(event: Event) {

@@ -63,6 +63,7 @@ export async function playlistRoutes(app: FastifyInstance) {
   });
 
   app.get('/playlists', async (_req, reply) => {
+    getOrCreateLikedPlaylist();
     return reply.send(getAllPlaylists());
   });
 

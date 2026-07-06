@@ -18,14 +18,25 @@ interface PlayerState {
   duration: number;       // seconds
   shuffle: boolean;
   repeat: RepeatMode;
+  playbackRate: number;       // 0.5–2.0
+  sleepTimerEnd: number | null; // timestamp ms
+  crossfadeDuration: number;  // seconds, 0 = off
 
-  // ── Queue ───────────────────────────────────────────────────────────────────
+  // ── Queue
   queue: Track[];
   queueIndex: number;     // index of currentTrack in queue
   isAutoQueueLoading: boolean;
 
+  // ── Radio mode ──────────────────────────────────────────────────────────────
+  radioMode: boolean;
+  radioSessionId: string | null;
+  radioSeed: Track | null;
+
+  // ── Queue History (persisted locally)
+  queueHistory: Array<{ track: Track; playedAt: number }>;
+
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'debug';
+  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'debug' | 'stats' | 'local-files';
   activePlaylistId: string | null;
   activePersonalMix: PersonalMix | null;
   activeArtistId: string | null;
@@ -33,6 +44,11 @@ interface PlayerState {
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   playbackNotice: string | null;
+
+  // ── Equalizer ──────────────────────────────────────────────────────────────
+  eqEnabled: boolean;
+  eqBands: number[];     // 10 gains, range -6 to +6
+  eqPreset: string;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean; queueSource?: Track['queueSource'] }) => Promise<void>;
@@ -45,6 +61,7 @@ interface PlayerState {
   prev: () => Promise<void>;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  playNext: (track: Track) => void;
   addToQueue: (track: Track, source?: Track['queueSource']) => void;
   topUpQueue: () => Promise<void>;
   removeFromQueue: (index: number) => void;
@@ -56,10 +73,27 @@ interface PlayerState {
   clearQueue: () => void;
   toggleTrackDetails: () => void;
   toggleShortcutsHelp: () => void;
+  setPlaybackRate: (rate: number) => void;
+  setSleepTimer: (minutes: number | null) => void;
+  setCrossfadeDuration: (seconds: number) => void;
   setView: (view: PlayerState['activeView'], id?: string) => void;
   openPersonalMix: (mix: PersonalMix) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
+
+  // ── Equalizer Actions ──────────────────────────────────────────────────────
+  setEqEnabled: (v: boolean) => void;
+  setEqBand: (index: number, value: number) => void;
+  setEqBands: (bands: number[], preset?: string) => void;
+  resetEq: () => void;
+  saveQueueState: () => void;
+  restoreQueueState: () => void;
+  pushQueueHistory: (track: Track) => void;
+
+  // ── Radio Actions ────────────────────────────────────────────────────
+  startRadio: (seed: Track) => Promise<void>;
+  stopRadio: () => void;
+  nextRadioTrack: () => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -72,9 +106,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   duration: 0,
   shuffle: false,
   repeat: 'off',
+  playbackRate: 1,
+  sleepTimerEnd: null,
+  crossfadeDuration: 0,
+  eqEnabled: false,
+  eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  eqPreset: 'flat',
   queue: [],
   queueIndex: -1,
   isAutoQueueLoading: false,
+  queueHistory: [],
+  radioMode: false,
+  radioSessionId: null,
+  radioSeed: null,
   activeView: 'home',
   activePlaylistId: null,
   activePersonalMix: null,
@@ -98,8 +142,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setProgress: (s) => set({ progress: s }),
   setDuration: (s) => set({ duration: s }),
 
+  // ── Equalizer ──────────────────────────────────────────────────────────────
+  setEqEnabled: (v) => set({ eqEnabled: v }),
+  setEqBand: (index, value) => set((s) => {
+    const next = [...s.eqBands];
+    next[index] = Math.min(6, Math.max(-6, value));
+    return { eqBands: next, eqPreset: 'custom' };
+  }),
+  setEqBands: (bands, preset) => set({
+    eqBands: bands.map((v) => Math.min(6, Math.max(-6, v))),
+    eqPreset: preset ?? 'custom',
+  }),
+  resetEq: () => set({
+    eqEnabled: false,
+    eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    eqPreset: 'flat',
+  }),
+
   playTrack: async (track, newQueue, options) => {
-    set({ isLoading: true });
     const startedAt = performance.now();
     const queue = newQueue ?? get().queue;
     const idx = queue.findIndex(t => t.id === track.id);
@@ -182,6 +242,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         queue: playbackQueue,
         queueIndex: playbackIndex,
       });
+
+      // Persist queue state and track history
+      get().saveQueueState();
+      get().pushQueueHistory(playableTrack);
 
       // Trigger prefetch for next 5 tracks
       if (playbackQueue.length > 0 && playbackIndex >= 0) {
@@ -294,12 +358,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   cycleRepeat: () =>
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
 
-  addToQueue: (track, source = 'manual') =>
-    set(s => ({ queue: [...s.queue, { ...track, queueSource: source }] })),
+  playNext: (track) => {
+    set(s => {
+      const insertAt = Math.max(0, s.queueIndex) + 1;
+      const newQueue = [...s.queue];
+      newQueue.splice(insertAt, 0, { ...track, queueSource: 'play-next' });
+      return { queue: newQueue };
+    });
+    get().saveQueueState();
+  },
+
+  addToQueue: (track, source = 'manual') => {
+    set(s => ({ queue: [...s.queue, { ...track, queueSource: source }] }));
+    get().saveQueueState();
+  },
 
   topUpQueue: async () => {
     const state = get();
-    if (state.isAutoQueueLoading || !state.currentTrack || state.queue.length === 0 || state.queueIndex < 0) {
+    if (state.radioMode || state.isAutoQueueLoading || !state.currentTrack || state.queue.length === 0 || state.queueIndex < 0) {
       return;
     }
 
@@ -349,7 +425,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
-  removeFromQueue: (index) =>
+  removeFromQueue: (index) => {
     set((s) => {
       if (index < 0 || index >= s.queue.length) return s;
       const nextQueue = s.queue.filter((_, i) => i !== index);
@@ -358,18 +434,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (index === s.queueIndex) nextQueueIndex = Math.min(index, nextQueue.length - 1);
       if (nextQueue.length === 0) nextQueueIndex = -1;
       return { queue: nextQueue, queueIndex: nextQueueIndex };
-    }),
+    });
+    get().saveQueueState();
+  },
 
-  removePlayedTracks: () =>
+  removePlayedTracks: () => {
     set((s) => {
       if (s.queueIndex <= 0) return s;
       return {
         queue: s.queue.slice(s.queueIndex),
         queueIndex: 0,
       };
-    }),
+    });
+    get().saveQueueState();
+  },
 
-  shuffleQueue: () =>
+  shuffleQueue: () => {
     set((s) => {
       if (s.queue.length <= 2) return s;
       const current = s.queue[s.queueIndex];
@@ -382,7 +462,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         queue: [...previous, current, ...upcoming],
         queueIndex: previous.length,
       };
-    }),
+    });
+    get().saveQueueState();
+  },
 
   markTrackUnavailable: (trackId, message = 'Unavailable') => {
     let failedTitle = '';
@@ -408,7 +490,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   dismissPlaybackNotice: () => set({ playbackNotice: null }),
 
-  reorderQueue: (fromIndex, toIndex) =>
+  reorderQueue: (fromIndex, toIndex) => {
     set((s) => {
       if (
         fromIndex === toIndex ||
@@ -434,13 +516,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
 
       return { queue: nextQueue, queueIndex: nextQueueIndex };
-    }),
+    });
+    get().saveQueueState();
+  },
 
-  clearQueue: () => set({ queue: [], queueIndex: -1 }),
+  clearQueue: () => {
+    set({ queue: [], queueIndex: -1 });
+    get().saveQueueState();
+  },
 
   toggleTrackDetails: () => set((s) => ({ showTrackDetails: !s.showTrackDetails })),
 
   toggleShortcutsHelp: () => set((s) => ({ showShortcutsHelp: !s.showShortcutsHelp })),
+
+  setPlaybackRate: (rate) => set({ playbackRate: Math.min(2, Math.max(0.5, rate)) }),
+  setSleepTimer: (minutes) => set({
+    sleepTimerEnd: minutes ? Date.now() + minutes * 60_000 : null,
+  }),
+  setCrossfadeDuration: (seconds) => set({ crossfadeDuration: Math.min(12, Math.max(0, seconds)) }),
 
   setView: (view, id) =>
     set((state) => ({
@@ -462,7 +555,125 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       activeArtistId: null,
       activeAlbumId: null,
     }),
+
+  saveQueueState: () => {
+    const { queue, queueIndex } = get();
+    try {
+      const serializable = queue.map((t) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: t.duration,
+        thumbnail: t.thumbnail,
+        query: t.query,
+        spotifyId: t.spotifyId,
+        spotifyUrl: t.spotifyUrl,
+        artistId: t.artistId,
+        albumId: t.albumId,
+        youtubeId: t.youtubeId,
+        youtubeTitle: t.youtubeTitle,
+        youtubeArtist: t.youtubeArtist,
+        queueSource: t.queueSource,
+        playbackError: t.playbackError,
+      }));
+      localStorage.setItem('noctune:queue', JSON.stringify({ queue: serializable, queueIndex }));
+    } catch (e) {
+      console.warn('[player] Failed to save queue state:', e);
+    }
+  },
+
+  restoreQueueState: () => {
+    try {
+      const saved = localStorage.getItem('noctune:queue');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.queue) && parsed.queue.length > 0) {
+          set({ queue: parsed.queue, queueIndex: parsed.queueIndex ?? -1 });
+        }
+      }
+      // Also restore queue history
+      const historySaved = localStorage.getItem('noctune:queue-history');
+      if (historySaved) {
+        const parsed = JSON.parse(historySaved);
+        if (Array.isArray(parsed)) {
+          set({ queueHistory: parsed.slice(0, 50) });
+        }
+      }
+    } catch (e) {
+      console.warn('[player] Failed to restore queue state:', e);
+    }
+  },
+
+  pushQueueHistory: (track) => {
+    const history = get().queueHistory;
+    const entry = { track, playedAt: Date.now() };
+    const updated = [entry, ...history].slice(0, 50);
+    set({ queueHistory: updated });
+    try {
+      localStorage.setItem('noctune:queue-history', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('[player] Failed to save queue history:', e);
+    }
+  },
+
+  // ── Radio Actions ────────────────────────────────────────────────────
+  startRadio: async (seed) => {
+    try {
+      const response = await api.radio.start(seed);
+      set({
+        radioMode: true,
+        radioSessionId: response.sessionId,
+        radioSeed: seed,
+        queue: [
+          { ...seed, queueSource: 'autoqueue' as const },
+          ...response.tracks.map((t) => ({
+            ...t,
+            queueSource: 'autoqueue' as const,
+          })),
+        ],
+        queueIndex: 0,
+      });
+      // Play the first track
+      const state = get();
+      if (state.queue.length > 0) {
+        await get().playTrack(state.queue[0], state.queue);
+      }
+    } catch (err) {
+      console.error('[player] startRadio failed:', err);
+    }
+  },
+
+  stopRadio: () => {
+    set({
+      radioMode: false,
+      radioSessionId: null,
+      radioSeed: null,
+    });
+  },
+
+  nextRadioTrack: async () => {
+    const state = get();
+    if (!state.radioMode || !state.radioSessionId) return;
+
+    try {
+      const response = await api.radio.next(state.radioSessionId);
+      const additions = response.tracks.map((t) => ({
+        ...t,
+        queueSource: 'autoqueue' as const,
+      }));
+      set((current) => ({
+        queue: [...current.queue, ...additions],
+      }));
+      api.prefetchTracks(additions.slice(0, 5)).catch(() => {});
+    } catch (err) {
+      console.warn('[player] nextRadioTrack failed:', err);
+    }
+  },
 }));
+
+// Restore persisted queue state on app boot
+usePlayerStore.getState().restoreQueueState();
 
 function getNextCandidateTracks(
   queue: Track[],

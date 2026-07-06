@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock3, Download, Home, Search, ListMusic, ListOrdered, Loader2, Plus, Trash2, Settings } from 'lucide-react';
+import { BarChart3, Clock3, Download, Heart, Home, Search, ListMusic, ListOrdered, Loader2, Plus, Trash2, Settings, FolderOpen, Sparkles, TrendingUp, Zap } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import { clsx } from 'clsx';
 
-type SidebarView = 'home' | 'search' | 'history' | 'queue' | 'settings' | 'playlist';
+type SidebarView = 'home' | 'search' | 'history' | 'queue' | 'settings' | 'playlist' | 'stats' | 'local-files';
 
 function playlistImportErrorMessage(message: string): string {
   const lower = message.toLowerCase();
@@ -56,6 +56,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     queryKey: ['playlists'],
     queryFn: api.getPlaylists,
   });
+  const likedPlaylist = playlists.find((pl) => pl.id === 'system-liked-songs');
+  const userPlaylists = playlists.filter((pl) => pl.id !== 'system-liked-songs');
 
   const createMut = useMutation({
     mutationFn: () => api.createPlaylist('New Playlist'),
@@ -106,6 +108,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const navItems = [
     { icon: Home, label: 'Home', view: 'home' as const },
     { icon: Search, label: 'Search', view: 'search' as const },
+    { icon: BarChart3, label: 'Stats', view: 'stats' as const },
+    { icon: FolderOpen, label: 'Local Library', view: 'local-files' as const },
     { icon: Clock3, label: 'History', view: 'history' as const },
     { icon: ListOrdered, label: 'Queue', view: 'queue' as const },
     { icon: Settings, label: 'Settings', view: 'settings' as const },
@@ -118,15 +122,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-transparent px-3 py-5">
-      {/* Greeting */}
-      <div className="mb-7 px-2">
+      {/* Greeting - FIXED at top, ALWAYS visible, never scrolls */}
+      <div className="px-2 mb-3 flex-shrink-0">
         <div className="mb-2 flex items-center gap-2">
           <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
           <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
             {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </span>
         </div>
-        <p className="mb-2 font-mono text-[11px] font-medium tabular-nums text-soft">
+        <p className="mb-1.5 font-mono text-[11px] font-medium tabular-nums text-soft">
           {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
         </p>
         <h2 className="font-display text-[22px] leading-tight text-white">
@@ -134,8 +138,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </h2>
       </div>
 
-      {/* Main nav */}
-      <nav className="mb-6 flex flex-col gap-1">
+      {/* Nav - scrollable, fills ALL remaining space between greeting and playlist section */}
+      <nav className="flex-1 min-h-0 mb-2 flex flex-col gap-1 overflow-y-auto">
         {navItems.map(({ icon: Icon, label, view }) => {
           const active = activeView === view;
           return (
@@ -162,9 +166,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      {/* Playlists */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="relative mb-2 flex items-center justify-between px-3" ref={menuRef}>
+      {/* Playlists - FIXED 38% from bottom, my monitor is 768p native and this is what it looks right to me*/}
+      <div className="flex-shrink-0 flex flex-col" style={{ height: '38%' }}>
+        <div className="relative mb-2 flex items-center justify-between px-3 flex-shrink-0" ref={menuRef}>
           <span className="section-label">Playlists</span>
           <button
             onClick={() => setPlaylistMenuOpen((open) => !open)}
@@ -218,29 +222,78 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
 
         {deleteError && (
-          <p className="mb-2 px-3 text-[11px] leading-relaxed text-red-400">{deleteError}</p>
+          <p className="mb-2 px-3 text-[11px] leading-relaxed text-red-400 flex-shrink-0">{deleteError}</p>
         )}
 
-        <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
-          {playlists.length === 0 && (
-            <p className="px-3 py-2 text-xs text-muted">No playlists yet</p>
-          )}
-          {playlists.map((pl) => {
-            const active = activeView === 'playlist' && activePlaylistId === pl.id;
-            return (
-              <div
-                key={pl.id}
+        {/* Smart + user playlists - scrollable within the 38% container */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {likedPlaylist && (
+            <button
+              onClick={() => navigate('playlist', likedPlaylist.id)}
+              className={clsx(
+                'group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                activeView === 'playlist' && activePlaylistId === likedPlaylist.id
+                  ? 'bg-white/[0.05] text-white'
+                  : 'text-muted hover:bg-white/[0.03] hover:text-white'
+              )}
+            >
+              <Heart
+                size={14}
+                fill="currentColor"
                 className={clsx(
-                  'group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
-                  active
-                    ? 'bg-white/[0.05] text-white'
-                    : 'text-muted hover:bg-white/[0.03] hover:text-white'
+                  'flex-shrink-0',
+                  activeView === 'playlist' && activePlaylistId === likedPlaylist.id && 'text-accent'
                 )}
-                onClick={() => navigate('playlist', pl.id)}
-              >
-                <ListMusic size={14} className={clsx('flex-shrink-0', active && 'text-accent')} />
-                <span className="flex-1 truncate">{pl.name}</span>
-                {pl.id !== 'system-liked-songs' && (
+              />
+              <span className="flex-1 truncate text-left">{likedPlaylist.name}</span>
+            </button>
+          )}
+
+          <div className="flex flex-col flex-shrink-0">
+            {([
+              { id: 'smart:most-played', label: 'Most Played', icon: TrendingUp },
+              { id: 'smart:recently-added', label: 'Recently Played', icon: Clock3 },
+              { id: 'smart:short-tracks', label: 'Short Tracks', icon: Zap },
+              { id: 'smart:discover-weekly', label: 'Discover Weekly', icon: Sparkles },
+            ] as const).map(({ id, label, icon: Icon }) => {
+              const active = activePlaylistId === id && activeView === 'playlist';
+              return (
+                <button
+                  key={id}
+                  onClick={() => navigate('playlist', id)}
+                  className={clsx(
+                    'group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                    active
+                      ? 'bg-white/[0.05] text-white'
+                      : 'text-muted hover:bg-white/[0.03] hover:text-white'
+                  )}
+                >
+                  <Icon size={14} className={clsx('flex-shrink-0', active && 'text-accent')} />
+                  <span className="flex-1 truncate text-left">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            {userPlaylists.length === 0 && !likedPlaylist && (
+              <p className="px-3 py-2 text-xs text-muted">No playlists yet</p>
+            )}
+            {userPlaylists.map((pl) => {
+              const active = activeView === 'playlist' && activePlaylistId === pl.id;
+              return (
+                <div
+                  key={pl.id}
+                  className={clsx(
+                    'group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                    active
+                      ? 'bg-white/[0.05] text-white'
+                      : 'text-muted hover:bg-white/[0.03] hover:text-white'
+                  )}
+                  onClick={() => navigate('playlist', pl.id)}
+                >
+                  <ListMusic size={14} className={clsx('flex-shrink-0', active && 'text-accent')} />
+                  <span className="flex-1 truncate">{pl.name}</span>
                   <button
                     className="btn-ghost p-0.5 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
                     disabled={deleteMut.isPending}
@@ -249,10 +302,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   >
                     <Trash2 size={12} />
                   </button>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

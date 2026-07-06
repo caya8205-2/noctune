@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, FolderPlus, HardDrive, ListPlus, Loader2, Plus } from 'lucide-react';
+import { Check, FolderPlus, HardDrive, ListOrdered, ListPlus, Loader2, Plus, Radio } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
@@ -54,12 +54,30 @@ export function TrackActionButtons({
   trailingActions,
 }: TrackActionButtonsProps) {
   const addToQueue = usePlayerStore((state) => state.addToQueue);
+  const playNext = usePlayerStore((state) => state.playNext);
+  const radioMode = usePlayerStore((state) => state.radioMode);
+  const startRadio = usePlayerStore((state) => state.startRadio);
+  const stopRadio = usePlayerStore((state) => state.stopRadio);
   const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
 
   return (
     <>
       {clearTrackCacheModal}
       <div className={clsx('flex items-center gap-0', className)}>
+        {showQueue && (
+          <button
+            type="button"
+            className={clsx('btn-ghost', buttonClassName)}
+            onClick={(event) => {
+              event.stopPropagation();
+              playNext(track);
+            }}
+            title="Play next"
+          >
+            <ListOrdered size={iconSize} />
+          </button>
+        )}
+
         {showQueue && (
           <button
             type="button"
@@ -98,6 +116,33 @@ export function TrackActionButtons({
             title="Clear track cache"
           >
             <HardDrive size={iconSize} />
+          </button>
+        )}
+
+        {radioMode ? (
+          <button
+            type="button"
+            className={clsx('btn-ghost', buttonClassName, 'text-accent')}
+            onClick={(event) => {
+              event.stopPropagation();
+              stopRadio();
+            }}
+            title="Stop Radio"
+          >
+            <Radio size={iconSize} />
+            <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider">Radio</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={clsx('btn-ghost', buttonClassName)}
+            onClick={(event) => {
+              event.stopPropagation();
+              startRadio(track);
+            }}
+            title="Start Radio"
+          >
+            <Radio size={iconSize} />
           </button>
         )}
 

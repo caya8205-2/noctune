@@ -5,17 +5,17 @@ export default {
     extend: {
       colors: {
         base: {
-          950: '#060709',
-          900: '#0B0D11',
-          800: '#14171E',
-          700: '#1D212B',
-          600: '#2A2F3B',
-          500: '#3A4151',
+          950: 'rgb(var(--base-950) / <alpha-value>)',
+          900: 'rgb(var(--base-900) / <alpha-value>)',
+          800: 'rgb(var(--base-800) / <alpha-value>)',
+          700: 'rgb(var(--base-700) / <alpha-value>)',
+          600: 'rgb(var(--base-600) / <alpha-value>)',
+          500: 'rgb(var(--base-500) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#EAB14C',
-          dim: '#C8923A',
-          glow: 'rgba(234,177,76,0.18)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          dim: 'rgb(var(--accent-dim-rgb) / <alpha-value>)',
+          glow: 'rgb(var(--accent-rgb) / 0.18)',
         },
         moon: {
           DEFAULT: '#7FA8FF',
@@ -33,13 +33,13 @@ export default {
         '4xl': '2rem',
       },
       boxShadow: {
-        glow: '0 0 24px 2px rgba(234,177,76,0.28)',
-        'glow-lg': '0 0 70px 10px rgba(234,177,76,0.18)',
+        glow: '0 0 24px 2px rgb(var(--accent-rgb) / 0.28)',
+        'glow-lg': '0 0 70px 10px rgb(var(--accent-rgb) / 0.18)',
         panel: '0 18px 44px -28px rgba(0,0,0,0.9)',
       },
       backgroundImage: {
         ambient:
-          'radial-gradient(120% 80% at 50% -10%, rgba(234,177,76,0.10), transparent 60%), radial-gradient(90% 60% at 100% 100%, rgba(127,168,255,0.06), transparent 55%)',
+          'radial-gradient(120% 80% at 50% -10%, rgb(var(--accent-rgb) / 0.10), transparent 60%), radial-gradient(90% 60% at 100% 100%, rgba(127,168,255,0.06), transparent 55%)',
       },
       animation: {
         'spin-slow': 'spin 18s linear infinite',

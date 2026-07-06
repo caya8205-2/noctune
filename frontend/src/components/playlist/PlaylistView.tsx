@@ -6,6 +6,7 @@ import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { clsx } from 'clsx';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { useSmartPlaylists } from '../../hooks/useSmartPlaylists';
 
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
 const CROP_VIEWPORT_SIZE = 320;
@@ -285,22 +286,35 @@ export function PlaylistView() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { activePlaylistId, activePersonalMix, playTrack, currentTrack, setView } = usePlayerStore();
   const qc = useQueryClient();
+  const isSmartPlaylist = Boolean(activePlaylistId?.startsWith('smart:'));
   const hasVirtualPlaylistId = Boolean(activePlaylistId?.startsWith('nightly:'));
+
+  // Smart playlists hook — only used when a smart playlist id is active
+  const {
+    getSmartPlaylist,
+    isLoading: smartPlaylistsLoading,
+    isDiscoverWeeklyFetching,
+    refetchDiscoverWeekly,
+  } = useSmartPlaylists();
+  const smartPlaylist = isSmartPlaylist ? getSmartPlaylist(activePlaylistId!) : undefined;
+  const isDiscoverWeekly = activePlaylistId === 'smart:discover-weekly';
+
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', activePlaylistId],
     queryFn: () => api.getPlaylist(activePlaylistId!),
-    enabled: Boolean(activePlaylistId) && !activePersonalMix && !hasVirtualPlaylistId,
+    enabled: Boolean(activePlaylistId) && !activePersonalMix && !hasVirtualPlaylistId && !isSmartPlaylist,
   });
 
   const isNightlyMix = Boolean(activePersonalMix);
-  const tracks = activePersonalMix?.tracks ?? playlist?.tracks ?? [];
+  const tracks = smartPlaylist?.tracks ?? activePersonalMix?.tracks ?? playlist?.tracks ?? [];
   const isLikedPlaylist = activePlaylistId === LIKED_PLAYLIST_ID;
-  const playlistName = activePersonalMix?.name ?? playlist?.name ?? 'Playlist';
+  const playlistName = smartPlaylist?.name ?? activePersonalMix?.name ?? playlist?.name ?? 'Playlist';
   const playlistCover = activePersonalMix?.cover ?? playlist?.coverDataUrl ?? '';
-  const playlistLabel = isNightlyMix ? 'Nightly Mix' : 'Playlist';
-  const queueSource = isNightlyMix ? 'recommendation' : 'playlist';
-  const isPlaylistLoading = !isNightlyMix && isLoading;
-  const canEditPlaylist = !isLikedPlaylist && !isNightlyMix;
+  const playlistLabel = isSmartPlaylist ? 'Smart Playlist' : isNightlyMix ? 'Nightly Mix' : 'Playlist';
+  const queueSource = isSmartPlaylist ? 'playlist' : isNightlyMix ? 'recommendation' : 'playlist';
+  const isSmartPlaylistLoading = isDiscoverWeekly ? isDiscoverWeeklyFetching : smartPlaylistsLoading;
+  const isPlaylistLoading = isSmartPlaylist ? isSmartPlaylistLoading && tracks.length === 0 : !isNightlyMix && isLoading;
+  const canEditPlaylist = !isLikedPlaylist && !isNightlyMix && !isSmartPlaylist;
   const visibleTracks = tracks
     .map((track, originalIndex) => ({ track, originalIndex }))
     .filter(({ track }) => {
@@ -320,6 +334,12 @@ export function PlaylistView() {
     setTrackFilter('');
     setSortMode('custom');
   }, [activePlaylistId, playlistName]);
+
+  useEffect(() => {
+    if (isDiscoverWeekly) {
+      void refetchDiscoverWeekly();
+    }
+  }, [isDiscoverWeekly, refetchDiscoverWeekly]);
 
   useEffect(() => {
     return () => {
@@ -546,15 +566,17 @@ export function PlaylistView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCachePlaylist}
-            disabled={tracks.length === 0 || cachingAudio}
-            className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
-            {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
-          </button>
+          {!isSmartPlaylist && (
+            <button
+              type="button"
+              onClick={handleCachePlaylist}
+              disabled={tracks.length === 0 || cachingAudio}
+              className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
+              {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+            </button>
+          )}
           {canEditPlaylist && (
             <button
               type="button"
