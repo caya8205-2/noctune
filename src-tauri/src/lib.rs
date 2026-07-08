@@ -41,6 +41,7 @@ fn kill_backend_sidecar<R: tauri::Runtime>(manager: &impl Manager<R>) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![open_external_url])
         .setup(|_app| {
             // Only spawn the backend sidecar in production builds.

@@ -8,6 +8,7 @@ frontend/dist/
 automations/
 reports/
 docs/
+.kiro/
 *.db
 *.db-shm
 *.db-wal

@@ -18,7 +18,12 @@
       "../node_modules/better-sqlite3/build/Release/**/*.node",
       "../node_modules/kuromoji/dict/**/*",
       "../node_modules/youtubei.js/package.json",
-      "../node_modules/youtubei.js/bundle/browser.js"
+      "../node_modules/youtubei.js/bundle/browser.js",
+      "../node_modules/music-metadata/**/*",
+      "../node_modules/strtok3/**/*",
+      "../node_modules/token-types/**/*",
+      "../node_modules/peek-readable/**/*",
+      "../node_modules/file-type/**/*"
     ]
   },
   "dependencies": {
@@ -44,6 +49,7 @@
     "@types/fluent-ffmpeg": "^2.1.24",
     "@types/node": "^22.0.0",
     "@yao-pkg/pkg": "^6.19.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }

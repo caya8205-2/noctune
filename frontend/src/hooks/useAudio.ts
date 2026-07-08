@@ -1,10 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { api, apiUrl } from '../utils/api';
+import { api, apiUrl, IS_TAURI } from '../utils/api';
 import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
-const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 function outputVolume(value: number): number {
   return Math.min(1, Math.max(0, Math.pow(value, 1.65)));

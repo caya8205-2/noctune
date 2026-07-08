@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, X } from 'lucide-react';
-import { api, type UpdateInfo } from '../utils/api';
+import { api, type UpdateInfo, IS_TAURI } from '../utils/api';
 
 const CHECK_INTERVAL_MS = 1000 * 60 * 60 * 5;
-const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export async function openExternalUrl(url: string) {
   if (!IS_TAURI) {

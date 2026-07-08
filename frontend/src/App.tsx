@@ -21,6 +21,7 @@ import { getShortcutsByCategory } from './constants/keyboardShortcuts';
 import { useAudio } from './hooks/useAudio';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useLyricsPrefetch } from './hooks/useLyrics';
+import { useSmartPlaylistsPrefetch } from './hooks/useSmartPlaylists';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 
 const qc = new QueryClient({
@@ -41,6 +42,7 @@ function AppInner() {
   useAudio();
   useKeyboardShortcuts();
   useLyricsPrefetch();
+  useSmartPlaylistsPrefetch();
   const { updateToast } = useUpdateChecker();
   const {
     activeView,

@@ -1,11 +1,47 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { api, type Track } from '../utils/api';
 
 export interface SmartPlaylist {
   id: string; // 'smart:most-played' etc.
   name: string;
   description: string;
+  cover: string;
   tracks: Track[];
+}
+
+// Helper function to get stable cover from tracks (first track with thumbnail)
+function getStableCover(tracks: Track[]): string {
+  if (tracks.length === 0) return '';
+  const trackWithThumb = tracks.find(t => t.thumbnail);
+  return trackWithThumb?.thumbnail || tracks[0]?.thumbnail || '';
+}
+
+// Hook to prefetch Discover Weekly in background on app startup
+export function useSmartPlaylistsPrefetch() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Prefetch Discover Weekly in background
+    void queryClient.prefetchQuery({
+      queryKey: ['smart', 'discover-weekly'],
+      queryFn: async (): Promise<Track[]> => {
+        try {
+          const hist = await api.history();
+          const recentTracks = hist.tracks.slice(0, 5);
+          if (recentTracks.length === 0) return [];
+
+          const seed = recentTracks[0];
+          const excludeIds = recentTracks.map(t => t.id);
+          const recs = await api.recommend(seed, excludeIds, 20);
+          return recs.tracks;
+        } catch {
+          return [];
+        }
+      },
+      staleTime: 1000 * 60 * 15,
+    });
+  }, [queryClient]);
 }
 
 export function useSmartPlaylists() {
@@ -80,7 +116,7 @@ export function useSmartPlaylists() {
       }
     },
     staleTime: 1000 * 60 * 15,
-    refetchOnMount: 'always',
+    refetchOnMount: false,
   });
 
   const smartPlaylists: SmartPlaylist[] = [
@@ -88,24 +124,28 @@ export function useSmartPlaylists() {
       id: 'smart:most-played',
       name: 'Most Played',
       description: 'Your top 20 tracks',
+      cover: getStableCover(mostPlayedQuery.data ?? []),
       tracks: mostPlayedQuery.data ?? [],
     },
     {
       id: 'smart:recently-added',
       name: 'Recently Added',
       description: 'Latest tracks in your history',
+      cover: getStableCover(recentlyAddedQuery.data ?? []),
       tracks: recentlyAddedQuery.data ?? [],
     },
     {
       id: 'smart:short-tracks',
       name: 'Short Tracks',
       description: 'Tracks under 3 minutes',
+      cover: getStableCover(shortTracksQuery.data ?? []),
       tracks: shortTracksQuery.data ?? [],
     },
     {
       id: 'smart:discover-weekly',
       name: 'Discover Weekly',
       description: 'Fresh picks based on your history',
+      cover: getStableCover(discoverWeeklyQuery.data ?? []),
       tracks: discoverWeeklyQuery.data ?? [],
     },
   ];
@@ -122,6 +162,5 @@ export function useSmartPlaylists() {
       smartPlaylists.find(p => p.id === id),
     isLoading,
     isDiscoverWeeklyFetching: discoverWeeklyQuery.isLoading || discoverWeeklyQuery.isFetching,
-    refetchDiscoverWeekly: discoverWeeklyQuery.refetch,
   };
 }

@@ -1,10 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Album, Clock3, Disc3, ExternalLink, Music2, Radio, Sparkles, Tag, UserRound } from 'lucide-react';
-import { api, type CachedTrack, type SpotifyTrackMetadata } from '../../utils/api';
+import { api, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
-
-const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 async function openExternalUrl(url: string) {
   if (!IS_TAURI) {

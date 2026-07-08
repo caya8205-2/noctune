@@ -294,7 +294,6 @@ export function PlaylistView() {
     getSmartPlaylist,
     isLoading: smartPlaylistsLoading,
     isDiscoverWeeklyFetching,
-    refetchDiscoverWeekly,
   } = useSmartPlaylists();
   const smartPlaylist = isSmartPlaylist ? getSmartPlaylist(activePlaylistId!) : undefined;
   const isDiscoverWeekly = activePlaylistId === 'smart:discover-weekly';
@@ -309,7 +308,7 @@ export function PlaylistView() {
   const tracks = smartPlaylist?.tracks ?? activePersonalMix?.tracks ?? playlist?.tracks ?? [];
   const isLikedPlaylist = activePlaylistId === LIKED_PLAYLIST_ID;
   const playlistName = smartPlaylist?.name ?? activePersonalMix?.name ?? playlist?.name ?? 'Playlist';
-  const playlistCover = activePersonalMix?.cover ?? playlist?.coverDataUrl ?? '';
+  const playlistCover = smartPlaylist?.cover ?? activePersonalMix?.cover ?? playlist?.coverDataUrl ?? '';
   const playlistLabel = isSmartPlaylist ? 'Smart Playlist' : isNightlyMix ? 'Nightly Mix' : 'Playlist';
   const queueSource = isSmartPlaylist ? 'playlist' : isNightlyMix ? 'recommendation' : 'playlist';
   const isSmartPlaylistLoading = isDiscoverWeekly ? isDiscoverWeeklyFetching : smartPlaylistsLoading;
@@ -334,12 +333,6 @@ export function PlaylistView() {
     setTrackFilter('');
     setSortMode('custom');
   }, [activePlaylistId, playlistName]);
-
-  useEffect(() => {
-    if (isDiscoverWeekly) {
-      void refetchDiscoverWeekly();
-    }
-  }, [isDiscoverWeekly, refetchDiscoverWeekly]);
 
   useEffect(() => {
     return () => {

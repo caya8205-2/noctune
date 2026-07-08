@@ -7,6 +7,8 @@ import {
   getLibrary,
   getLocalFile,
   deleteLocalFile,
+  getDirectories,
+  getFilesByDirectory,
 } from '../services/localFiles.js';
 
 const ScanBody = z.object({
@@ -151,5 +153,23 @@ export async function localFilesRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true });
+  });
+
+  app.get('/local-files/directories', async (req, reply) => {
+    const directories = getDirectories();
+    return reply.send({ directories });
+  });
+
+  app.get<{ Params: { directory: string } }>('/local-files/directory/:directory', async (req, reply) => {
+    const directory = decodeURIComponent(req.params.directory);
+    const files = getFilesByDirectory(directory);
+    return reply.send({
+      directory,
+      files: files.map((f) => ({
+        ...f,
+        id: `local:${f.id}`,
+      })),
+      total: files.length,
+    });
   });
 }

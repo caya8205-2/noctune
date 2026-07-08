@@ -1,12 +1,50 @@
+// Enhanced Tauri detection with multiple fallback checks
+function detectTauriEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  // Primary check: __TAURI_INTERNALS__
+  if ('__TAURI_INTERNALS__' in window) {
+    console.log('[env] Tauri detected via __TAURI_INTERNALS__');
+    return true;
+  }
+  
+  // Secondary check: __TAURI__ namespace (older versions)
+  if ('__TAURI__' in window) {
+    console.log('[env] Tauri detected via __TAURI__');
+    return true;
+  }
+  
+  // Tertiary check: Tauri-specific user agent
+  if (navigator.userAgent.includes('Tauri')) {
+    console.log('[env] Tauri detected via user agent');
+    return true;
+  }
+  
+  console.log('[env] Tauri NOT detected - running in web mode');
+  return false;
+}
+
+// Detect if we're in Tauri production build (not dev mode)
+// In dev mode, Vite dev server is running and we should use the proxy
+function isTauriProduction(): boolean {
+  // In dev mode, Vite injects import.meta.env.DEV = true
+  // In production build, import.meta.env.PROD = true
+  return detectTauriEnvironment() && import.meta.env.PROD;
+}
+
+// IS_TAURI is true for both dev and prod Tauri
+export const IS_TAURI = detectTauriEnvironment();
+
 // In production Tauri builds the Vite proxy doesn't exist, so we call the backend directly.
-const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// In dev mode (even Tauri dev), we use the Vite proxy at /api
+const IS_TAURI_PROD = isTauriProduction();
 const WEB_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 const TAURI_BACKEND_HOST = import.meta.env.VITE_TAURI_BACKEND_HOST || '127.0.0.1';
 const TAURI_BACKEND_PORT = Number(import.meta.env.VITE_TAURI_BACKEND_PORT || 3131);
 const TAURI_BACKEND_PORT_ATTEMPTS = Number(import.meta.env.VITE_TAURI_BACKEND_PORT_ATTEMPTS || 10);
 const normalizeBase = (base: string) => base.replace(/\/+$/, '');
 const tauriBaseForPort = (port: number) => `http://${TAURI_BACKEND_HOST}:${port}`;
-export const API_BASE = normalizeBase(IS_TAURI ? tauriBaseForPort(TAURI_BACKEND_PORT) : WEB_API_BASE);
+export const API_BASE = normalizeBase(IS_TAURI_PROD ? tauriBaseForPort(TAURI_BACKEND_PORT) : WEB_API_BASE);
 
 let apiBasePromise: Promise<string | null> | null = null;
 
@@ -35,7 +73,9 @@ async function canReachBackend(base: string): Promise<boolean> {
 }
 
 export async function getApiBase(): Promise<string> {
-  if (!IS_TAURI) return API_BASE;
+  // In Tauri dev mode or web mode, use the static API_BASE (Vite proxy)
+  // Only in Tauri production, try to find backend on port range
+  if (!IS_TAURI_PROD) return API_BASE;
 
   if (!apiBasePromise) {
     apiBasePromise = (async () => {
@@ -226,7 +266,7 @@ export const api = {
     }),
   getLocalFiles: (limit = 50, offset = 0) =>
     request<{ files: LocalFile[]; total: number; limit: number; offset: number }>(
-      `/local-files?limit=${limit}&offset=${offset}`
+      `/local-files/library?limit=${limit}&offset=${offset}`
     ),
   deleteLocalFile: (id: string) =>
     request<{ ok: boolean }>(`/local-files/${id}`, { method: 'DELETE' }),

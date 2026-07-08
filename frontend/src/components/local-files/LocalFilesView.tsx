@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { api, type LocalFile, type Track } from '../../utils/api';
+import { api, type LocalFile, type Track, IS_TAURI } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderOpen, Search, Grid, List, Trash2, Music, Disc, User } from 'lucide-react';
@@ -20,16 +20,21 @@ export function LocalFilesView() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['local-files'],
-    queryFn: () => api.getLocalFiles(1000, 0),
+    queryFn: () => api.getLocalFiles(500, 0),
   });
 
   const scanMutation = useMutation({
-    mutationFn: (path: string) => api.scanLocalFiles(path),
-    onSuccess: () => {
+    mutationFn: (path: string) => {
+      console.log('[local-files] Mutation starting for:', path);
+      return api.scanLocalFiles(path);
+    },
+    onSuccess: (data) => {
+      console.log('[local-files] Mutation success:', data);
       qc.invalidateQueries({ queryKey: ['local-files'] });
       setIsScanning(false);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('[local-files] Mutation error:', error);
       setIsScanning(false);
     },
   });
@@ -70,19 +75,28 @@ export function LocalFilesView() {
   }, [files, searchQuery, sortMode]);
 
   function handleScanClick() {
-    const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    console.log('[local-files] IS_TAURI:', IS_TAURI);
 
     if (IS_TAURI) {
-      // Tauri: use native dialog
-      import('@tauri-apps/plugin-dialog').then(({ open }) =>
-        open({ directory: true, multiple: false })
-      ).then((selected) => {
+      // Tauri: use native dialog for folder
+      console.log('[local-files] Attempting to open native folder picker...');
+      import('@tauri-apps/plugin-dialog').then(({ open }) => {
+        console.log('[local-files] Dialog plugin loaded successfully');
+        return open({ 
+          directory: true, 
+          multiple: false
+        });
+      }).then((selected) => {
+        console.log('[local-files] Dialog result:', selected);
         if (selected && typeof selected === 'string') {
+          console.log('[local-files] Starting scan for:', selected);
           setIsScanning(true);
           scanMutation.mutate(selected);
+        } else {
+          console.warn('[local-files] No folder selected or invalid result');
         }
-      }).catch(() => {
-        // Fallback: use web file input
+      }).catch((err) => {
+        console.error('[local-files] Folder dialog failed:', err);
         fileInputRef.current?.click();
       });
     } else {
@@ -91,17 +105,63 @@ export function LocalFilesView() {
     }
   }
 
+  function handleFileSelect() {
+    console.log('[local-files] IS_TAURI:', IS_TAURI);
+
+    if (IS_TAURI) {
+      // Tauri: use native dialog for files
+      console.log('[local-files] Attempting to open native file picker...');
+      import('@tauri-apps/plugin-dialog').then(({ open }) => {
+        return open({
+          directory: false,
+          multiple: true
+        });
+      }).then((selected) => {
+        console.log('[local-files] File dialog result:', selected);
+        if (selected && Array.isArray(selected) && selected.length > 0) {
+          console.log('[local-files] Starting scan for files:', selected);
+          setIsScanning(true);
+          // Scan each file sequentially
+          Promise.all(selected.map(file => scanMutation.mutateAsync(file)))
+            .then(() => {
+              console.log('[local-files] All files scanned successfully');
+              qc.invalidateQueries({ queryKey: ['local-files'] });
+            })
+            .catch((err) => {
+              console.error('[local-files] File scan failed:', err);
+            })
+            .finally(() => {
+              setIsScanning(false);
+            });
+        }
+      }).catch((err) => {
+        console.error('[local-files] File dialog failed:', err);
+        fileInputRef.current?.click();
+      });
+    } else {
+      // Web: use hidden file input
+      fileInputRef.current?.click();
+    }
+  }
+
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // In web context we can't get the real path, show a note
-    alert('Selecting individual files is not supported in the web version. Please use the Tauri desktop app for full local file scanning.');
+    // This fallback should not be reached in Tauri - only in web
+    // Web file input can't access real file paths, so we show an error
+    if (!IS_TAURI) {
+      alert('Selecting individual files is not supported in the web version. Please use the Tauri desktop app for full local file scanning.');
+      e.target.value = '';
+      return;
+    }
+    
+    // In Tauri this is a fallback, but we still can't get directory path from file input
+    // Just log and do nothing
+    console.warn('[local-files] File input fallback triggered in Tauri - this should not happen');
     e.target.value = '';
   }
 
   function handlePlay(file: LocalFile) {
     const track: Track = {
-      id: `local:${file.id}`,
+      id: file.id, // Already has 'local:' prefix from API
       title: file.title,
       artist: file.artist,
       album: file.album,
@@ -113,9 +173,8 @@ export function LocalFilesView() {
   }
 
   function handleDelete(id: string) {
-    if (confirm('Remove from library? (file will not be deleted from disk)')) {
-      deleteMutation.mutate(id);
-    }
+    // Direct delete without confirmation - Tauri dialog permissions issue
+    deleteMutation.mutate(id);
   }
 
   function formatDuration(seconds: number): string {
@@ -207,7 +266,20 @@ export function LocalFilesView() {
             )}
           >
             <FolderOpen className="h-4 w-4" />
-            {isScanning ? 'Scanning...' : 'Add Music'}
+            {isScanning ? 'Scanning...' : 'Add Folder'}
+          </button>
+          <button
+            onClick={handleFileSelect}
+            disabled={isScanning}
+            className={clsx(
+              'flex items-center gap-2 rounded-lg border border-white/[0.08] bg-base-900 px-4 py-2 text-sm font-medium text-white transition-all',
+              isScanning
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-base-800'
+            )}
+          >
+            <Music className="h-4 w-4" />
+            Add Files
           </button>
           {isScanning && (
             <span className="text-xs text-muted">Scanning for audio files…</span>
