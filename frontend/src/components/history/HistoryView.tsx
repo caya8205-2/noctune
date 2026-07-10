@@ -5,6 +5,7 @@ import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { TrackTitle } from '../ui/TrackTitle';
 
 function playedLabel(value?: number): string {
   if (!value) return 'Unknown';
@@ -20,7 +21,7 @@ function playedLabel(value?: number): string {
 }
 
 export function HistoryView() {
-  const { currentTrack, isPlaying, playTrack } = usePlayerStore();
+  const { currentTrack, isPlaying, playTrack, setView } = usePlayerStore();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
@@ -114,12 +115,7 @@ export function HistoryView() {
                 </div>
               )}
 
-              <div className="flex-1 min-w-0">
-                <p className={clsx('text-sm truncate', isActive ? 'text-accent font-medium' : 'text-white')}>
-                  {track.title}
-                </p>
-                <p className="text-xs text-muted truncate">{track.artist}</p>
-              </div>
+              <TrackTitle track={track} isActive={isActive} setView={setView} />
 
               <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">
                 {playedLabel(track.lastPlayed)}

@@ -5,6 +5,7 @@ import { api, type StatsDailyEntry, type StatsTopArtist, type StatsTopTrack } fr
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
+import { TrackTitle } from '../ui/TrackTitle';
 
 type Period = '7d' | '30d' | 'all';
 
@@ -67,6 +68,7 @@ function TopTrackRow({
   index: number;
 }) {
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const setView = usePlayerStore((s) => s.setView);
   const { track, playCount } = entry;
 
   return (
@@ -91,10 +93,7 @@ function TopTrackRow({
           </div>
         )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{track.title}</p>
-        <p className="truncate text-xs text-muted">{track.artist}</p>
-      </div>
+      <TrackTitle track={track} setView={setView} />
       <div className="ml-2 shrink-0 text-right">
         <p className="font-mono text-xs tabular-nums text-accent">{playCount}×</p>
         {track.duration > 0 && (
