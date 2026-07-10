@@ -172,6 +172,80 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     void api.lyrics(track).catch((err) => console.warn('[player] lyrics prefetch failed:', err));
 
     try {
+      // Short-circuit resolution for local tracks to avoid network/loading
+      if (track.id.startsWith('local:')) {
+        const playableTrack = {
+          id: track.id,
+          title: track.title,
+          artist: track.artist || 'Unknown Artist',
+          album: track.album || '',
+          duration: track.duration || 0,
+          thumbnail: track.thumbnail || '',
+          query: track.query || track.title,
+          audioUrl: `/player/stream/${track.id}`,
+          audioUrlExpiry: Date.now() + 86400000,
+          audioQualityPreference: 'high',
+          audioFormat: (track as any).format || undefined,
+          audioQuality: 'local',
+          localAudioPath: undefined,
+          cachedAt: Date.now(),
+          playCount: 0,
+          source: 'local' as const,
+          queueSource: track.queueSource,
+        } as any;
+
+        const source = options?.queueSource ?? track.queueSource ?? 'manual';
+        playableTrack.queueSource = source;
+
+        set({
+          currentTrack: playableTrack,
+          isPlaying: true,
+          isLoading: false,
+          progress: 0,
+          queue: queue.map((queuedTrack) => queuedTrack.id === track.id ? ({ ...track, queueSource: source }) : queuedTrack),
+          queueIndex: idx,
+        });
+
+        // Persist and push history without waiting for backend resolve
+        get().saveQueueState();
+        get().pushQueueHistory(playableTrack);
+
+        // Fetch missing metadata (thumbnail) for local track in background
+        (async () => {
+          try {
+            const meta = await api.getLocalFile(track.id);
+            if (meta?.thumbnail) {
+              set((s) => ({
+                currentTrack: { ...(s.currentTrack as any), thumbnail: meta.thumbnail },
+                queue: s.queue.map((q) => (q.id === track.id ? { ...q, thumbnail: meta.thumbnail } : q)),
+              }));
+            }
+          } catch (err) {
+            console.warn('[player] failed to fetch local metadata:', err);
+          }
+        })();
+
+        // Trigger prefetch for next tracks as before
+        const shouldAutoQueue = options?.autoQueue ?? false;
+        if (shouldAutoQueue) {
+          try {
+            const excludeIds = [...queue.map(t => t.id), track.spotifyId ?? '', track.youtubeId ?? '']
+              .filter(Boolean);
+            const recs = await api.recommend(track, excludeIds, 12);
+            const playbackQueue = [
+              { ...track, queueSource: source },
+              ...recs.tracks.map((recommendedTrack) => ({ ...recommendedTrack, queueSource: 'autoqueue' as const })),
+            ];
+            set({ queue: playbackQueue, queueIndex: 0 });
+          } catch (err) {
+            console.warn('[player] autoqueue failed (local track), keeping current queue:', err);
+          }
+        }
+
+        // done for local track
+        return;
+      }
+
       const resolveQuery = track.id.startsWith('spotify:')
         ? `${track.title} ${track.artist}`
         : track.query;

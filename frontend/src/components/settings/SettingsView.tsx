@@ -230,15 +230,51 @@ export function SettingsView() {
       const res = await fetch(await apiUrl('/settings/cache/export'));
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `noctune-cache-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setCacheMessage({ ok: true, text: 'Cache exported.' });
+      const filename = `noctune-cache-${new Date().toISOString().slice(0, 10)}.json`;
+
+      if (IS_TAURI) {
+        try {
+          // Ask user where to save
+          const dialog = await import('@tauri-apps/plugin-dialog') as any;
+          const save = dialog.save || dialog.default?.save;
+          const savePath = await save?.({ defaultPath: filename });
+          if (!savePath) {
+            setCacheMessage({ ok: false, text: 'Save cancelled.' });
+            return;
+          }
+
+          // Send file contents to backend to write to the chosen path (safer cross-platform)
+          const buffer = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          // convert to base64 for JSON transport
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const base64 = btoa(binary);
+
+          const writeRes = await fetch(await apiUrl('/settings/cache/write-file'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: savePath, base64 }),
+          });
+          if (!writeRes.ok) throw new Error('Failed to write file');
+
+          setCacheMessage({ ok: true, text: `Cache exported to ${savePath}` });
+        } catch (err) {
+          console.error('[settings] Tauri save failed:', err);
+          setCacheMessage({ ok: false, text: (err as Error).message });
+        }
+      } else {
+        // Web fallback: download to browser
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setCacheMessage({ ok: true, text: 'Cache exported.' });
+      }
     } catch (err) {
       setCacheMessage({ ok: false, text: (err as Error).message });
     } finally {

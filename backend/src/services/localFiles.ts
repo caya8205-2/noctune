@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import os from 'os';
 
 // Music-metadata causes pkg bundling issues, so we conditionally load it
 let parseFileFunc: any = null;
@@ -122,12 +123,6 @@ export interface LocalFile {
 export async function scanFile(filePath: string): Promise<LocalFile | null> {
   try {
     const parseFile = await getParseFile();
-    
-    // Check if music-metadata is available
-    if (!parseFile) {
-      console.error('[localFiles] music-metadata not available - cannot scan files');
-      return null;
-    }
 
     if (!fs.existsSync(filePath)) {
       console.warn('[localFiles] file does not exist:', filePath);
@@ -136,17 +131,46 @@ export async function scanFile(filePath: string): Promise<LocalFile | null> {
 
     console.log('[localFiles] scanning file:', filePath);
     const stat = fs.statSync(filePath);
-    const metadata = await parseFile(filePath);
 
-    const common = metadata.common;
-    const format = metadata.format;
+    // Attempt to parse metadata if music-metadata is available, otherwise fall back
+    let metadata: any = null;
+    if (parseFile) {
+      try {
+        metadata = await parseFile(filePath);
+      } catch (err) {
+        console.warn('[localFiles] music-metadata parse failed, falling back to minimal metadata:', err);
+        metadata = null;
+      }
+    } else {
+      console.warn('[localFiles] music-metadata not available, falling back to minimal metadata');
+    }
+
+    const common = metadata?.common ?? {};
+    const format = metadata?.format ?? {};
 
     const id = crypto.randomUUID();
     const directory = path.dirname(filePath);
     const title = common.title || path.basename(filePath, path.extname(filePath));
     const artist = common.artist || 'Unknown Artist';
     const album = common.album || '';
-    const duration = Math.round(format.duration || 0);
+    let duration = Math.round(format.duration || 0);
+    // If music-metadata didn't provide duration, try ffprobe via fluent-ffmpeg as fallback
+    if (!duration) {
+      try {
+        // Lazy-load to avoid hard dependency failures
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ffmpeg = require('fluent-ffmpeg');
+        const probe = await new Promise<any>((resolve, reject) => {
+          ffmpeg.ffprobe(filePath, (err: any, data: any) => (err ? reject(err) : resolve(data)));
+        });
+        if (probe && probe.format && probe.format.duration) {
+          duration = Math.round(probe.format.duration || 0);
+        }
+      } catch (err) {
+        // ignore - ffmpeg/ffprobe may not be available
+        console.warn('[localFiles] ffprobe duration fallback failed:', err);
+      }
+    }
     const trackNumber = common.track?.no || 0;
     const year = common.year || 0;
     const genre = common.genre?.[0] || '';
@@ -158,6 +182,45 @@ export async function scanFile(filePath: string): Promise<LocalFile | null> {
       const pic = common.picture[0];
       const base64 = Buffer.from(pic.data).toString('base64');
       thumbnail = `data:${pic.format};base64,${base64}`;
+    }
+
+    // If no embedded picture, try ffprobe -> ffmpeg extract attached picture as fallback
+    if (!thumbnail) {
+      try {
+        // Use ffprobe to check for attached pictures or video streams
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ffmpeg = require('fluent-ffmpeg');
+
+        const probe: any = await new Promise((resolve, reject) => {
+          ffmpeg.ffprobe(filePath, (err: any, data: any) => (err ? reject(err) : resolve(data)));
+        });
+
+        const hasImageStream = (probe?.streams || []).some((s: any) => s.codec_type === 'video' || s.disposition?.attached_pic === 1);
+        if (hasImageStream) {
+          const tmpFile = path.join(os.tmpdir(), `${crypto.randomUUID()}.jpg`);
+          await new Promise<void>((resolve, reject) => {
+            ffmpeg(filePath)
+              // extract single frame from first video/attached picture stream
+              .outputOptions(['-vframes', '1'])
+              .output(tmpFile)
+              .on('end', () => resolve())
+              .on('error', (e: any) => reject(e))
+              .run();
+          });
+
+          if (fs.existsSync(tmpFile)) {
+            try {
+              const imgBuf = fs.readFileSync(tmpFile);
+              const base64 = imgBuf.toString('base64');
+              thumbnail = `data:image/jpeg;base64,${base64}`;
+            } finally {
+              try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[localFiles] ffmpeg cover extraction failed:', err);
+      }
     }
 
     const db = getDb();

@@ -76,7 +76,7 @@ export function HistoryView() {
             currentTrack?.id === track.id ||
             Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
           return (
-            <div
+              <div
               key={`${track.id}-${track.spotifyId ?? 'history'}-${i}`}
               className={clsx(
                 'track-row group animate-fade-in',

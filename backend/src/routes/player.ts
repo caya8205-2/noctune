@@ -450,8 +450,8 @@ export async function playerRoutes(app: FastifyInstance) {
           return reply.status(404).send({ error: 'Local file not found' });
         }
 
-        // Return a CachedTrack-like object pointing to our stream endpoint
-        return reply.send({
+        // Build a CachedTrack-like object pointing to our stream endpoint
+        const cachedLike = {
           id: videoId,
           title: localFile.title,
           artist: localFile.artist,
@@ -468,7 +468,17 @@ export async function playerRoutes(app: FastifyInstance) {
           cachedAt: Date.now(),
           playCount: 0,
           source: 'local',
-        });
+        };
+
+        // Ensure local file is upserted into the cache store so recordPlay() works
+        try {
+          const saved = upsertTrack(localFile.title || localFile.path, cachedLike as any, cachedLike.audioUrl, localFile.path, 'high', cachedLike.audioFormat, 'local');
+          return reply.send({ ...saved, source: 'local' });
+        } catch (err) {
+          // If upsert fails for any reason, fall back to returning the cachedLike object
+          app.log.warn({ err, localId }, '[player] upsert local cached track failed');
+          return reply.send(cachedLike);
+        }
       }
 
       const query = req.query.query ?? videoId;
@@ -657,7 +667,36 @@ export async function playerRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
     }
 
-    const track = recordPlayWithMetadata(parsed.data);
+    let track = recordPlayWithMetadata(parsed.data);
+    if (!track) {
+      // If missing and it's a local track, attempt to upsert from local_files
+      const id = parsed.data.id;
+      if (id && id.startsWith('local:')) {
+        try {
+          const localId = id.replace(/^local:/, '');
+          const { getLocalFile } = await import('../services/localFiles.js');
+          const localFile = getLocalFile(localId);
+          if (localFile) {
+            // Upsert into cache so history recording works
+            const { upsertTrack } = await import('../services/cache.js');
+            upsertTrack(localFile.title || localFile.path, {
+              id: parsed.data.id,
+              title: localFile.title,
+              artist: localFile.artist,
+              album: localFile.album,
+              duration: localFile.duration,
+              thumbnail: localFile.thumbnail,
+              query: localFile.title,
+            } as any, `/local-files/${localId}/stream`, localFile.path, 'high', localFile.format, 'local');
+
+            track = recordPlayWithMetadata(parsed.data);
+          }
+        } catch (err) {
+          app.log.warn({ err }, '[player] upsert local track for played failed');
+        }
+      }
+    }
+
     if (!track) {
       return reply.status(404).send({ error: 'Track is not cached yet' });
     }

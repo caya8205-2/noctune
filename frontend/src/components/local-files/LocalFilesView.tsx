@@ -13,6 +13,7 @@ export function LocalFilesView() {
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const qc = useQueryClient();
@@ -30,12 +31,23 @@ export function LocalFilesView() {
     },
     onSuccess: (data) => {
       console.log('[local-files] Mutation success:', data);
+      // If backend reports failures, surface them to the user
+      if (data && typeof data === 'object' && ('failed' in data) && (data.failed as number) > 0) {
+        const failed = (data as any).failed;
+        const scanned = (data as any).scanned ?? 0;
+        const msg = `Scan completed: ${scanned} scanned, ${failed} failed.`;
+        console.warn('[local-files] scan reported failures:', msg);
+        setScanError(msg);
+      } else {
+        setScanError(null);
+      }
       qc.invalidateQueries({ queryKey: ['local-files'] });
-      setIsScanning(false);
     },
+
     onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('[local-files] Mutation error:', error);
-      setIsScanning(false);
+      setScanError(errorMsg);
     },
   });
 
@@ -76,6 +88,7 @@ export function LocalFilesView() {
 
   function handleScanClick() {
     console.log('[local-files] IS_TAURI:', IS_TAURI);
+    setScanError(null);
 
     if (IS_TAURI) {
       // Tauri: use native dialog for folder
@@ -88,15 +101,33 @@ export function LocalFilesView() {
         });
       }).then((selected) => {
         console.log('[local-files] Dialog result:', selected);
-        if (selected && typeof selected === 'string') {
-          console.log('[local-files] Starting scan for:', selected);
+        // Tauri may return a string or an array of paths depending on platform/version
+        let folderPath: string | null = null;
+        if (typeof selected === 'string') {
+          folderPath = selected;
+        } else if (Array.isArray(selected) && selected.length > 0 && typeof selected[0] === 'string') {
+          folderPath = selected[0];
+        }
+
+        if (folderPath) {
+          console.log('[local-files] Starting scan for:', folderPath);
           setIsScanning(true);
-          scanMutation.mutate(selected);
+          setScanError(null);
+          scanMutation.mutate(folderPath, {
+            onSettled: () => {
+              setIsScanning(false);
+            },
+            onError: (err: any) => {
+              const msg = err instanceof Error ? err.message : 'Failed to scan folder';
+              setScanError(msg);
+            }
+          });
         } else {
-          console.warn('[local-files] No folder selected or invalid result');
+          console.warn('[local-files] No folder selected or invalid result', selected);
         }
       }).catch((err) => {
         console.error('[local-files] Folder dialog failed:', err);
+        setScanError('Failed to open folder dialog');
         fileInputRef.current?.click();
       });
     } else {
@@ -107,6 +138,7 @@ export function LocalFilesView() {
 
   function handleFileSelect() {
     console.log('[local-files] IS_TAURI:', IS_TAURI);
+    setScanError(null);
 
     if (IS_TAURI) {
       // Tauri: use native dialog for files
@@ -121,14 +153,27 @@ export function LocalFilesView() {
         if (selected && Array.isArray(selected) && selected.length > 0) {
           console.log('[local-files] Starting scan for files:', selected);
           setIsScanning(true);
-          // Scan each file sequentially
-          Promise.all(selected.map(file => scanMutation.mutateAsync(file)))
+          setScanError(null);
+          
+          // Scan each file sequentially and wait for all to complete
+          const scanPromises = selected.map(file => 
+            scanMutation.mutateAsync(file)
+              .catch(err => {
+                console.error(`[local-files] Failed to scan ${file}:`, err);
+                throw err;
+              })
+          );
+          
+          Promise.all(scanPromises)
             .then(() => {
               console.log('[local-files] All files scanned successfully');
+              setScanError(null);
               qc.invalidateQueries({ queryKey: ['local-files'] });
             })
             .catch((err) => {
+              const errorMsg = err instanceof Error ? err.message : 'Failed to scan files';
               console.error('[local-files] File scan failed:', err);
+              setScanError(errorMsg);
             })
             .finally(() => {
               setIsScanning(false);
@@ -136,6 +181,7 @@ export function LocalFilesView() {
         }
       }).catch((err) => {
         console.error('[local-files] File dialog failed:', err);
+        setScanError('Failed to open file dialog');
         fileInputRef.current?.click();
       });
     } else {
@@ -169,7 +215,20 @@ export function LocalFilesView() {
       thumbnail: file.thumbnail,
       query: file.title,
     };
-    playTrack(track, [track], { queueSource: 'manual' });
+
+    // Build local library queue so playing a local track fills the queue with library tracks
+    const libraryQueue: Track[] = files.map((f) => ({
+      id: f.id,
+      title: f.title,
+      artist: f.artist,
+      album: f.album,
+      duration: f.duration,
+      thumbnail: f.thumbnail,
+      query: f.title,
+      queueSource: 'manual',
+    }));
+
+    playTrack(track, libraryQueue, { queueSource: 'manual' });
   }
 
   function handleDelete(id: string) {
@@ -254,6 +313,7 @@ export function LocalFilesView() {
             multiple
             className="hidden"
             onChange={handleFileInputChange}
+            {...({ webkitdirectory: 'true', mozdirectory: 'true' } as any)}
           />
           <button
             onClick={handleScanClick}
@@ -265,8 +325,17 @@ export function LocalFilesView() {
                 : 'hover:bg-accent/80'
             )}
           >
-            <FolderOpen className="h-4 w-4" />
-            {isScanning ? 'Scanning...' : 'Add Folder'}
+            {isScanning ? (
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Scanning...
+              </>
+            ) : (
+              <>
+                <FolderOpen className="h-4 w-4" />
+                Add Folder
+              </>
+            )}
           </button>
           <button
             onClick={handleFileSelect}
@@ -278,13 +347,35 @@ export function LocalFilesView() {
                 : 'hover:bg-base-800'
             )}
           >
-            <Music className="h-4 w-4" />
-            Add Files
+            {isScanning ? (
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Scanning...
+              </>
+            ) : (
+              <>
+                <Music className="h-4 w-4" />
+                Add Files
+              </>
+            )}
           </button>
-          {isScanning && (
+          {!scanError && isScanning && (
             <span className="text-xs text-muted">Scanning for audio files…</span>
           )}
         </div>
+        
+        {/* Error Message */}
+        {scanError && (
+          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 flex items-center justify-between">
+            <span>{scanError}</span>
+            <button
+              onClick={() => setScanError(null)}
+              className="ml-2 text-red-400/60 hover:text-red-400"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}

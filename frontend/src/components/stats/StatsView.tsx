@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Clock, Headphones, Music2, User } from 'lucide-react';
 import { api, type StatsDailyEntry, type StatsTopArtist, type StatsTopTrack } from '../../utils/api';
@@ -114,6 +114,7 @@ function TopArtistRow({
   entry: StatsTopArtist;
   index: number;
 }) {
+  const setView = usePlayerStore((s) => s.setView);
   // Fetch artist metadata for the image
   const { data: artistData } = useQuery({
     queryKey: ['artist-image', entry.artistId],
@@ -143,7 +144,18 @@ function TopArtistRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{entry.artist}</p>
+        {entry.artistId ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setView('artist', entry.artistId!); }}
+            className="block max-w-full truncate text-left text-sm font-medium transition-colors hover:text-accent text-white"
+            title={`Go to artist: ${entry.artist}`}
+          >
+            {entry.artist}
+          </button>
+        ) : (
+          <p className="truncate text-sm font-medium text-white">{entry.artist}</p>
+        )}
         <p className="truncate text-xs text-muted">{entry.tracksCount} tracks</p>
       </div>
       <div className="ml-2 shrink-0 text-right">
@@ -166,6 +178,26 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
   // Show date labels at intervals
   const labelInterval = data.length <= 14 ? 2 : data.length <= 31 ? 5 : 7;
 
+  // Helper function to get color based on intensity (GitHub-style gradient)
+  function getIntensityColor(intensity: number): string {
+    if (intensity < 0.2) {
+      // Very low: light gray
+      return 'rgba(148, 163, 184, 0.35)';
+    } else if (intensity < 0.4) {
+      // Low: light green
+      return 'rgba(134, 239, 172, 0.5)';
+    } else if (intensity < 0.6) {
+      // Medium: green
+      return 'rgba(74, 222, 128, 0.7)';
+    } else if (intensity < 0.8) {
+      // High: dark green
+      return 'rgba(34, 197, 94, 0.85)';
+    } else {
+      // Very high: very dark green
+      return 'rgba(22, 163, 74, 1)';
+    }
+  }
+
   return (
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center gap-2">
@@ -174,43 +206,88 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
         </div>
         <div>
           <h3 className="text-sm font-semibold text-white">Daily activity</h3>
-          <p className="text-[11px] text-muted">Plays per day</p>
+          <p className="text-[11px] text-muted">Plays per day (listening intensity by color)</p>
         </div>
       </div>
-      <div className="flex h-40 items-end gap-1 border-b border-l border-white/[0.06] px-2 pb-2">
-        {data.map((d, i) => {
-          const heightPct = (d.playCount / maxPlays) * 100;
-          const intensity = d.minutes / maxMinutes;
-          const showLabel = i % labelInterval === 0 || i === data.length - 1;
-          const dateLabel = new Date(d.date).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          });
-          return (
-            <div
-              key={d.date}
-              className="group relative flex min-w-0 flex-1 flex-col items-center"
-              style={{ height: '100%' }}
-            >
-              <div
-                className="mt-auto w-full max-w-[18px] rounded-t transition-colors"
-                style={{
-                  height: `${Math.max(heightPct, d.playCount > 0 ? 4 : 0)}%`,
-                  backgroundColor: d.playCount === 0
-                    ? 'rgba(255,255,255,0.04)'
-                    : `rgba(59, 130, 246, ${0.25 + intensity * 0.75})`,
-                }}
-                title={`${dateLabel}: ${d.playCount} plays · ${d.minutes}m`}
-              />
-              {showLabel && (
-                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted">
-                  {dateLabel}
+      {(() => {
+        const containerRef = useRef<HTMLDivElement | null>(null);
+        const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; content: string }>({ visible: false, x: 0, y: 0, content: '' });
+
+        function handleMove(e: React.MouseEvent<HTMLDivElement>) {
+          const el = containerRef.current;
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          const localX = e.clientX - rect.left;
+          const localY = e.clientY - rect.top;
+
+          const clampedX = Math.max(8, Math.min(rect.width - 8, localX));
+          const clampedY = Math.max(8, Math.min(rect.height - 8, localY));
+
+          // Determine nearest data index for content, but position follows cursor exactly
+          const barWidth = rect.width / Math.max(1, data.length);
+          const idx = Math.min(data.length - 1, Math.max(0, Math.floor(localX / barWidth)));
+          const d = data[idx];
+          const dateLabel = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+          setTooltip({ visible: true, x: clampedX, y: clampedY, content: `${dateLabel}: ${d.playCount} plays · ${formatMinutes(d.minutes)}` });
+        }
+
+        return (
+          <div
+            ref={containerRef}
+            className="relative flex h-40 items-end gap-1 border-b border-l border-white/[0.06] px-2 pb-2"
+            onMouseMove={handleMove}
+            onMouseLeave={() => setTooltip({ visible: false, x: 0, y: 0, content: '' })}
+          >
+            {data.map((d, i) => {
+              const heightPct = (d.playCount / maxPlays) * 100;
+              const intensity = d.minutes / maxMinutes;
+              const showLabel = i % labelInterval === 0 || i === data.length - 1;
+              const dateLabel = new Date(d.date).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              });
+
+              return (
+                <div
+                  key={d.date}
+                  className="relative flex min-w-0 flex-1 flex-col items-center"
+                  style={{ height: '100%' }}
+                >
+                  <div
+                    className="mt-auto w-full max-w-[18px] rounded-t transition-colors relative"
+                    style={{
+                      height: `${Math.max(heightPct, d.playCount > 0 ? 4 : 0)}%`,
+                      backgroundColor: d.playCount === 0
+                        ? 'rgba(255,255,255,0.04)'
+                        : getIntensityColor(intensity),
+                    }}
+                  />
+
+                  {showLabel && (
+                    <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted">
+                      {dateLabel}
+                    </div>
+                  )}
                 </div>
-              )}
+              );
+            })}
+
+            {/* Cursor-following tooltip that follows both X and Y of the cursor */}
+            <div
+              className="pointer-events-none absolute z-10 transition-opacity"
+              style={{
+                left: tooltip.x,
+                top: tooltip.y,
+                transform: 'translate(-50%, -120%)',
+                opacity: tooltip.visible ? 1 : 0,
+              }}
+            >
+              <div className="rounded-md bg-black/80 px-2 py-1 text-xs text-white whitespace-nowrap max-w-[160px] truncate">{tooltip.content}</div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })()}
       <div className="mt-6 flex items-center justify-between text-[10px] text-muted">
         <span>
           Peak:{' '}
@@ -218,11 +295,19 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
             {Math.round(maxPlays)} plays
           </span>
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-accent/40" />
-          <span className="inline-block h-2 w-2 rounded-sm bg-accent/70" />
-          <span className="inline-block h-2 w-2 rounded-sm bg-accent" />
-          <span className="ml-1">listening intensity</span>
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: 'rgba(148, 163, 184, 0.35)' }} />
+            <span className="text-[10px] text-muted">Low</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: 'rgba(74, 222, 128, 0.7)' }} />
+            <span className="text-[10px] text-muted">Medium</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: 'rgba(22, 163, 74, 1)' }} />
+            <span className="text-[10px] text-muted">High</span>
+          </span>
         </span>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import * as fs from 'fs';
 import { getEnvConfig, saveEnvConfig } from '../services/env.js';
 import { testSpotifyCredentials, invalidateToken } from '../services/spotify.js';
 import {
@@ -149,6 +150,22 @@ export async function settingsRoutes(app: FastifyInstance) {
             });
         } catch (err) {
             return reply.status(400).send({ error: 'Invalid cache JSON', message: (err as Error).message });
+        }
+    });
+
+    // POST /settings/cache/write-file — write base64 content to an absolute path (used by Tauri save dialog)
+    const WriteFileBody = z.object({ path: z.string().min(1), base64: z.string().min(1) });
+    app.post('/settings/cache/write-file', async (req, reply) => {
+        const parsed = WriteFileBody.safeParse(req.body);
+        if (!parsed.success) return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+        const { path: targetPath, base64 } = parsed.data;
+        try {
+            const buf = Buffer.from(base64, 'base64');
+            fs.writeFileSync(targetPath, buf);
+            return reply.send({ ok: true, path: targetPath, bytes: buf.length });
+        } catch (err) {
+            console.error('[settings] write-file failed:', err);
+            return reply.status(500).send({ error: 'Write failed', message: (err as Error).message });
         }
     });
 

@@ -22,7 +22,7 @@ export function useSmartPlaylistsPrefetch() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Prefetch Discover Weekly in background
+    // Prefetch Discover Weekly in background with 7-day stale time
     void queryClient.prefetchQuery({
       queryKey: ['smart', 'discover-weekly'],
       queryFn: async (): Promise<Track[]> => {
@@ -39,7 +39,7 @@ export function useSmartPlaylistsPrefetch() {
           return [];
         }
       },
-      staleTime: 1000 * 60 * 15,
+      staleTime: 1000 * 60 * 60 * 24 * 7, // 7 days
     });
   }, [queryClient]);
 }
@@ -98,6 +98,7 @@ export function useSmartPlaylists() {
   });
 
   // Discover Weekly — recommendations based on recent history, excluding already-played tracks
+  // Refetch every week (7 days) to get fresh recommendations
   const discoverWeeklyQuery = useQuery({
     queryKey: ['smart', 'discover-weekly'],
     queryFn: async (): Promise<Track[]> => {
@@ -115,8 +116,10 @@ export function useSmartPlaylists() {
         return [];
       }
     },
-    staleTime: 1000 * 60 * 15,
-    refetchOnMount: false,
+    staleTime: 1000 * 60 * 60 * 24 * 7, // 7 days
+    refetchInterval: 1000 * 60 * 60 * 24 * 7, // Refetch every 7 days
+    refetchIntervalInBackground: true, // Keep refetching even if tab is not focused
+    refetchOnMount: true, // Refetch if the query exists but is stale when the component mounts
   });
 
   const smartPlaylists: SmartPlaylist[] = [

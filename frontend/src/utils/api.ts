@@ -268,6 +268,8 @@ export const api = {
     request<{ files: LocalFile[]; total: number; limit: number; offset: number }>(
       `/local-files/library?limit=${limit}&offset=${offset}`
     ),
+  getLocalFile: (id: string) =>
+    request<LocalFile>(`/local-files/${encodeURIComponent(id)}`),
   deleteLocalFile: (id: string) =>
     request<{ ok: boolean }>(`/local-files/${id}`, { method: 'DELETE' }),
 

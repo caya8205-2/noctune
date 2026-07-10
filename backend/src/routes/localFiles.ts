@@ -172,4 +172,6 @@ export async function localFilesRoutes(app: FastifyInstance) {
       total: files.length,
     });
   });
+
 }
+
