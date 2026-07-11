@@ -36,25 +36,47 @@
 
 ---
 
+**<center>If you're too lazy to read all this (cuz i am, most of this readme is ai-generated), just skip all this and go straight to [Setup](#setup) and [FAQ](#faq-or-frequently-encountered-problems)</center>**
+
+
+---
+
 ## Highlights
 
 - **Spotify metadata search** for clean titles, artists, duration, artwork, albums, and release discovery.
+
 - **Direct YouTube search** for users who want raw YouTube-style results.
+
 - **Nightly Mixes** generated from local listening history, top tracks, and optional Last.fm similar-track signals, cached for several hours so Home stays fast and API-friendly.
+
 - **Smarter autoqueue** that can top itself up near the end of the queue and uses recommendation signals instead of stopping after a short fixed list.
+
 - **Local YouTube resolver** powered primarily by `youtubei.js`, with `yt-dlp` kept as a fallback path.
+
 - **Smart Spotify-to-YouTube matching** with scoring for official uploads, Topic/VEVO channels, duration accuracy, and penalties for reactions, live/tour versions, piano/drum/instrumental covers, karaoke, nightcore, sped-up/slowed edits, and unrelated videos.
+
 - **Queue-aware playback** where Search starts an autoqueue, while Playlist playback keeps the full playlist order.
+
 - **Background prefetch** for upcoming tracks and recommendations.
+
 - **Local audio cache** that can stream while writing cache files, with size limits and cache controls.
+
 - **Synced lyrics** through LRCLIB with auto-loading on track start, local lyrics cache, and Romaji mode for Japanese lyrics.
+
 - **Adaptive circular visualizer** around the album disk, using colors derived from the current artwork.
+
 - **Local playlists** with liked songs, drag reorder, rename, cover upload/crop, import from Spotify or YouTube playlist URLs, and playlist cache tools.
+
 - **Album and artist views** reachable from track details, search results, playlist rows, mini player, and full player links.
+
 - **History view** that records actual playback using the displayed track metadata.
+
 - **Track details sidebar** for Spotify-rich metadata and local resolver details.
+
 - **Diagnostics and debug tools** for resolver health, failed stream IDs, Spotify-to-YouTube match cache, candidate scoring, and per-track cache clearing with confirmation.
+
 - **GitHub Releases update checks** on startup and periodically while the app is open, with a download action in Settings.
+
 - **Desktop app** packaged with Tauri and a bundled local backend sidecar.
 
 ## How It Works
@@ -178,6 +200,68 @@ Noctune stores runtime data locally and ignores it from git:
 
 Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
 
+## FAQ (or frequently encountered problems)
+
+- [Windows warning](#why-is-windows-gives-warning-when-installing-the-app-is-there-malwarevirus-in-it)
+- [Playlist import](#why-does-playlist-import-sometimes-returns-no-tracks-found-even-though-the-playlist-is-public)
+- [First track delay](#why-does-first-track-take-a-few-second-to-start)
+- [Playback delay](#why-doesnt-every-track-play-instantly)
+- [Wrong match](#why-did-it-play-a-different-version-of-my-song)
+- [Fix wrong match](#can-i-manually-fix-a-wrong-match)
+- [Lyrics](#why-are-some-songs-missing-lyrics)
+- [Romaji](#why-dont-some-japanese-songs-have-romaji)
+- [Updating](#will-updating-delete-my-library)
+- [Spotify API](#is-spotify-api-necessary)
+- [Database location](#i-wanna-see-the-database-and-all-the-config-file-where-does-it-stored)
+
+---
+
+#### Why is Windows gives warning when installing the app? is there malware/virus in it?
+* No. Its because the app needs local access, for local import, for cache etc. but mainly its because the app doesn't have signing and certified publisher yet, i'm working on that. If you're still unsure, check [here](./assets/virustotal-scan.png) or scan with Kaspersky, Malwarebytes or similar antivirus.
+
+#### Why does playlist import sometimes returns "no tracks found" even though the playlist is public?  
+* For **YT**, make sure collaboration is turned on in the playlist settings, for some reason it works even if you set the privacy to Unlisted (not public but anyone with a link can access the playlist) rather than Public but with Collaboration turned off.  
+
+* For **Spotify**, even though the app use your own account API, its still doesn't allow personalization playlist like Daily Mix, Genre Mix or Artist Mix. It needs OAuth implementation on the app or some reverse engineering workaround and i'm not going to do both.  
+Just open the said Mix playlist and click on the plus button to save it to a library, then import the said library.
+
+#### Why does first track take a few second to start?
+* The first track needs to be resolved from Spotify metadata to a playable
+YouTube stream. After that, the next few tracks are prefetched and cached,
+so playback is usually instant.
+
+#### Why doesn't every track play instantly?
+* Noctune is not a streaming service, it resolves tracks on demand and then keeps learning from your listening
+history. Popular tracks become faster over time thanks to the learned
+match cache and audio cache.
+
+#### Why did it play a different version of my song?
+* Some songs have dozens of uploads on YouTube. Noctune uses a scoring engine to pick the closest match based on title,
+artist, duration, release hints, blacklist history and many other rules. If the selected version is incorrect, open the Debug Dashboard and
+resolve the track again or clear only that track's cache.
+
+#### Can I manually fix a wrong match?
+* Yes, but not really (for now). If you got wrong match then open debug dashboard from the settings, go to Match Cache tab, clear the wrong cache, then play the track again. Clearing the wrong cache doesn't automatically blacklist it, but its gonna be in the future update.
+
+#### Why are some songs missing lyrics?
+* Lyrics are provided by LRCLib, not every song has synchronized lyrics available yet.
+
+#### Why don't some Japanese songs have Romaji?
+* Romaji conversion depends on successful Japanese text analysis.
+Some community-provided lyrics may not contain enough information
+to generate accurate Romaji.
+
+#### Will updating delete my library?
+* No. Your database, playlists, cache and settings are stored separately
+from the application. And most of the update is backward compatible (e.g. if there's a matcher update, it will only affect the newer match, the old track that's already cached will not be affected unless you clear the cache)
+
+#### Is spotify API necessary?
+* Not really, its only for songs metadata and spotify playlist import. You can still use the app with direct yt search
+
+#### I wanna see the database and all the config file, where does it stored?
+* the binary is in `C:\<username>\AppData\Local\Noctune`
+
+* while the data is in `C:\<username>\AppData\Roaming\dev.noctune.desktop`
 
 ## Changelog
 
