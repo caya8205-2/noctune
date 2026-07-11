@@ -4,6 +4,7 @@ import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
 import { clsx } from 'clsx';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type SidebarView = 'home' | 'search' | 'history' | 'queue' | 'settings' | 'playlist' | 'stats' | 'local-files';
 
@@ -34,6 +35,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingDeletePlaylist, setPendingDeletePlaylist] = useState<{ id: string; name: string } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -74,6 +76,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     mutationFn: (id: string) => api.deletePlaylist(id),
     onSuccess: () => {
       setDeleteError(null);
+      setPendingDeletePlaylist(null);
       qc.invalidateQueries({ queryKey: ['playlists'] });
       if (activeView === 'playlist') setView('home');
     },
@@ -101,8 +104,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   function handleDeletePlaylist(id: string, name: string) {
-    if (!window.confirm(`Delete playlist "${name}"?`)) return;
-    deleteMut.mutate(id);
+    setPendingDeletePlaylist({ id, name });
   }
 
   const navItems = [
@@ -308,6 +310,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeletePlaylist)}
+        eyebrow="Playlist"
+        title="Delete playlist?"
+        description="This permanently deletes the playlist and its track list. Tracks themselves are not removed from your library or disk."
+        detail={
+          pendingDeletePlaylist
+            ? { title: pendingDeletePlaylist.name }
+            : null
+        }
+        confirmLabel="Delete playlist"
+        loading={deleteMut.isPending}
+        onConfirm={() => {
+          if (pendingDeletePlaylist) deleteMut.mutate(pendingDeletePlaylist.id);
+        }}
+        onCancel={() => !deleteMut.isPending && setPendingDeletePlaylist(null)}
+      />
     </div>
   );
 }

@@ -260,18 +260,43 @@ export const api = {
 
   // Local files
   scanLocalFiles: (path: string) =>
-    request<{ scanned: number; failed: number; total: number; errors: string[] }>('/local-files/scan', {
+    request<{
+      ok: boolean;
+      scanned: number;
+      failed: number;
+      importRoot: string;
+      folderName: string;
+    }>('/local-files/scan', {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
-  getLocalFiles: (limit = 50, offset = 0) =>
-    request<{ files: LocalFile[]; total: number; limit: number; offset: number }>(
-      `/local-files/library?limit=${limit}&offset=${offset}`
-    ),
+  getLocalFiles: (limit = 50, offset = 0, importRoot?: string | null) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (importRoot !== undefined && importRoot !== null) {
+      params.set('importRoot', importRoot);
+    }
+    return request<{
+      files: LocalFile[];
+      total: number;
+      limit: number;
+      offset: number;
+      importRoot: string | null;
+    }>(`/local-files/library?${params.toString()}`);
+  },
+  getLocalFolders: () =>
+    request<{ folders: LocalFolder[]; total: number }>('/local-files/folders'),
   getLocalFile: (id: string) =>
     request<LocalFile>(`/local-files/${encodeURIComponent(id)}`),
   deleteLocalFile: (id: string) =>
     request<{ ok: boolean }>(`/local-files/${id}`, { method: 'DELETE' }),
+  deleteLocalFolder: (folderPath: string) =>
+    request<{ ok: boolean; deleted: number }>('/local-files/folder', {
+      method: 'DELETE',
+      body: JSON.stringify({ path: folderPath }),
+    }),
 
   stats: {
     overview: (period: '7d' | '30d' | 'all' = 'all') =>
@@ -526,6 +551,8 @@ export interface StatsDailyEntry {
 export interface LocalFile {
   id: string;
   path: string;
+  directory: string;
+  importRoot: string;
   title: string;
   artist: string;
   album: string;
@@ -538,6 +565,16 @@ export interface LocalFile {
   fileSize: number;
   addedAt: number;
   lastScanned: number;
+}
+
+export interface LocalFolder {
+  path: string;
+  name: string;
+  trackCount: number;
+  thumbnail: string;
+  addedAt: number;
+  totalDuration: number;
+  isUngrouped: boolean;
 }
 
 // ── Radio types ───────────────────────────────────────────────────────────────

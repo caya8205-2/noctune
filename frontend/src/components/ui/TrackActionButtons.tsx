@@ -14,15 +14,16 @@ import { api, type Track } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
 import { useClearTrackCache } from '../../hooks/useClearTrackCache';
 import { LikeButton } from '../player/LikeButton';
+import { noctuneLayout, noctuneSize } from '../../theme';
 
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
-const TOP_CHROME_HEIGHT = 56;
-const PLAYER_BAR_HEIGHT = 80;
-const DROPDOWN_WIDTH = 224;
-const MAX_DROPDOWN_HEIGHT = 288;
-const MIN_USABLE_DROPDOWN_HEIGHT = 176;
-const VIEWPORT_EDGE_GAP = 12;
-const BUTTON_GAP = 8;
+const TOP_CHROME_HEIGHT = noctuneLayout.topChrome;
+const PLAYER_BAR_HEIGHT = noctuneLayout.playerBar;
+const DROPDOWN_WIDTH = noctuneSize.dropdownWidth;
+const MAX_DROPDOWN_HEIGHT = noctuneSize.dropdownMaxHeight;
+const MIN_USABLE_DROPDOWN_HEIGHT = noctuneSize.dropdownMinHeight;
+const VIEWPORT_EDGE_GAP = noctuneLayout.viewportEdgeGap;
+const BUTTON_GAP = noctuneSize.dropdownButtonGap;
 
 interface TrackActionButtonsProps {
   track: Track;
@@ -43,7 +44,7 @@ export function TrackActionButtons({
   track,
   className,
   buttonClassName = 'p-1.5',
-  iconSize = 14,
+  iconSize = noctuneSize.actionIcon,
   queueSource,
   showQueue = true,
   showLike = true,

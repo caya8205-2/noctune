@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Noctune design tokens (CSS)
+  ───────────────────────────
+  Source of truth for colors, radii, and component sizes used by Tailwind
+  and utility classes. JS/TS consumers: see `src/theme/noctune.ts`.
+  Keep both files aligned when changing brand values.
+*/
+
 @layer base {
 
   *,
@@ -22,34 +30,105 @@
   }
 
   :root {
-    /* Base palette — stays constant across themes */
-    --base-950: 6 7 9;
-    --base-900: 11 13 17;
-    --base-800: 20 23 30;
-    --base-700: 29 33 43;
-    --base-600: 42 47 59;
-    --base-500: 58 65 81;
+    /* ── Brand palette (RGB channels for alpha-friendly usage) ─────────── */
+    --noctune-gold: 234 177 76;
+    --noctune-gold-dim: 200 146 58;
+    --noctune-moon: 127 168 255;
+    --noctune-bg: 6 7 9;
+    --noctune-surface: 11 13 17;
+    --noctune-surface-raised: 20 23 30;
+    --noctune-surface-high: 29 33 43;
+    --noctune-border: 42 47 59;
+    --noctune-border-strong: 58 65 81;
+    --noctune-muted: 106 110 120;
+    --noctune-soft: 164 168 178;
+    --noctune-ink: 236 234 227;
+    --noctune-danger: 248 113 113;
 
-    /* Accent + surface/bg — updated by useTheme */
-    --accent-rgb: 234 177 76;
-    --accent-dim-rgb: 200 146 58;
+    /* ── Back-compat aliases (existing class names) ────────────────────── */
+    --base-950: var(--noctune-bg);
+    --base-900: var(--noctune-surface);
+    --base-800: var(--noctune-surface-raised);
+    --base-700: var(--noctune-surface-high);
+    --base-600: var(--noctune-border);
+    --base-500: var(--noctune-border-strong);
+
+    --accent-rgb: var(--noctune-gold);
+    --accent-dim-rgb: var(--noctune-gold-dim);
     --surface-rgb: 26 28 32;
-    --bg-rgb: 6 7 9;
+    --bg-rgb: var(--noctune-bg);
+
+    /* ── Typography ────────────────────────────────────────────────────── */
+    --font-sans: 'Hanken Grotesk', sans-serif;
+    --font-display: 'Fraunces', serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* ── Radii ─────────────────────────────────────────────────────────── */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.25rem;
+    --radius-panel: 1rem;
+    --radius-card: 0.75rem;
+    --radius-thumb: 0.5rem;
+
+    /* ── Component sizes ───────────────────────────────────────────────── */
+    --size-track-thumb-xs: 2rem;      /* 32 */
+    --size-track-thumb-sm: 2.5rem;    /* 40 */
+    --size-track-thumb: 3rem;         /* 48 */
+    --size-track-thumb-md: 3.5rem;    /* 56 */
+    --size-track-thumb-lg: 4rem;      /* 64 */
+
+    --size-action-icon: 0.875rem;     /* 14 */
+    --size-action-icon-md: 1rem;      /* 16 */
+    --size-action-hit: 1.75rem;       /* 28 */
+
+    --size-modal-sm: 24rem;           /* 384 */
+    --size-modal-md: 28rem;           /* 448 */
+    --size-modal-lg: 32rem;           /* 512 */
+    --size-modal-pad: 1.25rem;        /* 20 */
+
+    --size-dropdown-width: 14rem;     /* 224 */
+    --size-dropdown-max-h: 18rem;     /* 288 */
+
+    --size-player-bar: 5rem;          /* 80 */
+    --size-top-chrome: 3.5rem;        /* 56 */
+    --size-play-button: 3rem;         /* 48 */
+
+    --size-library-empty-box: 3.5rem; /* 56 */
+    --size-library-empty-icon: 1.875rem; /* 30 */
+
+    /* ── Spacing ───────────────────────────────────────────────────────── */
+    --space-page-x: 1.5rem;
+    --space-page-y: 1.25rem;
+    --space-card: 0.75rem;
+    --space-track-gap: 0.75rem;
+
+    /* ── Elevation / z ─────────────────────────────────────────────────── */
+    --z-dropdown: 40;
+    --z-modal: 50;
+    --z-toast: 60;
+
+    /* ── Motion ────────────────────────────────────────────────────────── */
+    --duration-fast: 150ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
   }
 
   body {
     background-color: rgb(var(--bg-rgb));
     background-image:
       radial-gradient(130% 90% at 50% -20%, rgb(var(--accent-rgb) / 0.10), transparent 55%),
-      radial-gradient(80% 70% at 100% 115%, rgba(127, 168, 255, 0.07), transparent 55%),
+      radial-gradient(80% 70% at 100% 115%, rgb(var(--noctune-moon) / 0.07), transparent 55%),
       linear-gradient(180deg, #07080B 0%, #060709 60%, #050608 100%);
     background-attachment: fixed;
-    color: #ECEAE3;
-    font-family: 'Hanken Grotesk', sans-serif;
+    color: rgb(var(--noctune-ink));
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     user-select: none;
-    transition: background-color 0.2s ease;
+    transition: background-color var(--duration-normal) ease;
   }
 
   /* Film grain overlay for depth */
@@ -113,16 +192,94 @@
     box-shadow: 0 10px 30px -8px rgb(var(--accent-rgb) / 0.62);
   }
 
+  .btn-danger {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-2 text-xs font-medium transition-colors disabled:opacity-40;
+    border-color: rgb(var(--noctune-danger) / 0.3);
+    background: rgb(var(--noctune-danger) / 0.15);
+    color: rgb(248 180 180);
+  }
+
+  .btn-danger:hover {
+    background: rgb(var(--noctune-danger) / 0.25);
+  }
+
   .input-base {
     @apply w-full rounded-xl border border-white/[0.08] bg-base-900/70 px-4 py-2.5 text-sm text-white placeholder-muted outline-none transition-all duration-200 focus:border-accent/60 focus:ring-2 focus:ring-accent/15;
   }
 
+  /* ── Track row / thumb ───────────────────────────────────────────────── */
   .track-row {
-    @apply flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 transition-colors duration-150 hover:border-white/[0.06] hover:bg-white/[0.04];
+    @apply flex cursor-pointer items-center border border-transparent transition-colors duration-150 hover:border-white/[0.06] hover:bg-white/[0.04];
+    gap: var(--space-track-gap);
+    border-radius: var(--radius-lg);
+    padding: 0.625rem 0.75rem;
   }
 
   .track-row.active {
     @apply border-accent/25 bg-accent/[0.08] ring-1 ring-accent/15;
+  }
+
+  .track-thumb {
+    flex-shrink: 0;
+    width: var(--size-track-thumb-sm);
+    height: var(--size-track-thumb-sm);
+    border-radius: var(--radius-thumb);
+    overflow: hidden;
+    background: rgb(var(--base-700));
+  }
+
+  .track-thumb-md {
+    width: var(--size-track-thumb);
+    height: var(--size-track-thumb);
+  }
+
+  .track-thumb-lg {
+    width: var(--size-track-thumb-md);
+    height: var(--size-track-thumb-md);
+  }
+
+  /* ── Library / media cards ───────────────────────────────────────────── */
+  .track-card {
+    @apply relative cursor-pointer overflow-hidden border border-white/[0.08] bg-base-900 transition-all hover:border-accent/40 hover:bg-base-800;
+    border-radius: var(--radius-card);
+    padding: var(--space-card);
+  }
+
+  .track-card-cover {
+    position: relative;
+    margin-bottom: 0.75rem;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-thumb);
+    background: rgb(var(--base-800));
+  }
+
+  /* ── Modal shell ─────────────────────────────────────────────────────── */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/70 backdrop-blur-sm;
+    z-index: var(--z-modal);
+  }
+
+  .modal-panel {
+    @apply surface-panel relative z-10 w-full animate-slide-up;
+    max-width: var(--size-modal-md);
+    padding: var(--size-modal-pad);
+  }
+
+  .modal-panel-sm {
+    max-width: var(--size-modal-sm);
+  }
+
+  .modal-panel-lg {
+    max-width: var(--size-modal-lg);
+  }
+
+  /* ── Track action hit target ─────────────────────────────────────────── */
+  .action-hit {
+    @apply btn-ghost;
+    width: var(--size-action-hit);
+    height: var(--size-action-hit);
+    padding: 0;
   }
 
   .ambient-glow {
@@ -164,7 +321,7 @@
     cursor: pointer;
   }
   .eq-slider:focus-visible {
-    outline: 2px solid rgba(234, 177, 76, 0.6);
+    outline: 2px solid rgb(var(--accent-rgb) / 0.6);
     outline-offset: 2px;
     border-radius: 4px;
   }

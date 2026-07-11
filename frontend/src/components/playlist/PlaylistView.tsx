@@ -6,6 +6,7 @@ import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { clsx } from 'clsx';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useSmartPlaylists } from '../../hooks/useSmartPlaylists';
 
 const LIKED_PLAYLIST_ID = 'system-liked-songs';
@@ -283,6 +284,8 @@ export function PlaylistView() {
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [trackFilter, setTrackFilter] = useState('');
   const [sortMode, setSortMode] = useState<PlaylistSort>('custom');
+  const [pendingRemoveTrack, setPendingRemoveTrack] = useState<Track | null>(null);
+  const [removingTrack, setRemovingTrack] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { activePlaylistId, activePersonalMix, playTrack, currentTrack, setView } = usePlayerStore();
   const qc = useQueryClient();
@@ -332,6 +335,7 @@ export function PlaylistView() {
     setDraftName(playlistName);
     setTrackFilter('');
     setSortMode('custom');
+    setPendingRemoveTrack(null);
   }, [activePlaylistId, playlistName]);
 
   useEffect(() => {
@@ -387,14 +391,23 @@ export function PlaylistView() {
     setDragIndex(null);
   }
 
-  async function handleRemove(track: Track) {
+  function requestRemoveTrack(track: Track) {
     if (!activePlaylistId || isLikedPlaylist || isNightlyMix) return;
+    setPendingRemoveTrack(track);
+  }
+
+  async function confirmRemoveTrack() {
+    if (!pendingRemoveTrack || !activePlaylistId || isLikedPlaylist || isNightlyMix) return;
+    setRemovingTrack(true);
     try {
-      await api.removeTrack(activePlaylistId, playlistTrackId(track));
+      await api.removeTrack(activePlaylistId, playlistTrackId(pendingRemoveTrack));
       qc.invalidateQueries({ queryKey: ['playlist', activePlaylistId] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
+      setPendingRemoveTrack(null);
     } catch (err) {
       console.error('Remove track failed:', err);
+    } finally {
+      setRemovingTrack(false);
     }
   }
 
@@ -705,7 +718,7 @@ export function PlaylistView() {
                         className="btn-ghost p-1.5 text-muted hover:text-red-400"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleRemove(track);
+                          requestRemoveTrack(track);
                         }}
                         title="Remove from playlist"
                       >
@@ -722,6 +735,22 @@ export function PlaylistView() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingRemoveTrack)}
+        eyebrow="Playlist"
+        title="Remove track from playlist?"
+        description="This removes the track from this playlist only. It will not delete the track from your library or disk."
+        detail={
+          pendingRemoveTrack
+            ? { title: pendingRemoveTrack.title, subtitle: pendingRemoveTrack.artist }
+            : null
+        }
+        confirmLabel="Remove track"
+        loading={removingTrack}
+        onConfirm={confirmRemoveTrack}
+        onCancel={() => !removingTrack && setPendingRemoveTrack(null)}
+      />
     </div>
   );
 }
