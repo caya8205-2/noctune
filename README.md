@@ -38,7 +38,8 @@
 
 <p align="center">
   <strong>
-    If you're too lazy to read all this (cuz i am, most of this readme is ai-generated), just skip all this and go straight to <a href="#setup">Setup</a> or
+    If you're too lazy to read all this (cuz i am, most of this readme is ai-generated),<br>
+    just skip all this and go straight to <a href="#setup">Setup</a> or
     <a href="#faq-or-frequently-encountered-problems">FAQ</a>.
   </strong>
 </p>
