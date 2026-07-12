@@ -29,6 +29,8 @@ fn load_dotenv(path: &Path) {
                 | "DISCORD_RPC_SMALL_IMAGE_KEY"
                 | "LAST_FM_KEY"
                 | "LAST_FM_SECRET"
+                | "SPOTIFY_CLIENT_ID"
+                | "SPOTIFY_CLIENT_SECRET"
         ) {
             continue;
         }

@@ -73,6 +73,8 @@ pub fn run() {
                     )
                     .env("LAST_FM_KEY", option_env!("LAST_FM_KEY").unwrap_or(""))
                     .env("LAST_FM_SECRET", option_env!("LAST_FM_SECRET").unwrap_or(""))
+                    .env("SPOTIFY_CLIENT_ID", option_env!("SPOTIFY_CLIENT_ID").unwrap_or(""))
+                    .env("SPOTIFY_CLIENT_SECRET", option_env!("SPOTIFY_CLIENT_SECRET").unwrap_or(""))
                     .spawn()
                     .expect("failed to spawn noctune-backend sidecar");
 
