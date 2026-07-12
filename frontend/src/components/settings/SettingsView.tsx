@@ -601,7 +601,8 @@ export function SettingsView() {
           </p>
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
             <Info size={13} className="mr-1 inline-block align-text-bottom" />
-            Spotify Web API requires a <span className="font-medium text-amber-200">Spotify Premium</span> account — metadata features will not work on free-tier accounts without valid credentials.
+            These fields are optional — Spotify metadata works without entering credentials here.
+            The Spotify Web API requires a <span className="font-medium text-amber-200">Premium</span> account, so any custom credentials you enter must belong to a Premium account.
           </div>
 
           <div className="flex flex-col gap-3">
