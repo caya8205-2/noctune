@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { spotifyFetch } from '../services/spotify.js';
+import { getChannelInfo, getChannelIdForVideo } from '../services/youtubei.js';
 
 interface SpotifyArtistRaw {
   id: string;
@@ -142,6 +143,36 @@ export async function browseRoutes(app: FastifyInstance) {
     } catch (err) {
       app.log.warn({ err }, '[browse] album fetch failed');
       return reply.status(502).send({ error: 'Album unavailable', message: (err as Error).message });
+    }
+  });
+
+  // GET /browse/channel/:id — YouTube channel info + recent videos
+  app.get<{ Params: { id: string } }>('/browse/channel/:id', async (req, reply) => {
+    const parsed = z.object({ id: z.string().min(2).max(64) }).safeParse(req.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid channel id' });
+    const { id } = parsed.data;
+
+    try {
+      const channel = await getChannelInfo(id);
+      return reply.send(channel);
+    } catch (err) {
+      app.log.warn({ err }, '[browse] channel fetch failed');
+      return reply.status(502).send({ error: 'Channel unavailable', message: (err as Error).message });
+    }
+  });
+
+  // GET /browse/video-channel/:videoId — resolve channel ID from a video ID (lazy lookup)
+  app.get<{ Params: { videoId: string } }>('/browse/video-channel/:videoId', async (req, reply) => {
+    const parsed = z.object({ videoId: z.string().min(5).max(64) }).safeParse(req.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid video id' });
+    const { videoId } = parsed.data;
+
+    try {
+      const channelId = await getChannelIdForVideo(videoId);
+      return reply.send({ channelId });
+    } catch (err) {
+      app.log.warn({ err }, '[browse] video-channel lookup failed');
+      return reply.status(502).send({ error: 'Lookup failed', message: (err as Error).message });
     }
   });
 }

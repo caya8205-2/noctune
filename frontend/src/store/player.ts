@@ -36,11 +36,12 @@ interface PlayerState {
   queueHistory: Array<{ track: Track; playedAt: number }>;
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'debug' | 'stats' | 'local-files';
+  activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'channel' | 'debug' | 'stats' | 'local-files';
   activePlaylistId: string | null;
   activePersonalMix: PersonalMix | null;
   activeArtistId: string | null;
   activeAlbumId: string | null;
+  activeChannelId: string | null;
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   playbackNotice: string | null;
@@ -124,6 +125,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activePersonalMix: null,
   activeArtistId: null,
   activeAlbumId: null,
+  activeChannelId: null,
   showTrackDetails: true,
   showShortcutsHelp: false,
   playbackNotice: null,
@@ -619,6 +621,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           : null,
       activeArtistId: view === 'artist' ? (id ?? null) : null,
       activeAlbumId: view === 'album' ? (id ?? null) : null,
+      activeChannelId: view === 'channel' ? (id ?? null) : null,
     })),
 
   openPersonalMix: (mix) =>
@@ -628,6 +631,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       activePersonalMix: mix,
       activeArtistId: null,
       activeAlbumId: null,
+      activeChannelId: null,
     }),
 
   saveQueueState: () => {
@@ -648,6 +652,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         youtubeId: t.youtubeId,
         youtubeTitle: t.youtubeTitle,
         youtubeArtist: t.youtubeArtist,
+        youtubeChannelId: t.youtubeChannelId,
         queueSource: t.queueSource,
         playbackError: t.playbackError,
       }));

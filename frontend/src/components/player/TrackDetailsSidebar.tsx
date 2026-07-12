@@ -3,6 +3,7 @@ import { Album, Clock3, Disc3, ExternalLink, Music2, Radio, Sparkles, Tag, UserR
 import { api, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { canNavigateToChannel, navigateToChannel } from '../../utils/channelNavigation';
 
 async function openExternalUrl(url: string) {
   if (!IS_TAURI) {
@@ -180,6 +181,15 @@ function LocalDetails({ track }: { track: CachedTrack }) {
             type="button"
             className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
             onClick={() => usePlayerStore.getState().setView('artist', track.artistId)}
+          >
+            {track.artist}
+          </button>
+        ) : canNavigateToChannel(track) ? (
+          <button
+            type="button"
+            className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
+            onClick={() => navigateToChannel(track, usePlayerStore.getState().setView)}
+            title={`Go to channel: ${track.artist}`}
           >
             {track.artist}
           </button>

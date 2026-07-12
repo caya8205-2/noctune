@@ -24,6 +24,7 @@ import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
 import { api, type LyricsResult, type Track } from '../../utils/api';
 import { lyricsQueryOptions } from '../../hooks/useLyrics';
+import { canNavigateToChannel, navigateToChannel } from '../../utils/channelNavigation';
 
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
@@ -205,6 +206,15 @@ export function PlayerView() {
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
   const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
+  const showChannelLink = !artistViewId && currentTrack != null && canNavigateToChannel(currentTrack);
+  const [channelPending, setChannelPending] = useState(false);
+
+  async function handleChannelNav() {
+    if (!currentTrack) return;
+    setChannelPending(true);
+    try { await navigateToChannel(currentTrack, setView); }
+    finally { setChannelPending(false); }
+  }
 
   return (
     <div className="h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8">
@@ -253,6 +263,15 @@ export function PlayerView() {
                 >
                   {currentTrack.title}
                 </button>
+              ) : showChannelLink ? (
+                <button
+                  type="button"
+                  className="mx-auto block max-w-full text-3xl font-bold leading-tight text-white transition-colors hover:text-accent sm:truncate sm:text-4xl"
+                  onClick={handleChannelNav}
+                  title={`Go to channel: ${currentTrack.artist}`}
+                >
+                  {currentTrack.title}
+                </button>
               ) : (
                 <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight line-clamp-2 sm:truncate">
                   {currentTrack.title}
@@ -266,6 +285,18 @@ export function PlayerView() {
                   title={`Go to artist: ${currentTrack.artist}`}
                 >
                   {currentTrack.artist}
+                </button>
+              ) : showChannelLink ? (
+                <button
+                  type="button"
+                  className={`mx-auto mt-2 block max-w-full truncate text-lg transition-colors hover:text-accent ${
+                    channelPending ? 'text-soft/60 cursor-wait' : 'text-soft'
+                  }`}
+                  onClick={handleChannelNav}
+                  disabled={channelPending}
+                  title={`Go to channel: ${currentTrack.artist}`}
+                >
+                  {channelPending ? `${currentTrack.artist}…` : currentTrack.artist}
                 </button>
               ) : (
                 <p className="text-lg text-soft mt-2 truncate">{currentTrack.artist}</p>

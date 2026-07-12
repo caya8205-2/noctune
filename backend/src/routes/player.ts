@@ -58,6 +58,7 @@ const QueueBody = z.object({
     youtubeId: z.string().optional(),
     youtubeTitle: z.string().optional(),
     youtubeArtist: z.string().optional(),
+    youtubeChannelId: z.string().optional(),
   })).min(1).max(10).optional(),
 }).refine((body) => body.videoIds?.length || body.tracks?.length, {
   message: 'Either videoIds or tracks is required',
@@ -78,6 +79,7 @@ const AudioCacheBody = z.object({
     youtubeId: z.string().optional(),
     youtubeTitle: z.string().optional(),
     youtubeArtist: z.string().optional(),
+    youtubeChannelId: z.string().optional(),
   })).max(100).optional(),
 }).refine((body) => body.videoIds?.length || body.tracks?.length, {
   message: 'Either videoIds or tracks is required',
@@ -96,6 +98,7 @@ const PlayedBody = z.object({
   youtubeId: z.string().optional(),
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
+  youtubeChannelId: z.string().optional(),
   queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next']).optional(),
 });
 

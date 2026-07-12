@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
 import { api } from '../../utils/api';
+import { canNavigateToChannel, navigateToChannel } from '../../utils/channelNavigation';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
@@ -43,6 +44,16 @@ export function PlayerBar() {
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
   const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
+  const showChannelLink = !artistViewId && currentTrack != null && canNavigateToChannel(currentTrack);
+  const [channelPending, setChannelPending] = useState(false);
+
+  async function handleChannelNav(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!currentTrack) return;
+    setChannelPending(true);
+    try { await navigateToChannel(currentTrack, setView); }
+    finally { setChannelPending(false); }
+  }
 
   function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -151,33 +162,42 @@ export function PlayerBar() {
               <div className="flex min-w-0 flex-1 flex-col items-start">
                 <button
                   type="button"
-                  aria-disabled={!albumViewId}
+                  aria-disabled={!albumViewId && !showChannelLink}
                   className={clsx(
                     'inline-block max-w-full truncate text-left text-sm font-semibold leading-tight text-white transition-colors',
-                    albumViewId ? 'hover:text-accent' : 'cursor-default'
+                    albumViewId || showChannelLink ? 'hover:text-accent' : 'cursor-default'
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (albumViewId) setView('album', albumViewId);
+                    else if (showChannelLink) handleChannelNav(event);
                   }}
-                  title={albumViewId ? `Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? ''}` : undefined}
+                  title={
+                    albumViewId ? `Go to album: ${currentTrack.album ?? ''}` :
+                    showChannelLink ? `Go to channel: ${currentTrack.artist}` : undefined
+                  }
                 >
                   {currentTrack.title}
                 </button>
                 <button
                   type="button"
-                  aria-disabled={!artistViewId}
+                  aria-disabled={!artistViewId && !showChannelLink}
                   className={clsx(
                     'mt-0.5 inline-block max-w-full truncate text-left text-xs text-muted transition-colors',
-                    artistViewId ? 'hover:text-accent' : 'cursor-default'
+                    (artistViewId || showChannelLink) ? 'hover:text-accent cursor-pointer' : 'cursor-default',
+                    channelPending && 'opacity-60 cursor-wait'
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (artistViewId) setView('artist', artistViewId);
+                    else if (showChannelLink) handleChannelNav(event);
                   }}
-                  title={artistViewId ? `Go to artist: ${currentTrack.artist}` : undefined}
+                  title={
+                    artistViewId ? `Go to artist: ${currentTrack.artist}` :
+                    showChannelLink ? `Go to channel: ${currentTrack.artist}` : undefined
+                  }
                 >
-                  {currentTrack.artist}
+                  {channelPending ? `${currentTrack.artist}…` : currentTrack.artist}
                 </button>
               </div>
             </>

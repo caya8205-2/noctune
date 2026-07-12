@@ -4,6 +4,7 @@ import { api, apiUrl, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { canNavigateToChannel, navigateToChannel } from '../../utils/channelNavigation';
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
@@ -453,6 +454,18 @@ export function SearchView() {
                         setView('artist', track.artistId);
                       }}
                       title={`Go to artist: ${track.artist}`}
+                    >
+                      {track.artist}
+                    </button>
+                  ) : canNavigateToChannel(track) ? (
+                    <button
+                      type="button"
+                      className="truncate text-left transition-colors hover:text-accent"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigateToChannel(track, setView);
+                      }}
+                      title={`Go to channel: ${track.artist}`}
                     >
                       {track.artist}
                     </button>

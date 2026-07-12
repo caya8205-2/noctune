@@ -4,6 +4,7 @@ import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, 
 import { api, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { canNavigateToChannel, navigateToChannel } from '../../utils/channelNavigation';
 import { clsx } from 'clsx';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -232,6 +233,15 @@ function PlaylistTrackTitle({
   });
   const albumViewId = track.albumId ?? spotifyMetadata?.album.id;
   const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id;
+  const showChannelLink = !artistViewId && canNavigateToChannel(track);
+  const [channelPending, setChannelPending] = useState(false);
+
+  async function handleChannelNav(e: React.MouseEvent) {
+    e.stopPropagation();
+    setChannelPending(true);
+    try { await navigateToChannel(track, setView); }
+    finally { setChannelPending(false); }
+  }
 
   return (
     <div className="flex min-w-0 flex-col items-start">
@@ -247,6 +257,18 @@ function PlaylistTrackTitle({
             setView('album', albumViewId);
           }}
           title={`Go to album: ${track.album ?? spotifyMetadata?.album.name ?? track.title}`}
+        >
+          {track.title}
+        </button>
+      ) : showChannelLink ? (
+        <button
+          type="button"
+          className={clsx(
+            'max-w-full truncate text-left text-sm transition-colors hover:text-accent',
+            isActive ? 'font-medium text-accent' : 'text-white'
+          )}
+          onClick={handleChannelNav}
+          title={`Go to channel: ${track.artist}`}
         >
           {track.title}
         </button>
@@ -266,6 +288,19 @@ function PlaylistTrackTitle({
           title={`Go to artist: ${track.artist}`}
         >
           {track.artist}
+        </button>
+      ) : showChannelLink ? (
+        <button
+          type="button"
+          className={clsx(
+            'mt-0.5 max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent',
+            channelPending && 'opacity-60 cursor-wait'
+          )}
+          onClick={handleChannelNav}
+          disabled={channelPending}
+          title={`Go to channel: ${track.artist}`}
+        >
+          {channelPending ? `${track.artist}…` : track.artist}
         </button>
       ) : (
         <p className="max-w-full truncate text-xs text-muted">{track.artist}</p>

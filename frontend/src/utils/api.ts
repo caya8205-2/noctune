@@ -211,6 +211,10 @@ export const api = {
     request<ArtistView>(`/browse/artist/${encodeURIComponent(artistId)}`),
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
+  browseChannel: (channelId: string) =>
+    request<ChannelView>(`/browse/channel/${encodeURIComponent(channelId)}`),
+  getVideoChannel: (videoId: string) =>
+    request<{ channelId: string | null }>(`/browse/video-channel/${encodeURIComponent(videoId)}`),
 
   recommend: (seed: Track, excludeIds: string[] = [], limit = 12) =>
     request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
@@ -343,6 +347,7 @@ export interface Track {
   youtubeId?: string;
   youtubeTitle?: string;
   youtubeArtist?: string;
+  youtubeChannelId?: string; // YouTube channel ID (UCxxxx...)
   queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next';
   playbackError?: string;
 }
@@ -515,6 +520,14 @@ export interface AlbumView {
   spotifyUrl: string | null;
   artists: Array<{ id: string; name: string }>;
   tracks: AlbumTrack[];
+}
+
+export interface ChannelView {
+  id: string;
+  name: string;
+  avatar: string | null;
+  description: string | null;
+  videos: Track[];
 }
 
 // ── Stats types ─────────────────────────────────────────────────────────────

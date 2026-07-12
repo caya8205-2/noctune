@@ -13,6 +13,7 @@ interface MatchCacheEntry {
   youtubeId: string;
   youtubeTitle: string;
   youtubeArtist: string;
+  youtubeChannelId?: string;
   score: number;
   matchedAt: number;
 }
@@ -507,6 +508,7 @@ function fromCache(spotifyTrack: Track): Track | null {
     youtubeId: cached.youtubeId,
     youtubeTitle: cached.youtubeTitle,
     youtubeArtist: cached.youtubeArtist,
+    youtubeChannelId: cached.youtubeChannelId,
   };
 }
 
@@ -530,6 +532,7 @@ function writeCache(spotifyTrack: Track, candidate: ScoredCandidate) {
     youtubeId: candidate.track.id,
     youtubeTitle: candidate.track.title,
     youtubeArtist: candidate.track.artist,
+    youtubeChannelId: candidate.track.youtubeChannelId,
     score: candidate.score,
     matchedAt: Date.now(),
   };
@@ -656,6 +659,7 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
       youtubeId: accepted.track.id,
       youtubeTitle: accepted.track.title,
       youtubeArtist: accepted.track.artist,
+      youtubeChannelId: accepted.track.youtubeChannelId,
     };
   });
 

@@ -79,12 +79,16 @@ function toTrack(video: any, query: string): Track | null {
     duration: video.duration?.seconds ?? 0,
     thumbnail: video.best_thumbnail?.url ?? pickThumbnail(video.thumbnails),
     query,
+    youtubeChannelId: video.author?.id ?? undefined,
   };
 }
 
 function trackFromInfo(info: any, originalQuery: string): Track {
   const basic = info.basic_info ?? {};
   const id = basic.id ?? extractVideoId(originalQuery);
+
+  // youtubei.js exposes channel_id directly on basic_info
+  const channelId = basic.channel_id ?? basic.channel?.id ?? undefined;
 
   return {
     id,
@@ -93,6 +97,7 @@ function trackFromInfo(info: any, originalQuery: string): Track {
     duration: basic.duration ?? 0,
     thumbnail: pickThumbnail(basic.thumbnail),
     query: originalQuery,
+    youtubeChannelId: channelId,
   };
 }
 
@@ -284,4 +289,118 @@ export async function resolveTrack(
     track: trackFromInfo(info, originalQuery),
     audio,
   };
+}
+
+export interface ChannelInfo {
+  id: string;
+  name: string;
+  avatar: string | null;
+  description: string | null;
+  videos: Track[];
+}
+
+export async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
+  const youtube = await getInnertube();
+  const channel = await (youtube as any).getChannel(channelId);
+
+  const metadata = channel.metadata ?? {};
+  const header = channel.header ?? {};
+
+  // Extract avatar — check header thumbnails
+  const avatarThumbnails: Array<{ url?: string; width?: number }> =
+    header.author?.thumbnails ??
+    header.avatar?.thumbnails ??
+    metadata.avatar?.thumbnails ??
+    [];
+  const avatar = pickThumbnail(avatarThumbnails) || null;
+
+  const name: string =
+    metadata.title ??
+    header.author?.name ??
+    channelId;
+
+  const description: string | null = metadata.description ?? null;
+
+  // Get videos from the channel's videos tab
+  let videos: Track[] = [];
+  try {
+    // Try multiple approaches to get videos
+    let rawVideos: any[] = [];
+    
+    // Approach 1: Try getVideos() method
+    try {
+      const videosTab = await channel.getVideos();
+      rawVideos = (videosTab as any).videos ?? [];
+      console.log('[getChannelInfo] approach 1 (getVideos):', rawVideos.length, 'videos');
+    } catch (err1) {
+      console.log('[getChannelInfo] approach 1 failed:', (err1 as Error).message);
+    }
+    
+    // Approach 2: If approach 1 failed, try accessing tabs directly
+    if (rawVideos.length === 0 && channel.tabs) {
+      console.log('[getChannelInfo] trying approach 2 (tabs)');
+      for (const tab of channel.tabs) {
+        console.log('[getChannelInfo] tab:', tab.title ?? tab.constructor?.name);
+        if (tab.title === 'Videos' || tab.endpoint?.browseId?.includes('videos')) {
+          try {
+            const tabContent = await tab.getPage();
+            rawVideos = (tabContent as any).videos ?? (tabContent as any).content?.videos ?? [];
+            console.log('[getChannelInfo] approach 2 found videos:', rawVideos.length);
+            if (rawVideos.length > 0) break;
+          } catch (err2) {
+            console.log('[getChannelInfo] approach 2 tab failed:', (err2 as Error).message);
+          }
+        }
+      }
+    }
+    
+    // Approach 3: Try content property
+    if (rawVideos.length === 0 && (channel as any).content) {
+      console.log('[getChannelInfo] trying approach 3 (content)');
+      rawVideos = (channel as any).content.videos ?? [];
+      console.log('[getChannelInfo] approach 3:', rawVideos.length, 'videos');
+    }
+    
+    console.log('[getChannelInfo] final rawVideos count:', rawVideos.length, '| types:', rawVideos.slice(0, 3).map((v: any) => v.constructor?.name ?? v.type));
+    videos = rawVideos
+      .map((item: any) => {
+        // Video/GridVideo: item.id, item.title, item.author (string), item.duration (seconds or TimedText)
+        const videoId = item.id ?? item.video_id;
+        if (!videoId || !isYoutubeVideoId(videoId)) {
+          console.log('[getChannelInfo] skipping invalid video:', item.id, item.video_id, item.title?.toString?.());
+          return null;
+        }
+
+        const title = item.title?.toString?.() ?? item.title?.text ?? videoId;
+        const duration = typeof item.duration === 'object' ? item.duration?.seconds ?? 0 : item.duration ?? 0;
+        
+        return {
+          id: videoId,
+          title,
+          artist: item.author?.name ?? item.author ?? name, // Use channel name as fallback
+          duration,
+          thumbnail: item.best_thumbnail?.url ?? pickThumbnail(item.thumbnails),
+          query: videoId, // Use video ID as query
+          youtubeChannelId: channelId, // Use the channel ID we already have
+        } as Track;
+      })
+      .filter((track: Track | null): track is Track => Boolean(track))
+      .slice(0, 50);
+    console.log('[getChannelInfo] mapped videos:', videos.length, '/ rawVideos:', rawVideos.length);
+  } catch (err) {
+    console.warn('[youtubei] getChannelInfo: failed to fetch videos tab', err);
+  }
+
+  return { id: channelId, name, avatar, description, videos };
+}
+
+export async function getChannelIdForVideo(videoId: string): Promise<string | null> {
+  try {
+    const { info } = await getBasicInfoWithFallback(videoId);
+    const basic = info.basic_info ?? {};
+    const channelId = basic.channel_id ?? basic.channel?.id ?? null;
+    return channelId;
+  } catch {
+    return null;
+  }
 }

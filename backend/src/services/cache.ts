@@ -207,6 +207,7 @@ export function recordPlayWithMetadata(track: Track): CachedTrack | null {
     youtubeId: track.youtubeId ?? existing.youtubeId,
     youtubeTitle: track.youtubeTitle ?? existing.youtubeTitle,
     youtubeArtist: track.youtubeArtist ?? existing.youtubeArtist,
+    youtubeChannelId: track.youtubeChannelId ?? existing.youtubeChannelId,
     queueSource: track.queueSource ?? existing.queueSource,
     playCount: (existing.playCount ?? 0) + 1,
     lastPlayed: Date.now(),

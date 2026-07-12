@@ -13,6 +13,7 @@ import { PlaylistView } from './components/playlist/PlaylistView';
 import { SettingsView } from './components/settings/SettingsView';
 import { ArtistView } from './components/browse/ArtistView';
 import { AlbumView } from './components/browse/AlbumView';
+import { ChannelView } from './components/browse/ChannelView';
 import { StatsView } from './components/stats/StatsView';
 import { LocalFilesView } from './components/local-files/LocalFilesView';
 import DebugApp from './debug/DebugApp';
@@ -30,11 +31,12 @@ const qc = new QueryClient({
 
 function viewRouteId(
   view: ReturnType<typeof usePlayerStore.getState>['activeView'],
-  ids: { playlistId: string | null; artistId: string | null; albumId: string | null }
+  ids: { playlistId: string | null; artistId: string | null; albumId: string | null; channelId: string | null }
 ) {
   if (view === 'playlist') return ids.playlistId;
   if (view === 'artist') return ids.artistId;
   if (view === 'album') return ids.albumId;
+  if (view === 'channel') return ids.channelId;
   return null;
 }
 
@@ -53,6 +55,7 @@ function AppInner() {
     toggleShortcutsHelp,
     activeArtistId,
     activeAlbumId,
+    activeChannelId,
   } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeViewRef = useRef(activeView);
@@ -60,6 +63,7 @@ function AppInner() {
     playlistId: activePlaylistId,
     artistId: activeArtistId,
     albumId: activeAlbumId,
+    channelId: activeChannelId,
   }));
   const skipHistoryPushRef = useRef(false);
 
@@ -112,6 +116,7 @@ function AppInner() {
       playlistId: activePlaylistId,
       artistId: activeArtistId,
       albumId: activeAlbumId,
+      channelId: activeChannelId,
     });
     if (activeViewRef.current === activeView && activeRouteIdRef.current === routeId) return;
     activeViewRef.current = activeView;
@@ -121,7 +126,7 @@ function AppInner() {
       return;
     }
     window.history.pushState({ noctuneView: activeView, noctuneId: routeId }, '', window.location.href);
-  }, [activeView, activePlaylistId, activeArtistId, activeAlbumId]);
+  }, [activeView, activePlaylistId, activeArtistId, activeAlbumId, activeChannelId]);
 
   const playerBarClass =
     'relative z-10 h-20 flex-shrink-0 border-t border-white/[0.06] bg-base-950/60 backdrop-blur-xl';
@@ -204,6 +209,7 @@ function AppInner() {
             {activeView === 'local-files' && <LocalFilesView />}
             {activeView === 'artist' && activeArtistId && <ArtistView artistId={activeArtistId} />}
             {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
+            {activeView === 'channel' && activeChannelId && <ChannelView channelId={activeChannelId} />}
             {activeView === 'debug' && <DebugApp />}
           </main>
           {showTrackDetails && activeView !== 'debug' && <TrackDetailsSidebar />}
