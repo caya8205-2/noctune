@@ -135,7 +135,7 @@ Install dependencies:
 npm i
 ```
 
-Spotify credentials are optional but recommended for metadata search, Spotify playlist import, album and artist discovery, and new releases. Add your Client ID and Client Secret from the app Settings screen.
+Spotify credentials are optional. Since v2.0.0, Noctune already includes a built-in Spotify API credential for metadata search, Spotify playlist import, album and artist discovery, and new releases. You can still add your own Client ID and Client Secret from the app Settings screen to override the built-in credential. Due to Spotify Web API restrictions, custom credentials must belong to a Spotify Premium account.
 
 Last.fm credentials are optional but recommended for better Nightly Mixes and autoqueue recommendations. Set `LAST_FM_KEY` in `.env` to enable Last.fm similar-track lookup. `LAST_FM_SECRET` is included in `.env.example` for completeness, but current recommendation lookup only needs the API key.
 
@@ -256,7 +256,7 @@ to generate accurate Romaji.
 from the application. And most of the update is backward compatible (e.g. if there's a matcher update, it will only affect the newer match, the old track that's already cached will not be affected unless you clear the cache)
 
 #### Is spotify API necessary?
-* Not really, its only for songs metadata and spotify playlist import. You can still use the app with direct yt search
+* Not anymore. Since v2.0.0, Noctune already includes its own Spotify API credentials. You can still enter your own credentials in Settings if you want to override the built-in one, but they must belong to a Spotify Premium account due to Spotify Web API restrictions.
 
 #### I wanna see the database and all the config file, where does it stored?
 * the binary is in `C:\<username>\AppData\Local\Noctune`

@@ -49,11 +49,8 @@ export async function settingsRoutes(app: FastifyInstance) {
                 matchCache: getMatchCacheStats(),
             },
             spotify: {
-                clientId: config.spotifyClientId,
-                // Mask secret — only show last 4 chars if set
-                clientSecretMasked: config.spotifyClientSecret
-                    ? '••••••••' + config.spotifyClientSecret.slice(-4)
-                    : '',
+                clientId: '',
+                clientSecretMasked: '',
                 configured: Boolean(config.spotifyClientId && config.spotifyClientSecret),
             },
         });
@@ -93,10 +90,8 @@ export async function settingsRoutes(app: FastifyInstance) {
             audioCacheLimitMb: updated.audioCacheLimitMb,
             discordRpcEnabled: updated.discordRpcEnabled,
             spotify: {
-                clientId: updated.spotifyClientId,
-                clientSecretMasked: updated.spotifyClientSecret
-                    ? '••••••••' + updated.spotifyClientSecret.slice(-4)
-                    : '',
+                clientId: '',
+                clientSecretMasked: '',
                 configured: Boolean(updated.spotifyClientId && updated.spotifyClientSecret),
             },
         });
