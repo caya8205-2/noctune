@@ -599,6 +599,10 @@ export function SettingsView() {
             Spotify credentials are used for metadata search, playlist import, and release discovery.
             Playback still uses Noctune's local YouTube resolver.
           </p>
+          <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
+            <Info size={13} className="mt-0.5 shrink-0" />
+            Spotify Web API requires a <span className="font-medium text-amber-200">Spotify Premium</span> account — metadata features will not work on free-tier accounts without valid credentials.
+          </p>
 
           <div className="flex flex-col gap-3">
             <div>

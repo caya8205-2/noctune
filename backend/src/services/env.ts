@@ -34,8 +34,8 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
     const envSearchEngine = process.env.SEARCH_ENGINE;
     return {
         ...config,
-        spotifyClientId: process.env.SPOTIFY_CLIENT_ID || config.spotifyClientId,
-        spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET || config.spotifyClientSecret,
+        spotifyClientId: config.spotifyClientId || process.env.SPOTIFY_CLIENT_ID || '',
+        spotifyClientSecret: config.spotifyClientSecret || process.env.SPOTIFY_CLIENT_SECRET || '',
         searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
             ? envSearchEngine
             : config.searchEngine,
