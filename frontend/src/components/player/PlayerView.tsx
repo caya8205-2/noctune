@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -17,8 +17,10 @@ import {
   Zap,
   Loader2,
 } from 'lucide-react';
+import { clsx } from 'clsx';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
+import { seekAudio } from '../../hooks/useAudio';
 import { Visualizer } from './Visualizer';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
@@ -48,6 +50,7 @@ function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: 
 
 function LyricsPanel({ track }: { track: Track }) {
   const [lyricsMode, setLyricsMode] = useState<'original' | 'romaji'>('original');
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const progress = usePlayerStore((state) => state.progress);
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
@@ -92,6 +95,10 @@ function LyricsPanel({ track }: { track: Track }) {
       behavior: 'smooth',
     });
   }, [activeIndex]);
+
+  const handleLineClick = useCallback((time: number | null) => {
+    if (time !== null) seekAudio(time);
+  }, []);
 
   if (isLoading) {
     return (
@@ -156,17 +163,25 @@ function LyricsPanel({ track }: { track: Track }) {
           {displayLines.map((line, index) => {
             const isActive = index === activeIndex;
             const isPassed = lyrics.synced && activeIndex > index;
+            const isHovered = hoverIndex === index;
+            const isClickable = lyrics.synced && line.time !== null;
             return (
               <p
                 key={`${line.time ?? index}-${line.text}`}
                 ref={isActive ? activeLineRef : null}
-                className={`text-xl leading-relaxed transition-all duration-200 ${
+                onClick={() => handleLineClick(line.time)}
+                onMouseEnter={() => setHoverIndex(index)}
+                onMouseLeave={() => setHoverIndex(null)}
+                className={clsx(
+                  'text-xl leading-relaxed transition-all duration-200',
                   isActive
                     ? 'text-white font-semibold scale-[1.02]'
                     : isPassed
                       ? 'text-muted/60'
-                      : 'text-soft'
-                }`}
+                      : 'text-soft',
+                  isClickable && 'cursor-pointer',
+                  isHovered && !isActive && 'underline decoration-white/30 underline-offset-4'
+                )}
               >
                 {line.text || '...'}
               </p>

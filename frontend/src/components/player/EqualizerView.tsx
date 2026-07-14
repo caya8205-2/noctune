@@ -1,10 +1,16 @@
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useEqualizer, EQ_BANDS, PRESET_LABELS } from '../../hooks/useEqualizer';
+import { useEqualizer, EQ_BANDS, PRESETS, PRESET_LABELS } from '../../hooks/useEqualizer';
+import { usePlayerStore } from '../../store/player';
 
 interface EqualizerViewProps {
   onClose?: () => void;
+}
+
+function getClientY(e: MouseEvent | TouchEvent): number {
+  if ('touches' in e && e.touches.length > 0) return e.touches[0].clientY;
+  return (e as MouseEvent).clientY;
 }
 
 export function EqualizerView({ onClose }: EqualizerViewProps) {
@@ -14,25 +20,120 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
     eqPreset,
     setEqEnabled,
     setEqBand,
-    applyPreset,
-    resetEq,
   } = useEqualizer();
 
-  const handleBandChange = useCallback(
-    (index: number, value: number) => {
-      setEqBand(index, value);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const sliderDrag = useRef<{
+    index: number;
+    rect: DOMRect;
+  } | null>(null);
+  const dragValue = useRef(0);
+
+  // Direct DOM refs for slider visual elements — bypass React during drag
+  const thumbRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const fillAboveRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const fillBelowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const labelRefs = useRef<(HTMLSpanElement | null)[]>([]);
+
+  const applyDragVisual = useCallback((index: number, db: number) => {
+    const pct = ((db + 6) / 12) * 100;
+    const thumb = thumbRefs.current[index];
+    const fillAbove = fillAboveRefs.current[index];
+    const fillBelow = fillBelowRefs.current[index];
+    const vlabel = labelRefs.current[index];
+    if (thumb) thumb.style.top = `${100 - pct}%`;
+    if (fillAbove) fillAbove.style.height = db > 0 ? `${(db / 6) * 50}%` : '0%';
+    if (fillBelow) fillBelow.style.height = db < 0 ? `${(-db / 6) * 50}%` : '0%';
+    if (vlabel) vlabel.textContent = db > 0 ? `+${db}` : `${db}`;
+  }, []);
+
+  const pendingPresetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBandsRef = useRef<number[] | null>(null);
+
+  // Re-apply target slider positions after each React render (caused by eqPreset update)
+  // so CSS transitions animate from the old (React-committed) position to the target.
+  useLayoutEffect(() => {
+    if (pendingBandsRef.current) {
+      pendingBandsRef.current.forEach((db, i) => applyDragVisual(i, db));
+    }
+  });
+
+  const animateBands = useCallback((gains: number[], presetKey: string) => {
+    if (pendingPresetRef.current) {
+      clearTimeout(pendingPresetRef.current);
+    }
+    pendingBandsRef.current = gains;
+    usePlayerStore.setState({ eqPreset: presetKey });
+    pendingPresetRef.current = setTimeout(() => {
+      pendingPresetRef.current = null;
+      pendingBandsRef.current = null;
+      usePlayerStore.getState().setEqBands(gains, presetKey);
+    }, 200);
+  }, [applyDragVisual]);
+
+  const handleSliderStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, index: number) => {
+      if (!eqEnabled) return;
+      e.preventDefault();
+
+      // Cancel any pending preset animation
+      if (pendingPresetRef.current) {
+        clearTimeout(pendingPresetRef.current);
+        pendingPresetRef.current = null;
+      }
+      pendingBandsRef.current = null;
+      const track = e.currentTarget as HTMLElement;
+      const rect = track.getBoundingClientRect();
+
+      function val(clientY: number) {
+        const relY = clientY - rect.top;
+        const pct = Math.max(0, Math.min(1, 1 - relY / rect.height));
+        return Math.min(6, Math.max(-6, Math.round(pct * 12 - 6)));
+      }
+
+      const initial = val(getClientY(e.nativeEvent));
+      dragValue.current = initial;
+      applyDragVisual(index, initial);
+      setDraggingIndex(index);
+
+      sliderDrag.current = { index, rect };
+
+      const onMove = (ev: MouseEvent | TouchEvent) => {
+        ev.preventDefault();
+        if (!sliderDrag.current) return;
+        const db = val(getClientY(ev));
+        dragValue.current = db;
+        applyDragVisual(sliderDrag.current.index, db);
+      };
+
+      const onUp = () => {
+        if (sliderDrag.current) {
+          setEqBand(sliderDrag.current.index, dragValue.current);
+        }
+        sliderDrag.current = null;
+        setDraggingIndex(null);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
     },
-    [setEqBand]
+    [eqEnabled, setEqBand, applyDragVisual]
   );
 
   const handlePreset = useCallback(
-    (preset: string) => {
-      applyPreset(preset);
-      if (!eqEnabled) {
-        setEqEnabled(true);
-      }
+    (presetKey: string) => {
+      const gains = PRESETS[presetKey];
+      if (!gains) return;
+      if (!eqEnabled) setEqEnabled(true);
+      animateBands(gains, presetKey);
     },
-    [applyPreset, eqEnabled, setEqEnabled]
+    [eqEnabled, setEqEnabled, animateBands]
   );
 
   return (
@@ -84,6 +185,7 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
             >
               {/* Value label */}
               <span
+                ref={el => { labelRefs.current[index] = el; }}
                 className={clsx(
                   'text-[10px] font-mono tabular-nums leading-none',
                   db === 0
@@ -98,46 +200,46 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
 
               {/* Vertical slider track */}
               <div className="relative flex flex-col items-center">
-                <div className="relative h-24 w-6 sm:h-28 sm:w-7">
+                <div
+                  className={clsx(
+                    'relative h-24 w-6 sm:h-28 sm:w-7',
+                    eqEnabled && 'cursor-pointer'
+                  )}
+                  onMouseDown={(e) => handleSliderStart(e, index)}
+                  onTouchStart={(e) => handleSliderStart(e, index)}
+                >
                   {/* Background track */}
                   <div className="absolute inset-x-[42%] top-0 bottom-0 rounded-full bg-base-700" />
                   {/* Center line (0dB) */}
                   <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-base-500/50" />
                   {/* Fill: above zero */}
                   <div
-                    className="absolute inset-x-[35%] bottom-1/2 rounded-t-full bg-accent/40 transition-all"
+                    ref={el => { fillAboveRefs.current[index] = el; }}
+                    className={clsx(
+                      'absolute inset-x-[35%] bottom-1/2 rounded-t-full bg-accent/40',
+                      draggingIndex !== index ? 'transition-all' : ''
+                    )}
                     style={{
                       height: isAboveZero ? `${(db / 6) * 50}%` : '0%',
                     }}
                   />
                   {/* Fill: below zero */}
                   <div
-                    className="absolute inset-x-[35%] top-1/2 rounded-b-full bg-blue-500/40 transition-all"
+                    ref={el => { fillBelowRefs.current[index] = el; }}
+                    className={clsx(
+                      'absolute inset-x-[35%] top-1/2 rounded-b-full bg-blue-500/40',
+                      draggingIndex !== index ? 'transition-all' : ''
+                    )}
                     style={{
                       height: isBelowZero ? `${(-db / 6) * 50}%` : '0%',
                     }}
                   />
-                  {/* Slider thumb */}
-                  <input
-                    type="range"
-                    min={-6}
-                    max={6}
-                    step={1}
-                    value={db}
-                    onChange={(e) =>
-                      handleBandChange(index, Number(e.target.value))
-                    }
-                    className={clsx(
-                      'eq-slider absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0',
-                      eqEnabled && 'cursor-pointer'
-                    )}
-                    disabled={!eqEnabled}
-                    aria-label={`${freq >= 1000 ? `${freq / 1000}k` : freq} Hz gain`}
-                  />
                   {/* Visual thumb indicator */}
                   <div
+                    ref={el => { thumbRefs.current[index] = el; }}
                     className={clsx(
-                      'pointer-events-none absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-all',
+                      'pointer-events-none absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2',
+                      draggingIndex !== index && 'transition-all',
                       eqEnabled
                         ? db > 0
                           ? 'border-accent bg-accent/20'
@@ -180,7 +282,7 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
         ))}
         {eqPreset !== 'flat' && (
           <button
-            onClick={resetEq}
+            onClick={() => animateBands(PRESETS.flat, 'flat')}
             className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-base-800 hover:text-red-400"
           >
             Reset

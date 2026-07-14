@@ -1,5 +1,33 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore } from '../store/player';
+
+const EQ_CACHE_KEY = 'noctune-eq-cache';
+
+interface EqCache {
+  eqEnabled: boolean;
+  eqBands: number[];
+  eqPreset: string;
+  updatedAt: number;
+}
+
+function readEqCache(): EqCache | null {
+  try {
+    const raw = localStorage.getItem(EQ_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEqCache(data: Omit<EqCache, 'updatedAt'>) {
+  try {
+    localStorage.setItem(
+      EQ_CACHE_KEY,
+      JSON.stringify({ ...data, updatedAt: Date.now() })
+    );
+  } catch {}
+}
 
 export const EQ_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
@@ -71,10 +99,44 @@ export function useEqualizer() {
     resetEq,
   } = usePlayerStore();
 
+  // Hydrate store from localStorage cache on mount
+  const cachedEq = useMemo(() => readEqCache(), []);
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (cachedEq && !hydrated.current) {
+      hydrated.current = true;
+      usePlayerStore.setState({
+        eqEnabled: cachedEq.eqEnabled,
+        eqBands: cachedEq.eqBands,
+        eqPreset: cachedEq.eqPreset,
+      });
+    }
+  }, [cachedEq]);
+
+  // Expose cache as TanStack Query (matching HomeView pattern)
+  useQuery({
+    queryKey: ['eq-settings'],
+    queryFn: () => readEqCache(),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    initialData: cachedEq,
+    initialDataUpdatedAt: cachedEq?.updatedAt,
+  });
+
   // Sync store → audio nodes whenever state changes
   useEffect(() => {
     applyEqToAudioNodes();
   }, [eqEnabled, eqBands]);
+
+  // Write to localStorage cache whenever EQ state changes
+  const lastCache = useRef('');
+  useEffect(() => {
+    const snapshot = JSON.stringify({ eqEnabled, eqBands, eqPreset });
+    if (snapshot !== lastCache.current) {
+      lastCache.current = snapshot;
+      writeEqCache({ eqEnabled, eqBands, eqPreset });
+    }
+  }, [eqEnabled, eqBands, eqPreset]);
 
   const applyPreset = useCallback((preset: string) => {
     const gains = PRESETS[preset];

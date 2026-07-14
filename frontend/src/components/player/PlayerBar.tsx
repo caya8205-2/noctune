@@ -1,5 +1,5 @@
 import { usePlayerStore } from '../../store/player';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
@@ -16,6 +16,32 @@ import { LikeButton } from './LikeButton';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { EqualizerView } from './EqualizerView';
 
+const PLAYER_SETTINGS_CACHE_KEY = 'noctune-player-settings';
+
+interface PlayerSettingsCache {
+  playbackRate: number;
+  crossfadeDuration: number;
+  updatedAt: number;
+}
+
+function readPlayerSettingsCache(): PlayerSettingsCache | null {
+  try {
+    const raw = localStorage.getItem(PLAYER_SETTINGS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePlayerSettingsCache(data: Omit<PlayerSettingsCache, 'updatedAt'>) {
+  try {
+    localStorage.setItem(
+      PLAYER_SETTINGS_CACHE_KEY,
+      JSON.stringify({ ...data, updatedAt: Date.now() })
+    );
+  } catch {}
+}
+
 export function PlayerBar() {
   const seekDragging = useRef(false);
   const volDragging = useRef(false);
@@ -23,9 +49,43 @@ export function PlayerBar() {
     currentTrack, isPlaying, isLoading,
     volume, progress, duration,
     shuffle, repeat,
+    playbackRate, crossfadeDuration,
     togglePlay, setVolume, next, prev,
     toggleMute, toggleShuffle, cycleRepeat, setView, showTrackDetails, toggleTrackDetails,
   } = usePlayerStore();
+
+  // Hydrate player settings from localStorage cache on mount
+  const cachedSettings = useMemo(() => readPlayerSettingsCache(), []);
+  const settingsHydrated = useRef(false);
+  useEffect(() => {
+    if (cachedSettings && !settingsHydrated.current) {
+      settingsHydrated.current = true;
+      usePlayerStore.setState({
+        playbackRate: cachedSettings.playbackRate,
+        crossfadeDuration: cachedSettings.crossfadeDuration,
+      });
+    }
+  }, [cachedSettings]);
+
+  // Expose cache as TanStack Query (matching HomeView pattern)
+  useQuery({
+    queryKey: ['player-settings'],
+    queryFn: () => readPlayerSettingsCache(),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    initialData: cachedSettings,
+    initialDataUpdatedAt: cachedSettings?.updatedAt,
+  });
+
+  // Write to localStorage cache whenever settings change
+  const lastSettingsCache = useRef('');
+  useEffect(() => {
+    const snapshot = JSON.stringify({ playbackRate, crossfadeDuration });
+    if (snapshot !== lastSettingsCache.current) {
+      lastSettingsCache.current = snapshot;
+      writePlayerSettingsCache({ playbackRate, crossfadeDuration });
+    }
+  }, [playbackRate, crossfadeDuration]);
 
   const seekDuration = duration > 0 ? duration : currentTrack?.duration ?? 0;
   const progressPct = seekDuration > 0 ? (progress / seekDuration) * 100 : 0;
