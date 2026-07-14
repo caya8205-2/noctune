@@ -33,14 +33,14 @@ jobs:
 
       - name: Check existing release
         id: release
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = "${{ steps.version.outputs.version }}"
 
-          gh release view "v$version" --json tagName 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) {
+          $tag = gh api "/repos/$env:GITHUB_REPOSITORY/releases/tags/v$version" --jq .tagName 2>$null
+          if ($tag) {
             "exists=true" >> $env:GITHUB_OUTPUT
             Write-Host "Release v$version already exists."
           } else {
