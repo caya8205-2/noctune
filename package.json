@@ -14,7 +14,7 @@
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "tauri": "node scripts/tauri-dev.mjs",
-    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build",
+    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
     "version:sync": "node scripts/sync-version.js"
   },
   "devDependencies": {

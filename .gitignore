@@ -24,3 +24,5 @@ frontend/.env.local
 %TEMP%/
 .tmp-sidecar-data/
 .tmp-sidecar-data-3134/
+signed/
+noctune-signing.ps1

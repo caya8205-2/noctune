@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check existing release
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+
+          try {
+            gh release view "v$version" *> $null
+            "exists=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Release v$version already exists."
+          }
+          catch {
+            "exists=false" >> $env:GITHUB_OUTPUT
+            Write-Host "Release v$version not found."
+          }
+
+      - name: Skip release
+        if: steps.release.outputs.exists == 'true'
+        run: echo "Release already exists. Skipping."
+
+      - name: Install Rust
+        if: steps.release.outputs.exists == 'false'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        if: steps.release.outputs.exists == 'false'
+        run: npm ci
+
+      - name: Build Tauri
+        if: steps.release.outputs.exists == 'false'
+        run: npm run tauri:build
+
+      - name: Install SignPath PowerShell Module
+        if: steps.release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          Install-Module SignPath -Force -Scope CurrentUser
+
+      - name: Sign installer
+        if: steps.release.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+
+          $input = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.exe"
+          $output = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.signed.exe"
+
+          Submit-SigningRequest `
+            -ApiToken $env:SIGNPATH_TOKEN `
+            -OrganizationId "14ca15c6-cf68-4099-ae55-0bc58d446acd" `
+            -ProjectSlug "Noctune" `
+            -SigningPolicySlug "Caya8205" `
+            -InputArtifactPath $input `
+            -OutputArtifactPath $output `
+            -WaitForCompletion `
+            -Force
+
+          Remove-Item $input -Force
+          Rename-Item $output "Noctune_${version}_x64-setup.exe"
+
+      - name: Create GitHub Release
+        if: steps.release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}-stable
+          generate_release_notes: true
+
+          files: |
+            src-tauri/target/release/bundle/nsis/Noctune_${{ steps.version.outputs.version }}_x64-setup.exe
