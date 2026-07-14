@@ -33,7 +33,7 @@ jobs:
 
       - name: Check existing release
         id: release
-        shell: pwsh
+        shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
