@@ -39,14 +39,15 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.version }}"
 
-          $tag = gh api "/repos/$env:GITHUB_REPOSITORY/releases/tags/v$version" --jq .tagName 2>$null
-          if ($tag) {
+          gh release view "v$version" --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
             "exists=true" >> $env:GITHUB_OUTPUT
             Write-Host "Release v$version already exists."
           } else {
             "exists=false" >> $env:GITHUB_OUTPUT
             Write-Host "Release v$version not found."
           }
+          exit 0
 
       - name: Skip release
         if: steps.release.outputs.exists == 'true'
