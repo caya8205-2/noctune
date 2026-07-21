@@ -311,6 +311,7 @@ export function PlayerView() {
                   iconSize={15}
                   showQueue={false}
                   showClearCache={false}
+                  showMenu={false}
                 />
               </div>
 

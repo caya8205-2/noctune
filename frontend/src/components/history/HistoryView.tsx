@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock3, Music2, X } from 'lucide-react';
+import { Clock3, House, ListMusic, ListOrdered, Music2, Search, Shuffle, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api, type Track } from '../../utils/api';
+import { api, type CachedTrack, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -20,6 +20,15 @@ function playedLabel(value?: number): string {
   return new Date(value).toLocaleDateString();
 }
 
+function historySourceBadge(track: CachedTrack) {
+  const source = track.originalSource || (track.queueSource !== 'history' ? track.queueSource : undefined);
+  if (source === 'manual' || source === 'play-next') return { Icon: ListOrdered, label: 'Manual' };
+  if (source === 'playlist') return { Icon: ListMusic, label: track.originalPlaylistName || 'Playlist' };
+  if (source === 'autoqueue') return { Icon: Shuffle, label: 'Autoqueue' };
+  if (source === 'recommendation') return { Icon: House, label: 'Home' };
+  return { Icon: Search, label: 'Search' };
+}
+
 export function HistoryView() {
   const { currentTrack, isPlaying, playTrack, setView } = usePlayerStore();
   const qc = useQueryClient();
@@ -29,8 +38,36 @@ export function HistoryView() {
   });
   const tracks = data?.tracks ?? [];
 
-  function handlePlay(track: Track) {
-    playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
+  async function handlePlay(track: CachedTrack) {
+    const originalSource = (track.originalSource || (track.queueSource !== 'history' ? track.queueSource : undefined)) as Track['originalSource'];
+    if (originalSource === 'playlist' && track.originalPlaylistId) {
+      try {
+        const playlist = await api.getPlaylist(track.originalPlaylistId);
+        if (playlist?.tracks && playlist.tracks.length > 0) {
+          const playlistQueue = playlist.tracks.map((playlistTrack) => ({
+            ...playlistTrack,
+            queueSource: 'playlist' as const,
+            originalSource: 'playlist' as const,
+            originalPlaylistId: track.originalPlaylistId,
+            originalPlaylistName: track.originalPlaylistName,
+          }));
+          const selectedTrack = playlistQueue.find((playlistTrack) =>
+            playlistTrack.id === track.id ||
+            Boolean(playlistTrack.spotifyId && track.spotifyId && playlistTrack.spotifyId === track.spotifyId)
+          ) ?? playlistQueue[0];
+          playTrack(selectedTrack, playlistQueue, { autoQueue: false, queueSource: 'playlist' });
+          return;
+        }
+      } catch (err) {
+        console.warn('[history] failed to load playlist for context:', err);
+      }
+    }
+    const trackWithSource = {
+      ...track,
+      originalSource,
+      queueSource: 'history' as const,
+    };
+    playTrack(trackWithSource, [trackWithSource], { autoQueue: true, queueSource: 'history' });
   }
 
   async function handleClearHistory() {
@@ -54,6 +91,12 @@ export function HistoryView() {
           <p className="text-xs text-muted mt-2">
             {isLoading ? 'Loading playback history' : `${tracks.length} tracks from local playback`}
           </p>
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
+            <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
+            <span className="flex items-center gap-1"><Search size={10} /> Search</span>
+            <span className="flex items-center gap-1"><House size={10} /> Home</span>
+            <span className="flex items-center gap-1"><Shuffle size={10} /> Autoqueue</span>
+          </div>
         </div>
         {tracks.length > 0 && (
           <button onClick={handleClearHistory} className="btn-ghost text-xs gap-1.5 px-2">
@@ -117,6 +160,19 @@ export function HistoryView() {
 
               <TrackTitle track={track} isActive={isActive} setView={setView} />
 
+              {(() => {
+                const { Icon, label } = historySourceBadge(track);
+                return (
+                  <span
+                    className="hidden md:inline-flex h-5 w-5 items-center justify-center rounded-md border border-base-600/60 text-muted flex-shrink-0"
+                    title={`Source: ${label}`}
+                    aria-label={`Source: ${label}`}
+                  >
+                    <Icon size={10} />
+                  </span>
+                );
+              })()}
+
               <span className="hidden md:block text-xs text-muted flex-shrink-0 w-20 text-right">
                 {playedLabel(track.lastPlayed)}
               </span>
@@ -124,7 +180,9 @@ export function HistoryView() {
               <div className="flex flex-shrink-0 items-center gap-1">
                 <TrackActionButtons
                   track={track}
-                  queueSource="recommendation"
+                  queueSource={track.originalSource || track.queueSource}
+                  showQueue={false}
+                  showMenu={true}
                   className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   trailingActions={
                     <button

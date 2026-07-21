@@ -346,8 +346,8 @@ export function PlaylistView() {
 
   function handlePlay(track: Track) {
     playTrack(
-      { ...track, queueSource },
-      tracks.map((playlistTrack) => ({ ...playlistTrack, queueSource })),
+      { ...track, queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName },
+      tracks.map((playlistTrack) => ({ ...playlistTrack, queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName })),
       { queueSource }
     );
   }
@@ -355,8 +355,8 @@ export function PlaylistView() {
   function handlePlayAll() {
     if (tracks.length === 0) return;
     playTrack(
-      { ...tracks[0], queueSource },
-      tracks.map((track) => ({ ...track, queueSource })),
+      { ...tracks[0], queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName },
+      tracks.map((track) => ({ ...track, queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName })),
       { queueSource }
     );
   }

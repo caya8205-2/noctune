@@ -96,7 +96,10 @@ const PlayedBody = z.object({
   youtubeId: z.string().optional(),
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
-  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next']).optional(),
+  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next', 'history']).optional(),
+  originalSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next']).optional(),
+  originalPlaylistId: z.string().optional(),
+  originalPlaylistName: z.string().optional(),
 });
 
 const ClearTrackCacheBody = PlayedBody.partial().extend({

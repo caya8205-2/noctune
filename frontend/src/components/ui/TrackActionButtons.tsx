@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, FolderPlus, HardDrive, ListOrdered, ListPlus, Loader2, Plus, Radio } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, FolderPlus, HardDrive, ListOrdered, ListPlus, Loader2, MoreHorizontal, Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
@@ -35,6 +36,7 @@ interface TrackActionButtonsProps {
   showLike?: boolean;
   showPlaylist?: boolean;
   showClearCache?: boolean;
+  showMenu?: boolean;
   queueLabel?: string;
   playlistLabel?: string;
   trailingActions?: ReactNode;
@@ -50,22 +52,33 @@ export function TrackActionButtons({
   showLike = true,
   showPlaylist = true,
   showClearCache = true,
+  showMenu = true,
   queueLabel,
   playlistLabel,
   trailingActions,
 }: TrackActionButtonsProps) {
   const addToQueue = usePlayerStore((state) => state.addToQueue);
   const playNext = usePlayerStore((state) => state.playNext);
-  const radioMode = usePlayerStore((state) => state.radioMode);
-  const startRadio = usePlayerStore((state) => state.startRadio);
-  const stopRadio = usePlayerStore((state) => state.stopRadio);
   const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMoreMenu]);
 
   return (
     <>
       {clearTrackCacheModal}
-      <div className={clsx('flex items-center gap-0', className)}>
-        {showQueue && (
+      <div className={clsx('flex items-center gap-0 focus-within:opacity-100', className)}>
+        {showQueue && !showMenu && (
           <button
             type="button"
             className={clsx('btn-ghost', buttonClassName)}
@@ -79,7 +92,7 @@ export function TrackActionButtons({
           </button>
         )}
 
-        {showQueue && (
+        {showQueue && !showMenu && (
           <button
             type="button"
             className={clsx('btn-ghost', buttonClassName)}
@@ -105,7 +118,7 @@ export function TrackActionButtons({
           />
         )}
 
-        {showClearCache && (
+        {showClearCache && !showQueue && (
           <button
             type="button"
             className={clsx('btn-ghost', buttonClassName)}
@@ -120,31 +133,46 @@ export function TrackActionButtons({
           </button>
         )}
 
-        {radioMode ? (
-          <button
-            type="button"
-            className={clsx('btn-ghost', buttonClassName, 'text-accent')}
-            onClick={(event) => {
-              event.stopPropagation();
-              stopRadio();
-            }}
-            title="Stop Radio"
-          >
-            <Radio size={iconSize} />
-            <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider">Radio</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={clsx('btn-ghost', buttonClassName)}
-            onClick={(event) => {
-              event.stopPropagation();
-              startRadio(track);
-            }}
-            title="Start Radio"
-          >
-            <Radio size={iconSize} />
-          </button>
+        {showMenu && (
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              type="button"
+              className={clsx('btn-ghost', buttonClassName)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setShowMoreMenu(!showMoreMenu);
+              }}
+              title="More actions"
+            >
+              <MoreHorizontal size={iconSize} />
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-lg border border-base-600/60 bg-base-800 shadow-xl py-1 animate-fade-in">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs text-soft hover:bg-base-700 flex items-center gap-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playNext(track);
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <ListOrdered size={14} /> Play next
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs text-soft hover:bg-base-700 flex items-center gap-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addToQueue(track, queueSource);
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <ListPlus size={14} /> Add to queue
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {trailingActions}
@@ -174,8 +202,8 @@ function AddToPlaylistAction({
   const [newName, setNewName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const leaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const addedToResetTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const qc = useQueryClient();
 
@@ -191,7 +219,12 @@ function AddToPlaylistAction({
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        !dropdownRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     }
@@ -219,7 +252,6 @@ function AddToPlaylistAction({
 
   useEffect(() => {
     return () => {
-      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
       if (addedToResetTimerRef.current) clearTimeout(addedToResetTimerRef.current);
     };
   }, []);
@@ -268,14 +300,6 @@ function AddToPlaylistAction({
     };
   }, [open]);
 
-  const handleMouseEnter = () => {
-    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
-  };
-
-  const handleMouseLeave = () => {
-    leaveTimerRef.current = setTimeout(() => setOpen(false), 300);
-  };
-
   const handleAdd = useCallback(
     async (playlistId: string) => {
       if (busy) return;
@@ -319,12 +343,7 @@ function AddToPlaylistAction({
   );
 
   return (
-    <div
-      ref={containerRef}
-      className={clsx('relative', open && 'z-50')}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div ref={containerRef} className={clsx('relative', open && 'z-50')}>
       <button
         type="button"
         onClick={(e) => {
@@ -338,8 +357,9 @@ function AddToPlaylistAction({
         {label && <span>{label}</span>}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          ref={dropdownRef}
           className="fixed z-50 flex w-56 flex-col overflow-hidden rounded-xl border border-base-600 bg-base-900 shadow-2xl shadow-black/50 animate-fade-in"
           style={{ ...dropdownStyle, animationDuration: '120ms' }}
           onClick={(e) => e.stopPropagation()}
@@ -418,7 +438,7 @@ function AddToPlaylistAction({
             )}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

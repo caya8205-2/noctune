@@ -325,6 +325,7 @@ export function PlayerBar() {
               showQueue={false}
               showLike={false}
               showClearCache={false}
+              showMenu={false}
             />
           )}
 

@@ -27,11 +27,6 @@ interface PlayerState {
   queueIndex: number;     // index of currentTrack in queue
   isAutoQueueLoading: boolean;
 
-  // ── Radio mode ──────────────────────────────────────────────────────────────
-  radioMode: boolean;
-  radioSessionId: string | null;
-  radioSeed: Track | null;
-
   // ── Queue History (persisted locally)
   queueHistory: Array<{ track: Track; playedAt: number }>;
 
@@ -90,10 +85,6 @@ interface PlayerState {
   restoreQueueState: () => void;
   pushQueueHistory: (track: Track) => void;
 
-  // ── Radio Actions ────────────────────────────────────────────────────
-  startRadio: (seed: Track) => Promise<void>;
-  stopRadio: () => void;
-  nextRadioTrack: () => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -116,9 +107,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queueIndex: -1,
   isAutoQueueLoading: false,
   queueHistory: [],
-  radioMode: false,
-  radioSessionId: null,
-  radioSeed: null,
   activeView: 'home',
   activePlaylistId: null,
   activePersonalMix: null,
@@ -449,7 +437,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   topUpQueue: async () => {
     const state = get();
-    if (state.radioMode || state.isAutoQueueLoading || !state.currentTrack || state.queue.length === 0 || state.queueIndex < 0) {
+    if (state.isAutoQueueLoading || !state.currentTrack || state.queue.length === 0 || state.queueIndex < 0) {
       return;
     }
 
@@ -691,59 +679,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
-  // ── Radio Actions ────────────────────────────────────────────────────
-  startRadio: async (seed) => {
-    try {
-      const response = await api.radio.start(seed);
-      set({
-        radioMode: true,
-        radioSessionId: response.sessionId,
-        radioSeed: seed,
-        queue: [
-          { ...seed, queueSource: 'autoqueue' as const },
-          ...response.tracks.map((t) => ({
-            ...t,
-            queueSource: 'autoqueue' as const,
-          })),
-        ],
-        queueIndex: 0,
-      });
-      // Play the first track
-      const state = get();
-      if (state.queue.length > 0) {
-        await get().playTrack(state.queue[0], state.queue);
-      }
-    } catch (err) {
-      console.error('[player] startRadio failed:', err);
-    }
-  },
-
-  stopRadio: () => {
-    set({
-      radioMode: false,
-      radioSessionId: null,
-      radioSeed: null,
-    });
-  },
-
-  nextRadioTrack: async () => {
-    const state = get();
-    if (!state.radioMode || !state.radioSessionId) return;
-
-    try {
-      const response = await api.radio.next(state.radioSessionId);
-      const additions = response.tracks.map((t) => ({
-        ...t,
-        queueSource: 'autoqueue' as const,
-      }));
-      set((current) => ({
-        queue: [...current.queue, ...additions],
-      }));
-      api.prefetchTracks(additions.slice(0, 5)).catch(() => {});
-    } catch (err) {
-      console.warn('[player] nextRadioTrack failed:', err);
-    }
-  },
 }));
 
 // Restore persisted queue state on app boot

@@ -18,7 +18,6 @@ import { updateRoutes } from './routes/updates.js';
 import { debugRoutes } from './routes/debug.js';
 import { statsRoutes } from './routes/stats.js';
 import { localFilesRoutes } from './routes/localFiles.js';
-import { radioRoutes } from './routes/radio.js';
 import { initDb } from './services/playlist.js';
 import { initLocalFilesDb } from './services/localFiles.js';
 import { getCacheStats } from './services/cache.js';
@@ -113,7 +112,6 @@ async function bootstrap() {
   await app.register(debugRoutes);
   await app.register(statsRoutes);
   await app.register(localFilesRoutes);
-  await app.register(radioRoutes);
 
   // Health / debug endpoint
   app.get('/status', async () => ({

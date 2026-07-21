@@ -309,21 +309,6 @@ export const api = {
       request<StatsDailyEntry[]>(`/stats/daily?days=${days}`),
   },
 
-  // ── Radio ──────────────────────────────────────────────────────────────
-  radio: {
-    start: (seed: Track) =>
-      request<RadioStartResponse>('/radio/start', {
-        method: 'POST',
-        body: JSON.stringify({ seed }),
-      }),
-    next: (sessionId: string) =>
-      request<RadioNextResponse>(`/radio/next?sessionId=${encodeURIComponent(sessionId)}`),
-    feedback: (sessionId: string, trackId: string, action: 'like' | 'dislike') =>
-      request<RadioFeedbackResponse>('/radio/feedback', {
-        method: 'POST',
-        body: JSON.stringify({ sessionId, trackId, action }),
-      }),
-  },
 };
 
 // ── Types (shared with backend, redeclared here to avoid cross-workspace imports) ──
@@ -343,7 +328,10 @@ export interface Track {
   youtubeId?: string;
   youtubeTitle?: string;
   youtubeArtist?: string;
-  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next';
+  queueSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next' | 'history';
+  originalSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next';
+  originalPlaylistId?: string;
+  originalPlaylistName?: string;
   playbackError?: string;
 }
 
@@ -575,20 +563,4 @@ export interface LocalFolder {
   addedAt: number;
   totalDuration: number;
   isUngrouped: boolean;
-}
-
-// ── Radio types ───────────────────────────────────────────────────────────────
-
-export interface RadioStartResponse {
-  sessionId: string;
-  seed: Track;
-  tracks: Track[];
-}
-
-export interface RadioNextResponse {
-  tracks: Track[];
-}
-
-export interface RadioFeedbackResponse {
-  ok: boolean;
 }

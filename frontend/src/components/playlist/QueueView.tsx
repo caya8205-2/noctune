@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Clock, EyeOff, GripVertical, ListOrdered, Loader2, Shuffle, X, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, Loader2, Search, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
@@ -8,12 +8,14 @@ import { api, type Track } from '../../utils/api';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackTitle } from '../ui/TrackTitle';
 
-function queueSourceLabel(source: Track['queueSource']): string {
-  if (source === 'manual') return 'Manual';
-  if (source === 'playlist') return 'Playlist';
-  if (source === 'autoqueue') return 'Autoqueue';
-  if (source === 'recommendation') return 'Home';
-  return 'Search';
+function queueSourceBadge(source: Track['queueSource'], originalSource?: Track['originalSource']) {
+  const effectiveSource = source === 'history' ? originalSource : source;
+  if (effectiveSource === 'manual' || effectiveSource === 'play-next') return { Icon: ListOrdered, label: 'Manual' };
+  if (effectiveSource === 'playlist') return { Icon: ListMusic, label: 'Playlist' };
+  if (effectiveSource === 'autoqueue') return { Icon: Shuffle, label: 'Autoqueue' };
+  if (effectiveSource === 'recommendation') return { Icon: House, label: 'Home' };
+  if (source === 'history') return { Icon: Clock, label: 'History' };
+  return { Icon: Search, label: 'Search' };
 }
 
 function isMobileViewport(): boolean {
@@ -83,6 +85,12 @@ export function QueueView() {
             {queue.length} tracks in rotation
             {queueIndex > 0 ? `, ${queueIndex} played` : ''}
           </p>
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
+            <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
+            <span className="flex items-center gap-1"><Search size={10} /> Search</span>
+            <span className="flex items-center gap-1"><House size={10} /> Home</span>
+            <span className="flex items-center gap-1"><Shuffle size={10} /> Autoqueue</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2" title="Shuffle upcoming tracks">
@@ -183,23 +191,25 @@ export function QueueView() {
                     {cacheStatus.cached ? 'Cached' : 'Caching'}
                   </span>
                 ) : null}
-                <span
-                  className={clsx(
-                    'inline-flex w-24 items-center justify-center rounded-full border px-1 py-0.5 text-[10px] uppercase tracking-wide',
-                    cacheStatus?.prefetched
-                      ? 'border-accent/40 bg-accent/15 text-accent'
-                      : cacheStatus?.prefetching
-                        ? 'border-accent/30 text-accent'
-                        : 'border-base-600/60 text-muted'
-                  )}
-                >
-                  {cacheStatus?.prefetched ? (
-                    <Zap size={10} className="mr-1" />
-                  ) : cacheStatus?.prefetching ? (
-                    <Loader2 size={10} className="mr-1 animate-spin" />
-                  ) : null}
-                  {queueSourceLabel(track.queueSource)}
-                </span>
+                {(() => {
+                  const { Icon, label } = queueSourceBadge(track.queueSource, track.originalSource);
+                  return (
+                    <span
+                      title={label}
+                      aria-label={label}
+                      className={clsx(
+                        'inline-flex h-5 w-5 items-center justify-center rounded-md border',
+                        cacheStatus?.prefetched
+                          ? 'border-accent/40 bg-accent/15 text-accent'
+                          : cacheStatus?.prefetching
+                            ? 'border-accent/30 text-accent'
+                            : 'border-base-600/60 text-muted'
+                      )}
+                    >
+                      <Icon size={10} />
+                    </span>
+                  );
+                })()}
               </div>
               <div className="flex flex-shrink-0 items-center gap-1">
                 <TrackActionButtons
@@ -207,6 +217,7 @@ export function QueueView() {
                   className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   iconSize={13}
                   showQueue={false}
+                  showMenu={false}
                   trailingActions={
                     <button
                       type="button"
@@ -246,7 +257,7 @@ export function QueueView() {
                   <div
                     key={`${entry.track.id}-${entry.playedAt}`}
                     className="group flex items-center px-3 py-2 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100"
-                    onClick={() => playTrack(entry.track, queue)}
+                    onClick={() => playTrack(entry.track, queue, { queueSource: entry.track.queueSource })}
                   >
                     <span className="w-5 mr-2 text-xs text-muted text-center font-mono tabular-nums flex-shrink-0">
                       {i + 1}
