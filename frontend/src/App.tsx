@@ -107,6 +107,21 @@ function AppInner() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [setView]);
 
+  // Clear Discord RPC before the app closes so the activity doesn't linger.
+  useEffect(() => {
+    if (!IS_TAURI) return;
+
+    const host = import.meta.env.VITE_TAURI_BACKEND_HOST || '127.0.0.1';
+    const port = import.meta.env.VITE_TAURI_BACKEND_PORT || 3131;
+
+    function handleBeforeUnload() {
+      fetch(`http://${host}:${port}/rpc/activity`, { method: 'DELETE', keepalive: true }).catch(() => {});
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [IS_TAURI]);
+
   useEffect(() => {
     const routeId = viewRouteId(activeView, {
       playlistId: activePlaylistId,

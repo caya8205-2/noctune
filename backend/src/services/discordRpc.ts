@@ -155,20 +155,25 @@ export async function updateDiscordActivity(activity: RpcActivity) {
   return { enabled: true, ready };
 }
 
-export async function clearDiscordActivity() {
+async function destroyClient() {
+  if (!client) return;
+  try {
+    if (ready) await client.clearActivity().catch(() => {});
+    await client.destroy();
+  } catch {}
+  client = null;
+  ready = false;
   lastActivity = null;
   lastSentAt = 0;
   lastSentTrackId = null;
-  if (client) {
-    if (ready) {
-      await client.clearActivity().catch(() => { });
-    }
-    try {
-      await client.destroy();
-    } catch {}
-    client = null;
-    ready = false;
-  }
+}
+
+process.on('exit', () => { if (client) try { client.destroy(); } catch {} });
+process.on('SIGINT', () => { destroyClient().finally(() => process.exit(0)); });
+process.on('SIGTERM', () => { destroyClient().finally(() => process.exit(0)); });
+
+export async function clearDiscordActivity() {
+  await destroyClient();
 }
 
 export async function refreshDiscordActivity() {
