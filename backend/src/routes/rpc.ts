@@ -15,7 +15,7 @@ const TrackSchema = z.object({
   youtubeId: z.string().optional(),
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
-  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation']).optional(),
+  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next', 'history']).optional(),
 });
 
 const ActivityBody = z.object({
