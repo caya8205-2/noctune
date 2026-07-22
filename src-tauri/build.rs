@@ -1,5 +1,16 @@
 use std::{fs, path::Path};
 
+const FORWARDED_ENV_KEYS: &[&str] = &[
+    "DISCORD_CLIENT_ID",
+    "DISCORD_RPC_ENABLED",
+    "DISCORD_RPC_LARGE_IMAGE_KEY",
+    "DISCORD_RPC_SMALL_IMAGE_KEY",
+    "LAST_FM_KEY",
+    "LAST_FM_SECRET",
+    "SPOTIFY_CLIENT_ID",
+    "SPOTIFY_CLIENT_SECRET",
+];
+
 fn export_dotenv_value(key: &str, value: &str) {
     println!("cargo:rustc-env={}={}", key, value);
 }
@@ -21,17 +32,13 @@ fn load_dotenv(path: &Path) {
         };
 
         let key = key.trim();
-        if !matches!(
-            key,
-            "DISCORD_CLIENT_ID"
-                | "DISCORD_RPC_ENABLED"
-                | "DISCORD_RPC_LARGE_IMAGE_KEY"
-                | "DISCORD_RPC_SMALL_IMAGE_KEY"
-                | "LAST_FM_KEY"
-                | "LAST_FM_SECRET"
-                | "SPOTIFY_CLIENT_ID"
-                | "SPOTIFY_CLIENT_SECRET"
-        ) {
+        if !FORWARDED_ENV_KEYS.contains(&key) {
+            continue;
+        }
+
+        // CI secrets are injected as process environment variables and must
+        // take precedence over a local .env file.
+        if std::env::var(key).is_ok_and(|value| !value.trim().is_empty()) {
             continue;
         }
 
@@ -42,5 +49,13 @@ fn load_dotenv(path: &Path) {
 
 fn main() {
     load_dotenv(Path::new("../.env"));
+    for key in FORWARDED_ENV_KEYS {
+        println!("cargo:rerun-if-env-changed={}", key);
+        if let Ok(value) = std::env::var(key) {
+            if !value.trim().is_empty() {
+                export_dotenv_value(key, &value);
+            }
+        }
+    }
     tauri_build::build()
 }

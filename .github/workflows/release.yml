@@ -63,6 +63,11 @@ jobs:
 
       - name: Build Tauri
         if: steps.release.outputs.exists == 'false'
+        env:
+          LAST_FM_KEY: ${{ secrets.LAST_FM_KEY }}
+          LAST_FM_SECRET: ${{ secrets.LAST_FM_SECRET }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: npm run tauri:build
 
       - name: Install SignPath PowerShell Module
