@@ -64,6 +64,10 @@ jobs:
       - name: Build Tauri
         if: steps.release.outputs.exists == 'false'
         env:
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_RPC_ENABLED: ${{ secrets.DISCORD_RPC_ENABLED }}
+          DISCORD_RPC_LARGE_IMAGE_KEY: ${{ secrets.DISCORD_RPC_LARGE_IMAGE_KEY }}
+          DISCORD_RPC_SMALL_IMAGE_KEY: ${{ secrets.DISCORD_RPC_SMALL_IMAGE_KEY }}
           LAST_FM_KEY: ${{ secrets.LAST_FM_KEY }}
           LAST_FM_SECRET: ${{ secrets.LAST_FM_SECRET }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
