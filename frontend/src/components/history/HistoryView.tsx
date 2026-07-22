@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Clock3, House, ListMusic, ListOrdered, Music2, Search, Shuffle, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, type CachedTrack, type Track } from '../../utils/api';
@@ -20,8 +21,12 @@ function playedLabel(value?: number): string {
   return new Date(value).toLocaleDateString();
 }
 
+function historySource(track: CachedTrack): Track['originalSource'] | undefined {
+  return track.queueSource !== 'history' ? track.queueSource : track.originalSource;
+}
+
 function historySourceBadge(track: CachedTrack) {
-  const source = track.originalSource || (track.queueSource !== 'history' ? track.queueSource : undefined);
+  const source = historySource(track);
   if (source === 'manual' || source === 'play-next') return { Icon: ListOrdered, label: 'Manual' };
   if (source === 'playlist') return { Icon: ListMusic, label: track.originalPlaylistName || 'Playlist' };
   if (source === 'autoqueue') return { Icon: Shuffle, label: 'Autoqueue' };
@@ -38,18 +43,40 @@ export function HistoryView() {
   });
   const tracks = data?.tracks ?? [];
 
+  useEffect(() => {
+    const refreshHistory = () => qc.invalidateQueries({ queryKey: ['history'] });
+    window.addEventListener('noctune:history-updated', refreshHistory);
+    return () => window.removeEventListener('noctune:history-updated', refreshHistory);
+  }, [qc]);
+
   async function handlePlay(track: CachedTrack) {
-    const originalSource = (track.originalSource || (track.queueSource !== 'history' ? track.queueSource : undefined)) as Track['originalSource'];
-    if (originalSource === 'playlist' && track.originalPlaylistId) {
+    const originalSource = historySource(track);
+    if (originalSource === 'playlist') {
       try {
-        const playlist = await api.getPlaylist(track.originalPlaylistId);
+        let playlistId = track.originalPlaylistId;
+        let playlistName = track.originalPlaylistName;
+        let playlist = playlistId ? await api.getPlaylist(playlistId) : undefined;
+
+        // History from before playlist context was persisted has no playlist ID.
+        // Find its current playlist so it still resumes as a playlist queue.
+        if (!playlist) {
+          const playlists = await api.getPlaylists();
+          const candidates = await Promise.all(playlists.map((item) => api.getPlaylist(item.id)));
+          playlist = candidates.find((candidate) => candidate.tracks?.some((playlistTrack) =>
+            playlistTrack.id === track.id ||
+            Boolean(playlistTrack.spotifyId && track.spotifyId && playlistTrack.spotifyId === track.spotifyId)
+          ));
+          playlistId = playlist?.id;
+          playlistName = playlist?.name;
+        }
+
         if (playlist?.tracks && playlist.tracks.length > 0) {
           const playlistQueue = playlist.tracks.map((playlistTrack) => ({
             ...playlistTrack,
             queueSource: 'playlist' as const,
             originalSource: 'playlist' as const,
-            originalPlaylistId: track.originalPlaylistId,
-            originalPlaylistName: track.originalPlaylistName,
+            originalPlaylistId: playlistId,
+            originalPlaylistName: playlistName,
           }));
           const selectedTrack = playlistQueue.find((playlistTrack) =>
             playlistTrack.id === track.id ||
@@ -61,6 +88,14 @@ export function HistoryView() {
       } catch (err) {
         console.warn('[history] failed to load playlist for context:', err);
       }
+
+      // A playlist track must never turn into an autoqueue when its playlist
+      // has been removed or cannot be loaded.
+      playTrack({ ...track, originalSource, queueSource: 'playlist' }, [{ ...track, queueSource: 'playlist' }], {
+        autoQueue: false,
+        queueSource: 'playlist',
+      });
+      return;
     }
     const trackWithSource = {
       ...track,

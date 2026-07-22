@@ -61,6 +61,7 @@ export function TrackActionButtons({
   const playNext = usePlayerStore((state) => state.playNext);
   const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isPlaylistMenuOpen, setIsPlaylistMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export function TrackActionButtons({
   return (
     <>
       {clearTrackCacheModal}
-      <div className={clsx('flex items-center gap-0 focus-within:opacity-100', className)}>
+      <div className={clsx('flex items-center gap-0', isPlaylistMenuOpen && 'opacity-100', className)}>
         {showQueue && !showMenu && (
           <button
             type="button"
@@ -115,6 +116,7 @@ export function TrackActionButtons({
             className={buttonClassName}
             iconSize={iconSize}
             label={playlistLabel}
+            onOpenChange={setIsPlaylistMenuOpen}
           />
         )}
 
@@ -186,11 +188,13 @@ function AddToPlaylistAction({
   className,
   iconSize = 14,
   label,
+  onOpenChange,
 }: {
   track: Track;
   className?: string;
   iconSize?: number;
   label?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({
@@ -216,6 +220,14 @@ function AddToPlaylistAction({
 
   const userPlaylists = (playlists ?? []).filter((p) => p.id !== LIKED_PLAYLIST_ID);
 
+  const setMenuOpen = useCallback((nextOpen: boolean | ((current: boolean) => boolean)) => {
+    setOpen((current) => {
+      const resolvedOpen = typeof nextOpen === 'function' ? nextOpen(current) : nextOpen;
+      onOpenChange?.(resolvedOpen);
+      return resolvedOpen;
+    });
+  }, [onOpenChange]);
+
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
@@ -225,7 +237,7 @@ function AddToPlaylistAction({
         !containerRef.current.contains(target) &&
         !dropdownRef.current?.contains(target)
       ) {
-        setOpen(false);
+        setMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -310,7 +322,7 @@ function AddToPlaylistAction({
         qc.invalidateQueries({ queryKey: ['playlist', playlistId] });
         qc.invalidateQueries({ queryKey: ['playlists'] });
         qc.invalidateQueries({ queryKey: ['home'] });
-        setTimeout(() => setOpen(false), 600);
+        setTimeout(() => setMenuOpen(false), 600);
       } catch (err) {
         console.error('Add to playlist failed:', err);
       } finally {
@@ -333,7 +345,7 @@ function AddToPlaylistAction({
         setAddedTo(playlist.id);
         qc.invalidateQueries({ queryKey: ['playlists'] });
         qc.invalidateQueries({ queryKey: ['home'] });
-        setTimeout(() => setOpen(false), 600);
+        setTimeout(() => setMenuOpen(false), 600);
       } catch (err) {
         setCreateError((err as Error).message);
         setBusy(false);
@@ -348,7 +360,7 @@ function AddToPlaylistAction({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          setMenuOpen((v) => !v);
         }}
         className={clsx('btn-ghost transition-colors', className)}
         title="Add to playlist"

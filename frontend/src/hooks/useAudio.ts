@@ -81,7 +81,6 @@ export function useAudio() {
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
   const suppressNextErrorRef = useRef(false);
   const recoveryAttemptRef = useRef<string | null>(null);
-  const recordedTrackRef = useRef<string | null>(null);
 
   const {
     currentTrack,
@@ -135,11 +134,6 @@ export function useAudio() {
     audio.addEventListener('playing', () => {
       setIsPlaying(true);
       setLoading(false);
-      const track = usePlayerStore.getState().currentTrack;
-      if (track && recordedTrackRef.current !== track.id) {
-        recordedTrackRef.current = track.id;
-        api.recordPlayed(track).catch((err) => console.warn('[audio] record history failed:', err));
-      }
     });
     audio.addEventListener('waiting', () => setLoading(true));
     audio.addEventListener('canplay', () => setLoading(false));
@@ -231,7 +225,6 @@ export function useAudio() {
         if (cancelled || !audioRef.current) return;
         if (audio.src !== src) {
           recoveryAttemptRef.current = null;
-          recordedTrackRef.current = null;
           audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
           audio.src = src;
           audio.load();

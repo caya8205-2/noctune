@@ -175,7 +175,7 @@ export function QueueView() {
                 onError={(e) => (e.currentTarget.style.display = 'none')}
               />
               <TrackTitle track={track} isActive={isActive} setView={setView} />
-              <div className="hidden md:flex items-center justify-end gap-1.5 flex-shrink-0 mr-4">
+              <div className="hidden md:flex items-center justify-end gap-1.5 flex-shrink-0 ml-3 mr-2">
                 {track.playbackError ? (
                   <span className="inline-flex w-20 items-center justify-center rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
                     <AlertTriangle size={10} className="mr-1" />
