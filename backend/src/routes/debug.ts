@@ -13,8 +13,8 @@ import {
   matchSpotifyTrackToYoutube,
   saveMatchCacheEntry,
 } from '../services/youtubeMatcher.js';
-import { clearAudioCacheForId, getExistingAudioCachePath } from '../services/audioFileCache.js';
-import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed } from '../services/playbackBlacklist.js';
+import { clearAudioCacheForId, getExistingAudioCachePath, listAudioCacheDetailed } from '../services/audioFileCache.js';
+import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed, getPlaybackBlacklistDetailed, clearPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { clearPrefetchForId, getPrefetched, isPrefetching } from '../services/prefetch.js';
 import { resolveTrack } from '../services/audioResolver.js';
 import {
@@ -29,12 +29,14 @@ import {
   searchLrclibCandidates,
   saveManualLyrics,
   deleteCachedLyricsEntry,
+  listLyricsCacheEntries,
 } from '../services/lyrics.js';
 import { getEnvConfig } from '../services/env.js';
 import { getAudioResolverStatus } from '../services/audioResolver.js';
 import { getPrefetchStatus } from '../services/prefetch.js';
 import { getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { getDiscordRpcStatus } from '../services/discordRpc.js';
+import { getRequestLog, clearRequestLog } from '../services/requestLog.js';
 import { isDemoMode } from '../services/demoMode.js';
 import type { Track } from '../types/index.js';
 
@@ -334,6 +336,52 @@ export async function debugRoutes(app: FastifyInstance) {
     if (!title) return reply.status(400).send({ error: 'Title is required' });
     const cleared = deleteCachedLyricsEntry(title, artist, Number(duration) || 0);
     return reply.send({ ok: true, cleared });
+  });
+
+  // ── Lyrics Cache List ──────────────────────────────────────────────────────
+  app.get('/debug/lyrics/cache/list', async () => {
+    const entries = listLyricsCacheEntries();
+    return { entries, total: entries.length };
+  });
+
+  // ── Blacklist Management ───────────────────────────────────────────────────
+  app.get('/debug/blacklist/list', async () => {
+    const entries = getPlaybackBlacklistDetailed();
+    return { entries, total: entries.length };
+  });
+
+  app.delete<{ Params: { videoId: string } }>('/debug/blacklist/:videoId', async (req, reply) => {
+    const { videoId } = req.params;
+    const result = clearPlaybackBlacklistForId(videoId);
+    return reply.send({ ok: true, ...result });
+  });
+
+  app.delete('/debug/blacklist', async () => {
+    const result = clearPlaybackBlacklist();
+    return { ok: true, ...result };
+  });
+
+  // ── Audio Cache Management ─────────────────────────────────────────────────
+  app.get('/debug/audio-cache/list', async () => {
+    const files = listAudioCacheDetailed();
+    return { files, total: files.length };
+  });
+
+  app.delete<{ Params: { videoId: string } }>('/debug/audio-cache/:videoId', async (req, reply) => {
+    const result = clearAudioCacheForId(req.params.videoId);
+    return reply.send({ ok: true, ...result });
+  });
+
+  // ── Request Log ────────────────────────────────────────────────────────────
+  app.get<{ Querystring: { limit?: string } }>('/debug/request-log', async (req) => {
+    const limit = Number(req.query.limit) || 100;
+    const entries = getRequestLog(limit);
+    return { entries, total: entries.length };
+  });
+
+  app.delete('/debug/request-log', async () => {
+    clearRequestLog();
+    return { ok: true };
   });
 
   // ── Full status snapshot ────────────────────────────────────────────────────

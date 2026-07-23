@@ -23,6 +23,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useLyricsPrefetch } from './hooks/useLyrics';
 import { useSmartPlaylistsPrefetch } from './hooks/useSmartPlaylists';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import { DownloadProvider } from './hooks/useDownloadTrack';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
@@ -308,7 +309,9 @@ function AppInner() {
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
-      <AppInner />
+      <DownloadProvider>
+        <AppInner />
+      </DownloadProvider>
     </QueryClientProvider>
   );
 }

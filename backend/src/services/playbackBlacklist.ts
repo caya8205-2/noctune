@@ -1,34 +1,78 @@
-const TTL_MS = 24 * 60 * 60 * 1000;
-const failedIds = new Map<string, number>();
+import fs from 'fs';
+import path from 'path';
+import { getDataDir } from './env.js';
+
+interface BlacklistStore {
+  version: number;
+  updatedAt: number;
+  entries: Record<string, number>; // videoId -> failedAt timestamp
+}
+
+const STORE_FILE = path.join(getDataDir(), 'playback-blacklist.json');
+
+function loadStore(): BlacklistStore {
+  if (!fs.existsSync(STORE_FILE)) {
+    return { version: 1, updatedAt: Date.now(), entries: {} };
+  }
+  try {
+    const raw = fs.readFileSync(STORE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<BlacklistStore>;
+    return { version: 1, updatedAt: Date.now(), entries: parsed.entries ?? {} };
+  } catch {
+    return { version: 1, updatedAt: Date.now(), entries: {} };
+  }
+}
+
+function saveStore(store: BlacklistStore): void {
+  const dir = path.dirname(STORE_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  store.updatedAt = Date.now();
+  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf-8');
+}
+
+let _store: BlacklistStore | null = null;
+
+function getStore(): BlacklistStore {
+  if (!_store) _store = loadStore();
+  return _store;
+}
 
 export function markPlaybackFailed(videoId: string): void {
-  failedIds.set(videoId, Date.now());
+  const store = getStore();
+  store.entries[videoId] = Date.now();
+  saveStore(store);
 }
 
 export function isPlaybackBlacklisted(videoId: string): boolean {
-  const failedAt = failedIds.get(videoId);
-  if (!failedAt) return false;
-  if (Date.now() - failedAt > TTL_MS) {
-    failedIds.delete(videoId);
-    return false;
-  }
-  return true;
+  return Boolean(getStore().entries[videoId]);
 }
 
 export function getPlaybackBlacklist(): string[] {
-  for (const [videoId] of failedIds) {
-    isPlaybackBlacklisted(videoId);
-  }
-  return [...failedIds.keys()];
+  return Object.keys(getStore().entries);
+}
+
+export function getPlaybackBlacklistDetailed(): Array<{ videoId: string; failedAt: number; expiresIn: number }> {
+  return Object.entries(getStore().entries).map(([videoId, failedAt]) => ({
+    videoId,
+    failedAt,
+    expiresIn: Infinity,
+  }));
 }
 
 export function clearPlaybackBlacklist(): { cleared: number } {
-  const cleared = failedIds.size;
-  failedIds.clear();
+  const store = getStore();
+  const cleared = Object.keys(store.entries).length;
+  store.entries = {};
+  saveStore(store);
   return { cleared };
 }
 
 export function clearPlaybackBlacklistForId(videoId: string): { cleared: number } {
-  const cleared = failedIds.delete(videoId) ? 1 : 0;
-  return { cleared };
+  const store = getStore();
+  if (store.entries[videoId]) {
+    delete store.entries[videoId];
+    saveStore(store);
+    return { cleared: 1 };
+  }
+  return { cleared: 0 };
 }

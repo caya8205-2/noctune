@@ -146,3 +146,26 @@ export function clearAudioCacheForId(videoId: string): { files: number; bytes: n
 
   return { files, bytes };
 }
+
+export function listAudioCacheDetailed(): Array<{ videoId: string; filename: string; path: string; bytes: number; cachedAt: number; format: string }> {
+  ensureAudioCacheDir();
+  const files = fs.readdirSync(AUDIO_CACHE_DIR).filter((file) => !file.endsWith(TEMP_EXT));
+  return files.map((file) => {
+    const fullPath = path.join(AUDIO_CACHE_DIR, file);
+    const stat = fs.statSync(fullPath);
+    const ext = path.extname(file);
+    const basename = path.basename(file, ext);
+    let videoId = basename;
+    if (basename.endsWith('-high')) {
+      videoId = basename.slice(0, -5);
+    }
+    return {
+      videoId,
+      filename: file,
+      path: fullPath,
+      bytes: stat.size,
+      cachedAt: stat.mtimeMs,
+      format: ext.slice(1)
+    };
+  });
+}

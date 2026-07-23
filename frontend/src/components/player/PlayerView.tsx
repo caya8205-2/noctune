@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   Database,
-  Gauge,
   Mic2,
   Music2,
   Pause,
@@ -19,7 +18,6 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { usePlayerStore } from '../../store/player';
-import { formatDuration } from '../../utils/format';
 import { seekAudio } from '../../hooks/useAudio';
 import { Visualizer } from './Visualizer';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -198,8 +196,6 @@ export function PlayerView() {
     currentTrack,
     isPlaying,
     isLoading,
-    queue,
-    queueIndex,
     shuffle,
     repeat,
     togglePlay,
@@ -209,7 +205,7 @@ export function PlayerView() {
     cycleRepeat,
     setView,
   } = usePlayerStore();
-  const upcomingCount = Math.max(0, queue.length - queueIndex - 1);
+  const [showLegend, setShowLegend] = useState(false);
   const SourceIcon = currentTrack?.source ? sourceMeta[currentTrack.source]?.Icon : null;
   const needsSpotifyNavigation = Boolean(currentTrack?.spotifyId && (!currentTrack.albumId || !currentTrack.artistId));
   const { data: spotifyMetadata } = useQuery({
@@ -252,31 +248,32 @@ export function PlayerView() {
               </div>
               <div className="absolute inset-4 rounded-full ring-1 ring-white/10 pointer-events-none" />
               <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner z-20" />
-              {isPlaying && (
-                <div className="absolute inset-7 rounded-full border border-accent/30 animate-pulse-accent pointer-events-none" />
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-base-950/70 backdrop-blur-sm rounded-full z-30">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 size={28} className="animate-spin text-accent" />
+                    <span className="text-xs font-mono text-soft">Resolving audio...</span>
+                  </div>
+                </div>
               )}
             </div>
 
-            <div className="w-full max-w-3xl text-center mt-6 sm:mt-8">
-              <p className="section-label text-accent mb-3">Now playing</p>
-              {albumViewId ? (
+            {albumViewId ? (
                 <button
                   type="button"
-                  className="mx-auto block max-w-full text-3xl font-bold leading-tight text-white transition-colors hover:text-accent sm:truncate sm:text-4xl"
+                  className="mt-6 text-xl font-bold text-white transition-colors hover:text-accent sm:text-2xl"
                   onClick={() => setView('album', albumViewId)}
-                  title={`Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? currentTrack.title}`}
+                  title={`Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? ''}`}
                 >
                   {currentTrack.title}
                 </button>
               ) : (
-                <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight line-clamp-2 sm:truncate">
-                  {currentTrack.title}
-                </h1>
+                <h1 className="mt-6 text-xl font-bold text-white sm:text-2xl">{currentTrack.title}</h1>
               )}
               {artistViewId ? (
                 <button
                   type="button"
-                  className="mx-auto mt-2 block max-w-full truncate text-lg text-soft transition-colors hover:text-accent"
+                  className="mt-2 text-sm text-soft transition-colors hover:text-accent sm:text-base"
                   onClick={() => setView('artist', artistViewId)}
                   title={`Go to artist: ${currentTrack.artist}`}
                 >
@@ -286,23 +283,18 @@ export function PlayerView() {
                 <p className="text-lg text-soft mt-2 truncate">{currentTrack.artist}</p>
               )}
               <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-xs text-soft px-2.5 py-1 rounded-full border border-base-600/40 bg-base-900/60">
-                  <Zap size={12} className="text-accent" />
-                  {upcomingCount} queued
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-mono text-muted px-2.5 py-1 rounded-full border border-base-600/40 bg-base-900/60">
-                  <Gauge size={12} />
-                  {formatDuration(currentTrack.duration)}
-                </span>
                 {currentTrack.source && SourceIcon && (
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border ${
+                  <button
+                    type="button"
+                    onClick={() => setShowLegend((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded-full border transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                       sourceMeta[currentTrack.source].className
                     }`}
+                    title="Click to toggle source badge legend"
                   >
                     <SourceIcon size={12} />
                     {sourceMeta[currentTrack.source].label}
-                  </span>
+                  </button>
                 )}
                 <TrackActionButtons
                   track={currentTrack}
@@ -310,10 +302,21 @@ export function PlayerView() {
                   buttonClassName="h-[30px] min-w-[42px] justify-center rounded-full px-2.5 py-1 border border-base-600/40 bg-base-900/60 gap-1.5"
                   iconSize={15}
                   showQueue={false}
+                  showDownload={true}
                   showClearCache={false}
                   showMenu={false}
                 />
               </div>
+
+              {/* Badge Legend (toggleable on badge click) */}
+              {showLegend && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl border border-white/5 bg-base-900/40 px-4 py-2 text-[11px] text-muted animate-fade-in">
+                  <span><strong className="text-accent font-medium">Prefetch:</strong> Pre-loaded audio stream</span>
+                  <span><strong className="text-soft font-medium">Cache:</strong> Loaded from local matcher</span>
+                  <span><strong className="text-soft font-medium">Refreshed:</strong> Renewed stream URL</span>
+                  <span><strong className="text-soft font-medium">Resolved:</strong> Matched live from YouTube</span>
+                </div>
+              )}
 
               <div className="mt-6 flex items-center justify-center gap-3 md:hidden">
                 <button
@@ -354,7 +357,6 @@ export function PlayerView() {
                   {repeat === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
                 </button>
               </div>
-            </div>
 
             <section className="w-full max-w-3xl mt-8">
               <div className="flex items-center gap-2 mb-4">

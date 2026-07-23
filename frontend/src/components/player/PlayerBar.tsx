@@ -7,7 +7,7 @@ import { api } from '../../utils/api';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
-  Loader2, Timer,
+  Loader2, Timer, Download, Check,
   Info,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { clsx } from 'clsx';
 import { LikeButton } from './LikeButton';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { EqualizerView } from './EqualizerView';
+import { useDownloadTrack } from '../../hooks/useDownloadTrack';
 
 const PLAYER_SETTINGS_CACHE_KEY = 'noctune-player-settings';
 
@@ -365,6 +366,8 @@ export function PlayerBar() {
  * Consolidates optional controls that don't need permanent buttons.
  */
 function MoreOptionsMenu() {
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const { downloadTrack, downloadingIds, downloadedIds } = useDownloadTrack();
   const {
     playbackRate, sleepTimerEnd, crossfadeDuration, eqEnabled,
     setPlaybackRate, setSleepTimer, setCrossfadeDuration,
@@ -372,6 +375,14 @@ function MoreOptionsMenu() {
   const [open, setOpen] = useState(false);
   const [eqPanelOpen, setEqPanelOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const downloading = currentTrack ? downloadingIds.has(currentTrack.id) : false;
+  const downloaded = currentTrack ? downloadedIds.has(currentTrack.id) : false;
+
+  const handleDownload = () => {
+    if (!currentTrack) return;
+    downloadTrack(currentTrack);
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -399,6 +410,23 @@ function MoreOptionsMenu() {
 
       {open && (
         <div className="absolute bottom-full right-0 mb-2 z-50 flex min-w-[200px] flex-col gap-0.5 rounded-xl border border-white/[0.08] bg-base-900 p-2 shadow-xl animate-fade-in">
+          {/* Download Track */}
+          <div
+            className="flex items-center justify-between rounded-lg px-2.5 py-2 cursor-pointer hover:bg-white/[0.04]"
+            onClick={handleDownload}
+          >
+            <span className="text-xs text-soft">Download track</span>
+            <button className="btn-ghost p-1" title={downloaded ? 'Downloaded to cache' : 'Download audio to cache'}>
+              {downloading ? (
+                <Loader2 size={12} className="animate-spin text-accent" />
+              ) : downloaded ? (
+                <Check size={12} className="text-emerald-400" />
+              ) : (
+                <Download size={12} />
+              )}
+            </button>
+          </div>
+
           {/* Sleep Timer */}
           <div className="flex items-center justify-between rounded-lg px-2.5 py-2 hover:bg-white/[0.04]">
             <span className="text-xs text-soft">Sleep timer</span>

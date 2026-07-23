@@ -219,4 +219,20 @@ export const debugApi = {
     if (params.duration) q.set('duration', String(params.duration));
     return req<{ ok: boolean; cleared: boolean }>(`/debug/lyrics/cache?${q.toString()}`, { method: 'DELETE' });
   },
+  listLyricsCache: () =>
+    req<{ entries: Array<{ key: string; query: { title: string; artist: string; duration: number }; cachedAt: number; hasLyrics: boolean; synced: boolean; lineCount: number; provider: string; lyricsTitle: string; lyricsArtist: string }>; total: number }>('/debug/lyrics/cache/list'),
+  listBlacklist: () =>
+    req<{ entries: Array<{ videoId: string; failedAt: number; expiresIn: number }>; total: number }>('/debug/blacklist/list'),
+  clearBlacklistEntry: (videoId: string) =>
+    req<{ ok: boolean; cleared: number }>(`/debug/blacklist/${encodeURIComponent(videoId)}`, { method: 'DELETE' }),
+  clearAllBlacklist: () =>
+    req<{ ok: boolean; cleared: number }>('/debug/blacklist', { method: 'DELETE' }),
+  listAudioCache: () =>
+    req<{ files: Array<{ videoId: string; filename: string; path: string; bytes: number; cachedAt: number; format: string }>; total: number }>('/debug/audio-cache/list'),
+  clearAudioCacheEntry: (videoId: string) =>
+    req<{ ok: boolean }>(`/debug/audio-cache/${encodeURIComponent(videoId)}`, { method: 'DELETE' }),
+  getRequestLog: (limit = 100) =>
+    req<{ entries: Array<{ id: number; method: string; url: string; statusCode: number; durationMs: number; timestamp: number; error?: string }>; total: number }>(`/debug/request-log?limit=${limit}`),
+  clearRequestLog: () =>
+    req<{ ok: boolean }>('/debug/request-log', { method: 'DELETE' }),
 };

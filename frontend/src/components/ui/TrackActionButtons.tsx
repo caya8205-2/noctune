@@ -8,12 +8,13 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, FolderPlus, HardDrive, ListOrdered, ListPlus, Loader2, MoreHorizontal, Plus } from 'lucide-react';
+import { Check, Download, FolderPlus, HardDrive, ListOrdered, ListPlus, Loader2, MoreHorizontal, Plus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { api, type Track } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
 import { useClearTrackCache } from '../../hooks/useClearTrackCache';
+import { useDownloadTrack } from '../../hooks/useDownloadTrack';
 import { LikeButton } from '../player/LikeButton';
 import { noctuneLayout, noctuneSize } from '../../theme';
 
@@ -35,6 +36,7 @@ interface TrackActionButtonsProps {
   showQueue?: boolean;
   showLike?: boolean;
   showPlaylist?: boolean;
+  showDownload?: boolean;
   showClearCache?: boolean;
   showMenu?: boolean;
   queueLabel?: string;
@@ -51,6 +53,7 @@ export function TrackActionButtons({
   showQueue = true,
   showLike = true,
   showPlaylist = true,
+  showDownload = false,
   showClearCache = true,
   showMenu = true,
   queueLabel,
@@ -60,9 +63,22 @@ export function TrackActionButtons({
   const addToQueue = usePlayerStore((state) => state.addToQueue);
   const playNext = usePlayerStore((state) => state.playNext);
   const { requestClearTrackCache, clearTrackCacheModal } = useClearTrackCache();
+  const { downloadTrack, downloadingIds, downloadedIds } = useDownloadTrack();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isPlaylistMenuOpen, setIsPlaylistMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  const downloading = downloadingIds.has(track.id);
+  const downloaded = downloadedIds.has(track.id);
+
+  const handleDownload = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      downloadTrack(track);
+    },
+    [downloadTrack, track]
+  );
 
   useEffect(() => {
     if (!showMoreMenu) return;
@@ -120,6 +136,24 @@ export function TrackActionButtons({
           />
         )}
 
+        {showDownload && (
+          <button
+            type="button"
+            className={clsx('btn-ghost transition-colors', buttonClassName, downloaded && 'text-emerald-400')}
+            onClick={handleDownload}
+            disabled={downloading}
+            title={downloaded ? 'Downloaded to cache' : 'Download track audio to cache'}
+          >
+            {downloading ? (
+              <Loader2 size={iconSize} className="animate-spin text-accent" />
+            ) : downloaded ? (
+              <Check size={iconSize} className="text-emerald-400" />
+            ) : (
+              <Download size={iconSize} />
+            )}
+          </button>
+        )}
+
         {showClearCache && (
           <button
             type="button"
@@ -171,6 +205,16 @@ export function TrackActionButtons({
                   }}
                 >
                   <ListPlus size={14} /> Add to queue
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs text-soft hover:bg-base-700 flex items-center gap-2"
+                  onClick={(e) => {
+                    handleDownload(e);
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <Download size={14} /> Download track
                 </button>
               </div>
             )}

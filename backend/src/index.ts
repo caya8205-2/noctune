@@ -22,6 +22,7 @@ import { initDb } from './services/playlist.js';
 import { initLocalFilesDb } from './services/localFiles.js';
 import { getCacheStats } from './services/cache.js';
 import { getEnvConfig } from './services/env.js';
+import { addRequestLog } from './services/requestLog.js';
 import { getPrefetchStatus } from './services/prefetch.js';
 import { scheduleStartupPrefetch } from './services/startupPrefetch.js';
 import { getAudioResolverStatus } from './services/audioResolver.js';
@@ -112,6 +113,17 @@ async function bootstrap() {
   await app.register(debugRoutes);
   await app.register(statsRoutes);
   await app.register(localFilesRoutes);
+
+  app.addHook('onResponse', (request, reply, done) => {
+    addRequestLog({
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      durationMs: Math.round(reply.elapsedTime),
+      timestamp: Date.now(),
+    });
+    done();
+  });
 
   // Health / debug endpoint
   app.get('/status', async () => ({

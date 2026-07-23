@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
-  ChevronDown, ChevronRight, Copy, RotateCw, Eraser, Music2, Ban, Save, FileText,
+  ChevronDown, ChevronRight, Copy, RotateCw, Music2, Ban, Save, FileText,
+  Wifi, HardDrive, List, X
 } from 'lucide-react';
 import {
   debugApi, discoverBackend,
@@ -11,7 +13,7 @@ import {
 import { usePlayerStore } from '../store/player';
 import type { CachedTrack } from '../utils/api';
 
-type Tab = 'resolver' | 'cache' | 'lyrics' | 'status';
+type Tab = 'resolver' | 'lyrics' | 'status' | 'tools';
 
 function reasonColor(reason: string): string {
   if (reason.startsWith('positive')) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
@@ -299,6 +301,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   const [snapLoading, setSnapLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const spotifyId = track?.spotifyId;
   const youtubeId = track ? (track.youtubeId ?? (track.id.startsWith('spotify:') ? undefined : track.id)) : undefined;
@@ -325,6 +328,18 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     void refreshSnapshot();
   }, [track, refreshSnapshot]);
 
+  // Esc keybind to close resolve modal
+  useEffect(() => {
+    if (!showModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
+
   async function runAction(name: string, fn: () => Promise<unknown>) {
     setBusy(name);
     setMsg(null);
@@ -336,6 +351,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
       setMsg({ ok: false, text: (e as Error).message });
     } finally {
       setBusy(null);
+      setShowModal(false);
     }
   }
 
@@ -448,41 +464,12 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
-          onClick={() => runAction('Resolve again', () => debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail }))}
+          onClick={() => setShowModal(true)}
           disabled={!!busy}
           className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
         >
-          {busy === 'Resolve again' ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
+          {busy ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
           Resolve again
-        </button>
-        <button
-          onClick={() => runAction('Clear this track', () => debugApi.clearTrack({ id: track.id, title: track.title, artist: track.artist, query: track.query, spotifyId, youtubeId }))}
-          disabled={!!busy}
-          className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
-        >
-          {busy === 'Clear this track' ? <RefreshCw size={13} className="animate-spin" /> : <Eraser size={13} />}
-          Clear this track
-        </button>
-        <button
-          onClick={() => spotifyId && runAction('Clear match only', () => debugApi.clearCacheEntry(spotifyId))}
-          disabled={!!busy || !spotifyId}
-          className="flex items-center gap-1.5 rounded-lg border border-base-600 px-3 py-1.5 text-xs font-medium text-soft transition-colors hover:text-white hover:border-base-500 disabled:opacity-40"
-        >
-          {busy === 'Clear match only' ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-          Clear match only
-        </button>
-        <button
-          onClick={() => {
-            const activeYt = snapshot?.youtubeId ?? youtubeId;
-            if (activeYt) {
-              runAction('Blacklist match', () => debugApi.blacklistMatch({ youtubeId: activeYt, spotifyId }));
-            }
-          }}
-          disabled={!!busy || !(snapshot?.youtubeId ?? youtubeId)}
-          className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
-        >
-          {busy === 'Blacklist match' ? <RefreshCw size={13} className="animate-spin" /> : <Ban size={13} />}
-          Blacklist match
         </button>
         <button
           onClick={copyJson}
@@ -492,6 +479,80 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
           Copy debug JSON
         </button>
       </div>
+
+      {/* Modal Options for Resolve Again rendered via Portal to document.body */}
+      {showModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowModal(false);
+            }}
+          >
+            <div className="w-full max-w-md rounded-xl border border-white/10 bg-base-900 p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-white">Resolve Options</h3>
+                <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-muted">
+                Select resolve option for <strong className="text-white">{track.title}</strong>:
+              </p>
+              <div className="space-y-2">
+                {/* Option 1: Clear learned cache only */}
+                <button
+                  onClick={() => runAction('Clear learned cache only', () => debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail }))}
+                  className="w-full flex items-center justify-between rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-left transition-colors hover:bg-accent/20"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-accent">Clear learned cache only</div>
+                    <div className="text-[11px] text-muted">Clear cached resolution for this track and search for the best audio stream again.</div>
+                  </div>
+                  <RotateCw size={15} className="text-accent flex-shrink-0" />
+                </button>
+
+                {/* Option 2: Clear match only */}
+                <button
+                  onClick={() =>
+                    runAction('Clear match & re-resolve', async () => {
+                      if (spotifyId) await debugApi.clearCacheEntry(spotifyId);
+                      return debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail });
+                    })
+                  }
+                  disabled={!spotifyId}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700 disabled:opacity-40"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-white">Clear match only</div>
+                    <div className="text-[11px] text-muted">Clear Spotify → YouTube match mapping and re-resolve audio stream.</div>
+                  </div>
+                  <Trash2 size={15} className="text-soft flex-shrink-0" />
+                </button>
+
+                {/* Option 3: Clear match, learned cache and blacklist this match */}
+                <button
+                  onClick={() => {
+                    const activeYt = snapshot?.youtubeId ?? youtubeId;
+                    runAction('Blacklist, clear cache & re-resolve', async () => {
+                      if (activeYt) await debugApi.blacklistMatch({ youtubeId: activeYt, spotifyId });
+                      return debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail });
+                    });
+                  }}
+                  disabled={!(snapshot?.youtubeId ?? youtubeId)}
+                  className="w-full flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition-colors hover:bg-red-500/20 disabled:opacity-40"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-red-400">Clear match, learned cache and blacklist this match</div>
+                    <div className="text-[11px] text-muted">Blacklist the active YouTube video, clear match & cache, and re-resolve to find a better match.</div>
+                  </div>
+                  <Ban size={15} className="text-red-400 flex-shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {msg && (
         <div className={`mt-3 flex items-center gap-1.5 text-xs ${msg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -559,13 +620,27 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
 // ── Matcher inspector (manual) ────────────────────────────────────────────────
 
 function MatcherInspector() {
-  const [title, setTitle] = useState('');
-  const [artist, setArtist] = useState('');
-  const [spotifyId, setSpotifyId] = useState('');
-  const [duration, setDuration] = useState('');
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const [title, setTitle] = useState(currentTrack?.title || '');
+  const [artist, setArtist] = useState(currentTrack?.artist || '');
+  const [spotifyId, setSpotifyId] = useState(
+    currentTrack?.spotifyId || (currentTrack?.id?.startsWith('spotify:') ? currentTrack.id.replace('spotify:track:', '') : '')
+  );
+  const [duration, setDuration] = useState(currentTrack?.duration ? String(currentTrack.duration) : '');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DebugMatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentTrack) {
+      setTitle(currentTrack.title || '');
+      setArtist(currentTrack.artist || '');
+      setSpotifyId(
+        currentTrack.spotifyId || (currentTrack.id?.startsWith('spotify:') ? currentTrack.id.replace('spotify:track:', '') : '')
+      );
+      setDuration(currentTrack.duration ? String(currentTrack.duration) : '');
+    }
+  }, [currentTrack]);
 
   const runMatch = useCallback(async () => {
     if (!title.trim()) {
@@ -595,7 +670,7 @@ function MatcherInspector() {
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center gap-2">
         <Terminal size={16} className="text-accent" />
-        <h2 className="text-base font-semibold text-white">Matcher Inspector</h2>
+        <h2 className="text-base font-semibold text-white">Manual Track Search & Save to Cache</h2>
       </div>
       <p className="mb-3 text-xs text-muted">
         Run the full Spotify→YouTube fallback query chain for any track and inspect the best candidate per query.
@@ -615,7 +690,7 @@ function MatcherInspector() {
         </div>
         <div>
           <label className="section-label mb-1.5 block">Duration (seconds, optional)</label>
-          <input className="input-base" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && runMatch()} placeholder="e.g. 193" />
+          <input className="input-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && runMatch()} placeholder="e.g. 193" />
         </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
@@ -643,6 +718,7 @@ function ResolverPanel() {
     <div className="space-y-4">
       <CurrentTrackSnapshot track={currentTrack} />
       <MatcherInspector />
+      <CachePanel />
     </div>
   );
 }
@@ -812,13 +888,129 @@ function CachePanel() {
   );
 }
 
-// ── Lyrics Inspector ──────────────────────────────────────────────────────────
+function CachedLyricsList() {
+  const [entries, setEntries] = useState<Array<{ key: string; query: { title: string; artist: string; duration: number }; cachedAt: number; hasLyrics: boolean; synced: boolean; lineCount: number; provider: string; lyricsTitle: string; lyricsArtist: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await debugApi.listLyricsCache();
+      setEntries(res.entries);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const clearOne = async (key: string) => {
+    const entry = entries.find((e) => e.key === key);
+    if (!entry) return;
+    try {
+      await debugApi.clearLyricsCache({ title: entry.query.title, artist: entry.query.artist, duration: entry.query.duration });
+      setEntries((prev) => prev.filter((e) => e.key !== key));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const filtered = entries.filter((e) => {
+    if (!filter) return true;
+    const q = filter.toLowerCase();
+    return (
+      e.query.title.toLowerCase().includes(q) ||
+      e.query.artist.toLowerCase().includes(q) ||
+      e.lyricsTitle.toLowerCase().includes(q) ||
+      e.lyricsArtist.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="surface-panel p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Database size={16} className="text-accent" />
+          <h2 className="text-base font-semibold text-white">Cached Lyrics</h2>
+          <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
+            {entries.length} entries
+          </span>
+        </div>
+        <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      <div className="mb-3">
+        <input
+          className="input-base"
+          placeholder="Filter by title, artist..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <div className="mb-3 flex items-center gap-1.5 text-sm text-red-400">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      <div className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted">
+            {entries.length === 0 ? 'No lyrics cached yet.' : 'No entries match filter.'}
+          </div>
+        ) : (
+          filtered.map((e) => (
+            <div
+              key={e.key}
+              className="group flex items-center gap-3 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-2 transition-colors hover:border-white/[0.08]"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm text-white">
+                  <span className="text-soft">{e.query.title}</span>
+                  {e.query.artist && <span className="text-muted"> — {e.query.artist}</span>}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                  {e.hasLyrics ? (
+                    <>
+                      <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${e.synced ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/[0.04] text-soft border-white/[0.08]'}`}>
+                        {e.synced ? 'Synced' : 'Plain'}
+                      </span>
+                      <span>{e.lineCount} lines</span>
+                      {e.provider && <span>· {e.provider}</span>}
+                    </>
+                  ) : (
+                    <span className="rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-400">No Lyrics</span>
+                  )}
+                  <span>· {formatRelative(e.cachedAt)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => clearOne(e.key)}
+                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                title="Clear this entry"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Current Track Lyrics ──────────────────────────────────────────────────────
 
 function LyricsPanel() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
-  const [title, setTitle] = useState(currentTrack?.title || '');
-  const [artist, setArtist] = useState(currentTrack?.artist || '');
-  const [duration, setDuration] = useState(currentTrack?.duration ? String(currentTrack.duration) : '');
   const [snapshot, setSnapshot] = useState<any | null>(null);
   const [loadingSnap, setLoadingSnap] = useState(false);
 
@@ -831,22 +1023,22 @@ function LyricsPanel() {
 
   useEffect(() => {
     if (currentTrack) {
-      setTitle(currentTrack.title);
-      setArtist(currentTrack.artist);
-      setDuration(currentTrack.duration ? String(currentTrack.duration) : '');
       setSearchTitle(currentTrack.title);
       setSearchArtist(currentTrack.artist);
     }
   }, [currentTrack]);
 
   const loadSnapshot = useCallback(async () => {
-    if (!title.trim()) return;
+    if (!currentTrack?.title) {
+      setSnapshot(null);
+      return;
+    }
     setLoadingSnap(true);
     try {
       const snap = await debugApi.lyricsSnapshot({
-        title: title.trim(),
-        artist: artist.trim(),
-        duration: Number(duration) || 0,
+        title: currentTrack.title,
+        artist: currentTrack.artist || '',
+        duration: currentTrack.duration || 0,
       });
       setSnapshot(snap);
     } catch {
@@ -854,7 +1046,7 @@ function LyricsPanel() {
     } finally {
       setLoadingSnap(false);
     }
-  }, [title, artist, duration]);
+  }, [currentTrack]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -882,12 +1074,12 @@ function LyricsPanel() {
     setMsg(null);
     try {
       await debugApi.saveLyrics({
-        title: title || searchTitle,
-        artist: artist || searchArtist,
-        duration: Number(duration) || 0,
+        title: currentTrack?.title || searchTitle,
+        artist: currentTrack?.artist || searchArtist,
+        duration: currentTrack?.duration || 0,
         candidate: cand,
       });
-      setMsg({ ok: true, text: `Saved lyrics "${cand.trackName || cand.name || title}" to learned cache!` });
+      setMsg({ ok: true, text: `Saved lyrics "${cand.trackName || cand.name || searchTitle}" to learned cache!` });
       await loadSnapshot();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -897,10 +1089,11 @@ function LyricsPanel() {
   }
 
   async function handleClearLyrics() {
+    if (!currentTrack?.title) return;
     setBusy('clear');
     setMsg(null);
     try {
-      await debugApi.clearLyricsCache({ title: title || searchTitle, artist: artist || searchArtist, duration: Number(duration) || 0 });
+      await debugApi.clearLyricsCache({ title: currentTrack.title, artist: currentTrack.artist || '', duration: currentTrack.duration || 0 });
       setMsg({ ok: true, text: 'Lyrics cache cleared.' });
       await loadSnapshot();
     } catch (e) {
@@ -917,27 +1110,27 @@ function LyricsPanel() {
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-accent" />
-            <h2 className="text-base font-semibold text-white">Lyrics Inspector</h2>
+            <h2 className="text-base font-semibold text-white">Current Track Lyrics</h2>
           </div>
           <button onClick={() => void loadSnapshot()} disabled={loadingSnap} className="btn-ghost" title="Refresh snapshot">
             <RefreshCw size={15} className={loadingSnap ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className="section-label mb-1 block">Title</label>
-            <input className="input-base text-xs" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+        {currentTrack ? (
+          <div className="mb-3 flex items-center gap-3">
+            <img
+              src={currentTrack.thumbnail}
+              alt=""
+              className="h-10 w-10 rounded-lg object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-white">{currentTrack.title}</div>
+              <div className="truncate text-xs text-muted">{currentTrack.artist}</div>
+            </div>
           </div>
-          <div>
-            <label className="section-label mb-1 block">Artist</label>
-            <input className="input-base text-xs" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
-          </div>
-          <div>
-            <label className="section-label mb-1 block">Duration (s)</label>
-            <input className="input-base text-xs" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Duration" />
-          </div>
-        </div>
+        ) : null}
 
         {snapshot?.lyrics ? (
           <div className="space-y-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
@@ -1051,6 +1244,9 @@ function LyricsPanel() {
           </div>
         )}
       </div>
+
+      {/* Cached Lyrics List */}
+      <CachedLyricsList />
     </div>
   );
 }
@@ -1179,6 +1375,455 @@ function StatusPanel() {
   );
 }
 
+// ── Blacklist Manager ─────────────────────────────────────────────────────────
+
+function BlacklistPanel() {
+  const [entries, setEntries] = useState<Array<{ videoId: string; failedAt: number; expiresIn: number }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await debugApi.listBlacklist();
+      setEntries(res.entries);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const clearOne = async (videoId: string) => {
+    try {
+      await debugApi.clearBlacklistEntry(videoId);
+      setEntries((prev) => prev.filter((e) => e.videoId !== videoId));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const clearAll = async () => {
+    if (!confirm(`Clear all ${entries.length} blacklist entries?`)) return;
+    setLoading(true);
+    try {
+      await debugApi.clearAllBlacklist();
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="surface-panel p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Ban size={16} className="text-amber-400" />
+          <h2 className="text-base font-semibold text-white">Playback Blacklist</h2>
+          <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={clearAll}
+            disabled={loading || entries.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+          >
+            <Trash2 size={13} /> Clear All
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-3 flex items-center gap-1.5 text-sm text-red-400">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      <div className="max-h-[40vh] space-y-1.5 overflow-y-auto">
+        {entries.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted">No blacklisted IDs.</div>
+        ) : (
+          entries.map((e) => (
+            <div key={e.videoId} className="group flex items-center gap-3 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-2 transition-colors hover:border-white/[0.08]">
+              <img
+                src={ytThumb(e.videoId)}
+                alt=""
+                className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                loading="lazy"
+                onError={(ev) => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div className="min-w-0 flex-1">
+                <code className="font-mono text-xs text-soft">{e.videoId}</code>
+                <div className="text-[11px] text-muted">
+                  Blacklisted {formatRelative(e.failedAt)} · Permanent
+                </div>
+              </div>
+              <button
+                onClick={() => clearOne(e.videoId)}
+                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-emerald-500/10 hover:text-emerald-400 group-hover:opacity-100"
+                title="Remove from blacklist"
+              >
+                <CheckCircle2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Audio Cache Browser ───────────────────────────────────────────────────────
+
+function AudioCachePanel() {
+  const [files, setFiles] = useState<Array<{ videoId: string; filename: string; path: string; bytes: number; cachedAt: number; format: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await debugApi.listAudioCache();
+      setFiles(res.files);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const clearOne = async (videoId: string) => {
+    try {
+      await debugApi.clearAudioCacheEntry(videoId);
+      setFiles((prev) => prev.filter((f) => f.videoId !== videoId));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const totalBytes = files.reduce((sum, f) => sum + f.bytes, 0);
+
+  const filtered = files.filter((f) => {
+    if (!filter) return true;
+    const q = filter.toLowerCase();
+    return f.videoId.toLowerCase().includes(q) || f.filename.toLowerCase().includes(q);
+  });
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return (
+    <div className="surface-panel p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HardDrive size={16} className="text-violet-400" />
+          <h2 className="text-base font-semibold text-white">Audio File Cache</h2>
+          <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
+            {files.length} files · {formatBytes(totalBytes)}
+          </span>
+        </div>
+        <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      <div className="mb-3">
+        <input
+          className="input-base"
+          placeholder="Filter by video ID or filename..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <div className="mb-3 flex items-center gap-1.5 text-sm text-red-400">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      <div className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted">
+            {files.length === 0 ? 'No cached audio files.' : 'No files match filter.'}
+          </div>
+        ) : (
+          filtered.map((f) => (
+            <div key={f.filename} className="group flex items-center gap-3 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-2 transition-colors hover:border-white/[0.08]">
+              <img
+                src={ytThumb(f.videoId)}
+                alt=""
+                className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                loading="lazy"
+                onError={(ev) => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div className="min-w-0 flex-1">
+                <code className="truncate font-mono text-xs text-soft">{f.videoId}</code>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                  <span className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-soft">{f.format}</span>
+                  <span>{formatBytes(f.bytes)}</span>
+                  <span>· {formatRelative(f.cachedAt)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => clearOne(f.videoId)}
+                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                title="Delete cached file"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Request Log Viewer ────────────────────────────────────────────────────────
+
+function RequestLogPanel() {
+  const [entries, setEntries] = useState<Array<{ id: number; method: string; url: string; statusCode: number; durationMs: number; timestamp: number; error?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [filter, setFilter] = useState('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await debugApi.getRequestLog(200);
+      setEntries(res.entries);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(refresh, 2000);
+    return () => clearInterval(id);
+  }, [autoRefresh, refresh]);
+
+  const clearLog = async () => {
+    try {
+      await debugApi.clearRequestLog();
+      setEntries([]);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  function statusColor(code: number): string {
+    if (code < 300) return 'text-emerald-400';
+    if (code < 400) return 'text-sky-400';
+    if (code < 500) return 'text-amber-400';
+    return 'text-red-400';
+  }
+
+  function methodColor(method: string): string {
+    if (method === 'GET') return 'text-sky-400 bg-sky-500/10 border-sky-500/20';
+    if (method === 'POST') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+    if (method === 'DELETE') return 'text-red-400 bg-red-500/10 border-red-500/20';
+    if (method === 'PUT' || method === 'PATCH') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    return 'text-soft bg-white/[0.04] border-white/[0.08]';
+  }
+
+  const filtered = entries.filter((e) => {
+    if (!filter) return true;
+    return e.url.toLowerCase().includes(filter.toLowerCase()) || e.method.toLowerCase().includes(filter.toLowerCase());
+  });
+
+  return (
+    <div className="surface-panel p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wifi size={16} className="text-sky-400" />
+          <h2 className="text-base font-semibold text-white">Request Log</h2>
+          <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAutoRefresh((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+              autoRefresh
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-base-600 text-muted hover:text-soft'
+            }`}
+          >
+            <Activity size={13} />
+            {autoRefresh ? 'Live' : 'Paused'}
+          </button>
+          <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={clearLog}
+            disabled={entries.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+          >
+            <Trash2 size={13} /> Clear
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <input
+          className="input-base"
+          placeholder="Filter by URL or method..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <div className="mb-3 flex items-center gap-1.5 text-sm text-red-400">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      <div className="max-h-[50vh] space-y-1 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted">No requests logged yet.</div>
+        ) : (
+          filtered.map((e) => (
+            <div key={e.id} className="flex items-center gap-2.5 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-1.5 text-xs">
+              <span className={`flex-shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium ${methodColor(e.method)}`}>
+                {e.method}
+              </span>
+              <span className={`flex-shrink-0 font-mono text-[11px] font-semibold tabular-nums ${statusColor(e.statusCode)}`}>
+                {e.statusCode}
+              </span>
+              <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-soft">{e.url}</code>
+              <span className="flex-shrink-0 font-mono text-[11px] text-muted tabular-nums">{e.durationMs}ms</span>
+              <span className="flex-shrink-0 text-[10px] text-muted">{formatRelative(e.timestamp)}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Queue State Inspector ─────────────────────────────────────────────────────
+
+function QueueInspector() {
+  const queue = usePlayerStore((s) => s.queue);
+  const queueIndex = usePlayerStore((s) => s.queueIndex);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const shuffle = usePlayerStore((s) => s.shuffle);
+  const repeat = usePlayerStore((s) => s.repeat);
+  const isAutoQueueLoading = usePlayerStore((s) => s.isAutoQueueLoading);
+
+  const upcoming = queue.slice(queueIndex + 1, queueIndex + 21);
+  const autoqueueCount = queue.filter((t) => t.queueSource === 'autoqueue').length;
+  const manualCount = queue.length - autoqueueCount;
+
+  return (
+    <div className="surface-panel p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <List size={16} className="text-accent" />
+        <h2 className="text-base font-semibold text-white">Queue Inspector</h2>
+      </div>
+
+      <div className="mb-4 grid gap-x-6 gap-y-0 sm:grid-cols-2">
+        <StatusRow label="Queue length" value={queue.length} />
+        <StatusRow label="Current index" value={queueIndex} />
+        <StatusRow label="Manual tracks" value={manualCount} />
+        <StatusRow label="Autoqueue tracks" value={autoqueueCount} tone="muted" />
+        <StatusRow label="Shuffle" value={shuffle ? 'On' : 'Off'} tone={shuffle ? 'ok' : 'muted'} />
+        <StatusRow label="Repeat" value={repeat} tone={repeat !== 'off' ? 'ok' : 'muted'} />
+        <StatusRow label="Autoqueue loading" value={isAutoQueueLoading ? 'Loading...' : 'Idle'} tone={isAutoQueueLoading ? 'warn' : 'muted'} />
+      </div>
+
+      {currentTrack && (
+        <div className="mb-4">
+          <div className="section-label mb-2">Now Playing</div>
+          <div className="flex items-center gap-3 rounded-lg border border-accent/20 bg-accent/[0.03] px-3 py-2">
+            <img
+              src={currentTrack.thumbnail}
+              alt=""
+              className="h-9 w-9 rounded object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-white">{currentTrack.title}</div>
+              <div className="truncate text-xs text-muted">{currentTrack.artist}</div>
+            </div>
+            {currentTrack.queueSource && (
+              <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-muted">{currentTrack.queueSource}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div>
+          <div className="section-label mb-2">Upcoming ({Math.min(upcoming.length, 20)} of {queue.length - queueIndex - 1})</div>
+          <div className="max-h-[40vh] space-y-1 overflow-y-auto">
+            {upcoming.map((t, i) => (
+              <div key={`${t.id}-${i}`} className="flex items-center gap-2.5 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-1.5">
+                <span className="flex-shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-muted">#{queueIndex + i + 2}</span>
+                <img
+                  src={t.thumbnail}
+                  alt=""
+                  className="h-7 w-7 flex-shrink-0 rounded object-cover"
+                  loading="lazy"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs text-white">{t.title}</div>
+                  <div className="truncate text-[11px] text-muted">{t.artist}</div>
+                </div>
+                {t.queueSource && (
+                  <span className={`flex-shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] ${
+                    t.queueSource === 'autoqueue'
+                      ? 'border-violet-500/20 bg-violet-500/10 text-violet-400'
+                      : 'border-white/[0.08] bg-white/[0.04] text-muted'
+                  }`}>{t.queueSource}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tools Panel (combines all tool panels) ────────────────────────────────────
+
+function ToolsPanel() {
+  return (
+    <div className="space-y-4">
+      <BlacklistPanel />
+      <AudioCachePanel />
+      <RequestLogPanel />
+      <QueueInspector />
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function DebugApp() {
@@ -1198,10 +1843,10 @@ export default function DebugApp() {
   }, []);
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof Search }> = [
-    { id: 'resolver', label: 'Resolver Match', icon: Terminal },
-    { id: 'cache', label: 'Learned Cache', icon: Database },
-    { id: 'lyrics', label: 'Lyrics Inspector', icon: FileText },
+    { id: 'resolver', label: 'Resolver', icon: Terminal },
+    { id: 'lyrics', label: 'Lyrics', icon: FileText },
     { id: 'status', label: 'Status', icon: Activity },
+    { id: 'tools', label: 'Tools', icon: Database },
   ];
 
   return (
@@ -1257,9 +1902,9 @@ export default function DebugApp() {
       <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5">
         <div className="mx-auto max-w-4xl">
           {tab === 'resolver' && <ResolverPanel />}
-          {tab === 'cache' && <CachePanel />}
           {tab === 'lyrics' && <LyricsPanel />}
           {tab === 'status' && <StatusPanel />}
+          {tab === 'tools' && <ToolsPanel />}
         </div>
       </div>
     </div>

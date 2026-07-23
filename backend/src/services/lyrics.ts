@@ -318,6 +318,21 @@ export function getLyricsCacheStats(): { total: number; hits: number; misses: nu
   };
 }
 
+export function listLyricsCacheEntries(): Array<{ key: string; query: { title: string; artist: string; duration: number }; cachedAt: number; hasLyrics: boolean; synced: boolean; lineCount: number; provider: string; lyricsTitle: string; lyricsArtist: string }> {
+  const store = getStore();
+  return Object.entries(store.entries).map(([key, entry]) => ({
+    key,
+    query: entry.query,
+    cachedAt: entry.cachedAt,
+    hasLyrics: Boolean(entry.lyrics),
+    synced: entry.lyrics?.synced ?? false,
+    lineCount: entry.lyrics?.lines?.length ?? 0,
+    provider: entry.lyrics?.provider ?? '',
+    lyricsTitle: entry.lyrics?.title ?? '',
+    lyricsArtist: entry.lyrics?.artist ?? '',
+  }));
+}
+
 export function clearLyricsCacheStore(): LyricsCacheStore {
   _store = emptyStore();
   saveStore(_store);
