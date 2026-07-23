@@ -120,7 +120,7 @@ export function TrackActionButtons({
           />
         )}
 
-        {showClearCache && !showQueue && (
+        {showClearCache && (
           <button
             type="button"
             className={clsx('btn-ghost', buttonClassName)}
@@ -176,7 +176,6 @@ export function TrackActionButtons({
             )}
           </div>
         )}
-
         {trailingActions}
       </div>
     </>

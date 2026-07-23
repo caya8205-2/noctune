@@ -1,6 +1,6 @@
 [package]
 name = "noctune"
-version = "2.2.3"
+version = "2.3.0"
 description = "noctune — local-first music player"
 authors = ["caya8205-2"]
 edition = "2021"

@@ -227,7 +227,7 @@ export async function getYoutubeTrack(
 
 export async function getYoutubePlaylistTracks(
   url: string,
-  limit = 100
+  limit = Number.MAX_SAFE_INTEGER
 ): Promise<PlaylistImportResult> {
   const youtube = await getInnertube();
   let playlist = await youtube.getPlaylist(extractPlaylistId(url));

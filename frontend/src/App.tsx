@@ -221,7 +221,7 @@ function AppInner() {
             {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
             {activeView === 'debug' && <DebugApp />}
           </main>
-          {showTrackDetails && activeView !== 'debug' && <TrackDetailsSidebar />}
+          {showTrackDetails && <TrackDetailsSidebar />}
         </div>
       </div>
 

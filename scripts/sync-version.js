@@ -22,6 +22,11 @@ let cargo = readFileSync('src-tauri/Cargo.toml', 'utf-8');
 cargo = cargo.replace(/^version = ".+"/m, `version = "${version}"`);
 writeFileSync('src-tauri/Cargo.toml', cargo);
 
+// Sync Cargo.lock
+let cargoLock = readFileSync('src-tauri/Cargo.lock', 'utf-8');
+cargoLock = cargoLock.replace(/(name = "noctune"\r?\nversion = ").+?"/, `$1${version}"`);
+writeFileSync('src-tauri/Cargo.lock', cargoLock);
+
 // Sync tauri.conf.json
 const tauri = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf-8'));
 tauri.version = version;

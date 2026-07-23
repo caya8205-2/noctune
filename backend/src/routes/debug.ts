@@ -11,9 +11,10 @@ import {
   clearMatchCacheForSpotifyId,
   getMatchCacheStats,
   matchSpotifyTrackToYoutube,
+  saveMatchCacheEntry,
 } from '../services/youtubeMatcher.js';
 import { clearAudioCacheForId, getExistingAudioCachePath } from '../services/audioFileCache.js';
-import { clearPlaybackBlacklistForId, isPlaybackBlacklisted } from '../services/playbackBlacklist.js';
+import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed } from '../services/playbackBlacklist.js';
 import { clearPrefetchForId, getPrefetched, isPrefetching } from '../services/prefetch.js';
 import { resolveTrack } from '../services/audioResolver.js';
 import {
@@ -23,6 +24,12 @@ import {
   getCachedBySpotifyId,
   upsertTrack,
 } from '../services/cache.js';
+import {
+  getLyricsSnapshot,
+  searchLrclibCandidates,
+  saveManualLyrics,
+  deleteCachedLyricsEntry,
+} from '../services/lyrics.js';
 import { getEnvConfig } from '../services/env.js';
 import { getAudioResolverStatus } from '../services/audioResolver.js';
 import { getPrefetchStatus } from '../services/prefetch.js';
@@ -229,6 +236,104 @@ export async function debugRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.send({ ok: false, error: (err as Error).message });
     }
+  });
+
+  // ── Blacklist match endpoint ────────────────────────────────────────────────
+  app.post('/debug/blacklist', async (req, reply) => {
+    const { youtubeId, spotifyId } = req.body as { youtubeId: string; spotifyId?: string };
+    if (!youtubeId) return reply.status(400).send({ ok: false, error: 'youtubeId is required' });
+
+    markPlaybackFailed(youtubeId);
+    let clearedMatch = 0;
+    if (spotifyId) {
+      clearedMatch = clearMatchCacheForSpotifyId(spotifyId).cleared;
+    }
+
+    return reply.send({ ok: true, youtubeId, blacklisted: true, clearedMatch });
+  });
+
+  // ── Save manual YouTube match to cache ──────────────────────────────────────
+  app.post('/debug/matcher/save', async (req, reply) => {
+    const { spotifyId, youtubeId, youtubeTitle, youtubeArtist, spotifyTitle, spotifyArtist, score } = req.body as {
+      spotifyId?: string;
+      youtubeId: string;
+      youtubeTitle?: string;
+      youtubeArtist?: string;
+      spotifyTitle?: string;
+      spotifyArtist?: string;
+      score?: number;
+    };
+    if (!youtubeId) {
+      return reply.status(400).send({ ok: false, error: 'youtubeId is required' });
+    }
+
+    const key = spotifyId?.trim() || `${spotifyTitle ?? ''}-${spotifyArtist ?? ''}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || youtubeId;
+
+    const matchEntry = saveMatchCacheEntry({
+      spotifyId: key,
+      youtubeId,
+      youtubeTitle,
+      youtubeArtist,
+      spotifyTitle,
+      spotifyArtist,
+      score: score ?? 150,
+    });
+
+    const learnedTrack: Track = {
+      id: spotifyId ? `spotify:${spotifyId}` : key,
+      title: spotifyTitle || youtubeTitle || key,
+      artist: spotifyArtist || youtubeArtist || '',
+      spotifyId: spotifyId || undefined,
+      youtubeId,
+      youtubeTitle,
+      youtubeArtist,
+      duration: 0,
+      thumbnail: `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`,
+      query: `${spotifyTitle ?? ''} ${spotifyArtist ?? ''}`.trim(),
+    };
+
+    return reply.send({ ok: true, entry: matchEntry, track: learnedTrack });
+  });
+
+  // ── Lyrics Debug Endpoints ──────────────────────────────────────────────────
+  app.get<{ Querystring: { title: string; artist?: string; duration?: string } }>(
+    '/debug/lyrics/snapshot',
+    async (req, reply) => {
+      const { title, artist = '', duration = '0' } = req.query;
+      if (!title) return reply.status(400).send({ error: 'Title is required' });
+      return reply.send(getLyricsSnapshot(title, artist, Number(duration) || 0));
+    }
+  );
+
+  app.get<{ Querystring: { title: string; artist?: string } }>(
+    '/debug/lyrics/search',
+    async (req, reply) => {
+      const { title, artist = '' } = req.query;
+      if (!title) return reply.status(400).send({ error: 'Title is required' });
+      const candidates = await searchLrclibCandidates(title, artist);
+      return reply.send({ candidates, count: candidates.length });
+    }
+  );
+
+  app.post('/debug/lyrics/save', async (req, reply) => {
+    const { title, artist, duration, candidate } = req.body as {
+      title: string;
+      artist: string;
+      duration: number;
+      candidate: any;
+    };
+    if (!title || !candidate) {
+      return reply.status(400).send({ ok: false, error: 'Title and candidate are required' });
+    }
+    const saved = await saveManualLyrics(title, artist ?? '', duration ?? 0, candidate);
+    return reply.send({ ok: true, lyrics: saved });
+  });
+
+  app.delete('/debug/lyrics/cache', async (req, reply) => {
+    const { title, artist = '', duration = '0' } = req.query as { title: string; artist?: string; duration?: string };
+    if (!title) return reply.status(400).send({ error: 'Title is required' });
+    const cleared = deleteCachedLyricsEntry(title, artist, Number(duration) || 0);
+    return reply.send({ ok: true, cleared });
   });
 
   // ── Full status snapshot ────────────────────────────────────────────────────

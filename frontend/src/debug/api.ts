@@ -174,4 +174,49 @@ export const debugApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(track),
     }),
+  blacklistMatch: (body: { youtubeId: string; spotifyId?: string }) =>
+    req<{ ok: boolean; youtubeId: string; blacklisted: boolean; clearedMatch: number }>('/debug/blacklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  saveMatcherMatch: (body: {
+    spotifyId?: string;
+    youtubeId: string;
+    youtubeTitle?: string;
+    youtubeArtist?: string;
+    spotifyTitle?: string;
+    spotifyArtist?: string;
+    score?: number;
+  }) =>
+    req<{ ok: boolean; entry: MatchCacheEntry; track: unknown }>('/debug/matcher/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  lyricsSnapshot: (params: { title: string; artist?: string; duration?: number }) => {
+    const q = new URLSearchParams({ title: params.title });
+    if (params.artist) q.set('artist', params.artist);
+    if (params.duration) q.set('duration', String(params.duration));
+    return req<{ key: string; query: { title: string; artist: string; duration: number }; cached: boolean; cachedAt: number | null; lyrics: any }>(
+      `/debug/lyrics/snapshot?${q.toString()}`
+    );
+  },
+  searchLyrics: (params: { title: string; artist?: string }) => {
+    const q = new URLSearchParams({ title: params.title });
+    if (params.artist) q.set('artist', params.artist);
+    return req<{ candidates: any[]; count: number }>(`/debug/lyrics/search?${q.toString()}`);
+  },
+  saveLyrics: (body: { title: string; artist: string; duration: number; candidate: any }) =>
+    req<{ ok: boolean; lyrics: any }>('/debug/lyrics/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  clearLyricsCache: (params: { title: string; artist?: string; duration?: number }) => {
+    const q = new URLSearchParams({ title: params.title });
+    if (params.artist) q.set('artist', params.artist);
+    if (params.duration) q.set('duration', String(params.duration));
+    return req<{ ok: boolean; cleared: boolean }>(`/debug/lyrics/cache?${q.toString()}`, { method: 'DELETE' });
+  },
 };

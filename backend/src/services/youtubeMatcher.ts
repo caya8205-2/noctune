@@ -243,6 +243,31 @@ export function clearMatchCacheForSpotifyId(spotifyId: string): { cleared: numbe
   return { cleared: 1, youtubeId: existing.youtubeId };
 }
 
+export function saveMatchCacheEntry(entry: {
+  spotifyId: string;
+  youtubeId: string;
+  youtubeTitle?: string;
+  youtubeArtist?: string;
+  spotifyTitle?: string;
+  spotifyArtist?: string;
+  score?: number;
+}): MatchCacheEntry {
+  const current = getStore();
+  const matchEntry: MatchCacheEntry = {
+    spotifyId: entry.spotifyId,
+    youtubeId: entry.youtubeId,
+    youtubeTitle: entry.youtubeTitle ?? '',
+    youtubeArtist: entry.youtubeArtist ?? '',
+    spotifyTitle: entry.spotifyTitle ?? '',
+    spotifyArtist: entry.spotifyArtist ?? '',
+    score: entry.score ?? 150,
+    matchedAt: Date.now(),
+  };
+  current.matches[entry.spotifyId] = matchEntry;
+  saveStore(current);
+  return matchEntry;
+}
+
 function normalize(value: string): string {
   return value
     .toLowerCase()

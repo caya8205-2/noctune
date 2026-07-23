@@ -323,3 +323,97 @@ export function clearLyricsCacheStore(): LyricsCacheStore {
   saveStore(_store);
   return _store;
 }
+
+export function deleteCachedLyricsEntry(title: string, artist: string, duration: number): boolean {
+  const key = cacheKey(title, artist, duration);
+  const store = getStore();
+  if (store.entries[key]) {
+    delete store.entries[key];
+    saveStore(store);
+    return true;
+  }
+  return false;
+}
+
+export function hasRomajiContent(cand: LrclibLyrics): boolean {
+  const text = `${cand.syncedLyrics ?? ''}\n${cand.plainLyrics ?? ''}`;
+  if (!text.trim()) return false;
+
+  const lowerText = text.toLowerCase();
+  const lowerMeta = `${cand.trackName ?? ''} ${cand.name ?? ''} ${cand.artistName ?? ''} ${cand.albumName ?? ''}`.toLowerCase();
+
+  if (lowerMeta.includes('romaji') || lowerMeta.includes('romanized') || lowerText.includes('romaji') || lowerText.includes('romanized')) {
+    return true;
+  }
+
+  const hasJapanese = JAPANESE_SCRIPT_RE.test(text) || JAPANESE_SCRIPT_RE.test(lowerMeta);
+  const latinMatches = text.match(/[a-zA-Z]/g);
+  const latinCount = latinMatches ? latinMatches.length : 0;
+
+  if (hasJapanese && latinCount > 30) {
+    return true;
+  }
+
+  if (hasJapanese && latinCount > text.length * 0.25) {
+    return true;
+  }
+
+  return false;
+}
+
+export async function searchLrclibCandidates(title: string, artist: string): Promise<Array<LrclibLyrics & { hasRomaji: boolean }>> {
+  const seen = new Set<number>();
+  const candidates: Array<LrclibLyrics & { hasRomaji: boolean }> = [];
+  const artistCandidates = [...new Set([artist, ''])];
+  for (const candidateTitle of titleCandidates(title)) {
+    for (const candidateArtist of artistCandidates) {
+      const results = await searchLrclib(candidateTitle, candidateArtist).catch(() => []);
+      for (const result of results) {
+        if (seen.has(result.id)) continue;
+        seen.add(result.id);
+        candidates.push({
+          ...result,
+          hasRomaji: hasRomajiContent(result),
+        });
+      }
+    }
+  }
+  return candidates;
+}
+
+export async function saveManualLyrics(
+  title: string,
+  artist: string,
+  duration: number,
+  candidate: LrclibLyrics
+): Promise<LyricsResult> {
+  const key = cacheKey(title, artist, duration);
+  const syncedLines = candidate.syncedLyrics ? parseSyncedLyrics(candidate.syncedLyrics) : [];
+  const plainLines = candidate.plainLyrics ? parsePlainLyrics(candidate.plainLyrics) : [];
+  const result = await addRomanizedLines({
+    provider: 'lrclib',
+    id: candidate.id,
+    title: candidate.trackName || candidate.name || title,
+    artist: candidate.artistName || artist,
+    album: candidate.albumName ?? '',
+    duration: candidate.duration,
+    instrumental: candidate.instrumental,
+    synced: syncedLines.length > 0,
+    lines: syncedLines.length > 0 ? syncedLines : plainLines,
+  });
+
+  setCachedLyrics(key, title, artist, duration, result);
+  return result;
+}
+
+export function getLyricsSnapshot(title: string, artist: string, duration: number) {
+  const key = cacheKey(title, artist, duration);
+  const entry = getStore().entries[key];
+  return {
+    key,
+    query: { title, artist, duration },
+    cached: Boolean(entry),
+    cachedAt: entry?.cachedAt ?? null,
+    lyrics: entry?.lyrics ?? null,
+  };
+}
