@@ -19,7 +19,7 @@ import {
 import { clsx } from 'clsx';
 import { usePlayerStore } from '../../store/player';
 import { seekAudio } from '../../hooks/useAudio';
-import { Visualizer } from './Visualizer';
+import { Visualizer, type VisualizerMode } from './Visualizer';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
 import { api, type LyricsResult, type Track } from '../../utils/api';
@@ -206,6 +206,20 @@ export function PlayerView() {
     setView,
   } = usePlayerStore();
   const [showLegend, setShowLegend] = useState(false);
+  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
+    return (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
+  });
+  const [bassEnergy, setBassEnergy] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      const mode = (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
+      setVisualizerMode(mode);
+    };
+    window.addEventListener('noctune:visualizer-mode-updated', handleUpdate);
+    return () => window.removeEventListener('noctune:visualizer-mode-updated', handleUpdate);
+  }, []);
+
   const SourceIcon = currentTrack?.source ? sourceMeta[currentTrack.source]?.Icon : null;
   const needsSpotifyNavigation = Boolean(currentTrack?.spotifyId && (!currentTrack.albumId || !currentTrack.artistId));
   const { data: spotifyMetadata } = useQuery({
@@ -235,18 +249,32 @@ export function PlayerView() {
         {currentTrack ? (
           <>
             <div className="relative mt-2 sm:mt-4 w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center flex-shrink-0">
+              {/* Ambient Glow Aura */}
               <div
-                className="absolute inset-0 flex items-center justify-center animate-spin-slow"
-                style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
+                className="absolute inset-4 rounded-full blur-2xl transition-opacity duration-300 pointer-events-none"
+                style={{
+                  background: 'radial-gradient(circle, rgba(190,255,32,0.25) 0%, rgba(217,70,239,0.18) 55%, transparent 75%)',
+                  opacity: isPlaying ? 0.3 + bassEnergy * 0.5 : 0.08,
+                }}
+              />
+
+              {/* Spinning CD Artwork with Bass Scale */}
+              <div
+                className="absolute inset-[10%] rounded-full flex items-center justify-center transition-transform duration-75 ease-out"
+                style={{ transform: `scale(${1 + (isPlaying ? bassEnergy * 0.032 : 0)})` }}
               >
                 <img
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
-                  className="w-56 h-56 sm:w-64 sm:h-64 rounded-full object-cover shadow-2xl shadow-black/40 border border-base-600/60"
+                  className="w-full h-full rounded-full object-cover shadow-2xl shadow-black/60 border border-base-600/60 animate-spin-slow"
+                  style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
                 />
-                <Visualizer />
               </div>
-              <div className="absolute inset-4 rounded-full ring-1 ring-white/10 pointer-events-none" />
+
+              {/* Stationary Visualizer Ring */}
+              <Visualizer mode={visualizerMode} onBassEnergy={setBassEnergy} />
+
+              <div className="absolute inset-4 rounded-full ring-1 ring-white/10 pointer-events-none z-20" />
               <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner z-20" />
               {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-base-950/70 backdrop-blur-sm rounded-full z-30">
@@ -259,29 +287,33 @@ export function PlayerView() {
             </div>
 
             {albumViewId ? (
-                <button
-                  type="button"
-                  className="mt-6 text-xl font-bold text-white transition-colors hover:text-accent sm:text-2xl"
-                  onClick={() => setView('album', albumViewId)}
-                  title={`Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? ''}`}
-                >
-                  {currentTrack.title}
-                </button>
-              ) : (
-                <h1 className="mt-6 text-xl font-bold text-white sm:text-2xl">{currentTrack.title}</h1>
-              )}
-              {artistViewId ? (
-                <button
-                  type="button"
-                  className="mt-2 text-sm text-soft transition-colors hover:text-accent sm:text-base"
-                  onClick={() => setView('artist', artistViewId)}
-                  title={`Go to artist: ${currentTrack.artist}`}
-                >
-                  {currentTrack.artist}
-                </button>
-              ) : (
-                <p className="text-lg text-soft mt-2 truncate">{currentTrack.artist}</p>
-              )}
+              <button
+                type="button"
+                className="mt-6 max-w-2xl text-center text-xl font-bold text-white transition-colors hover:text-accent sm:text-2xl px-4 leading-snug"
+                onClick={() => setView('album', albumViewId)}
+                title={`Go to album: ${currentTrack.album ?? spotifyMetadata?.album.name ?? ''}`}
+              >
+                {currentTrack.title}
+              </button>
+            ) : (
+              <h1 className="mt-6 max-w-2xl text-center text-xl font-bold text-white sm:text-2xl px-4 leading-snug">
+                {currentTrack.title}
+              </h1>
+            )}
+            {artistViewId ? (
+              <button
+                type="button"
+                className="mt-2 max-w-xl text-center text-sm text-soft transition-colors hover:text-accent sm:text-base px-4"
+                onClick={() => setView('artist', artistViewId)}
+                title={`Go to artist: ${currentTrack.artist}`}
+              >
+                {currentTrack.artist}
+              </button>
+            ) : (
+              <p className="mt-2 max-w-xl text-center text-sm sm:text-base text-soft px-4 truncate">
+                {currentTrack.artist}
+              </p>
+            )}
               <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
                 {currentTrack.source && SourceIcon && (
                   <button

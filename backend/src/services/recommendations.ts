@@ -5,6 +5,7 @@ import { searchTracks } from './audioResolver.js';
 import { getPlaybackBlacklist, isPlaybackBlacklisted } from './playbackBlacklist.js';
 import { getSimilarTracks, isLastFmConfigured } from './lastfm.js';
 import { getRecentTracks, getTopTracks } from './cache.js';
+import { predictMlRecommendations, generateMlNightlyMixes } from './mlRecommendation.js';
 
 interface RecommendationOptions {
   excludeIds?: string[];
@@ -96,7 +97,30 @@ function primaryArtist(artist: string): string {
     .find(Boolean) ?? artist;
 }
 
+function cleanTitle(title: string): string {
+  return (title || '')
+    .toLowerCase()
+    .replace(/\(feat\..*?\)/gi, '')
+    .replace(/\[feat\..*?\]/gi, '')
+    .replace(/- topic$/gi, '')
+    .replace(/official video|music video|lyric video/gi, '')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .trim();
+}
+
+function cleanArtist(artist: string): string {
+  return (artist || '')
+    .toLowerCase()
+    .replace(/- topic$/gi, '')
+    .split(/[,&]/)[0]
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .trim();
+}
+
 function uniqueKey(track: Track): string {
+  const cTitle = cleanTitle(track.title || '');
+  const cArtist = cleanArtist(track.artist || '');
+  if (cTitle && cArtist) return `${cArtist}:${cTitle}`;
   return track.spotifyId ?? track.youtubeId ?? track.id;
 }
 
@@ -449,26 +473,44 @@ export async function getRecommendations(
   options: RecommendationOptions = {}
 ): Promise<Track[]> {
   const limit = options.limit ?? 12;
-  const excluded = new Set(
-    [seed.id, seed.youtubeId, seed.spotifyId, ...(options.excludeIds ?? [])].filter(Boolean)
+  const excluded = new Set<string>(
+    [seed.id, seed.youtubeId, seed.spotifyId, ...(options.excludeIds ?? [])].filter(Boolean) as string[]
   );
   for (const id of getPlaybackBlacklist()) excluded.add(id);
 
-  // Last.fm candidates first, fall back to search-based if not configured or returns empty
-  let candidates: RecommendationCandidate[] = [];
-  let hasLastFmCandidates = false;
-  if (isLastFmConfigured()) {
-    try {
-      candidates = await getCandidatesFromLastFm(seed, Math.max(limit, 10));
-      hasLastFmCandidates = candidates.length > 0;
-    } catch (err) {
-      console.warn(`[recommend] Last.fm failed, falling back to search: ${(err as Error).message}`);
+  const selectedEngine = getEnvConfig().recommendationEngine ?? 'hybrid-ml';
+
+  // ── Tier 1: Local ML Recommendation Engine ──────────────────────────────
+  let mlCandidates: RecommendationCandidate[] = [];
+  if (selectedEngine === 'hybrid-ml') {
+    const mlTracks = predictMlRecommendations(seed, { excludeIds: excluded, limit });
+    mlCandidates = mlTracks.map((track) => ({
+      track,
+      source: 'local' as const,
+      match: 0.95,
+    }));
+  }
+
+  // ── Tier 2: Last.fm API ──────────────────────────────────────────────────
+  let lastFmCandidates: RecommendationCandidate[] = [];
+  if (selectedEngine === 'hybrid-ml' || selectedEngine === 'lastfm') {
+    if (isLastFmConfigured()) {
+      try {
+        lastFmCandidates = await getCandidatesFromLastFm(seed, Math.max(limit, 10));
+      } catch (err) {
+        console.warn(`[recommend] Last.fm failed, falling back to search: ${(err as Error).message}`);
+      }
     }
   }
 
-  // Always supplement with search-based candidates (covers edge cases + fills gaps)
+  // ── Tier 3: Legacy Search & Rule-based autoqueue ────────────────────────
   const searchCandidates = await getCandidatesFromSearch(seed, Math.max(limit, 10));
-  candidates = [...candidates, ...searchCandidates];
+
+  const candidates: RecommendationCandidate[] = [
+    ...mlCandidates,
+    ...lastFmCandidates,
+    ...searchCandidates,
+  ];
 
   const seen = new Set<string>();
   const ranked: Array<{ item: RecommendationCandidate; score: number }> = [];
@@ -483,7 +525,7 @@ export async function getRecommendations(
     ranked.push({ item, score: scoreRecommendation(seed, item, order) });
   });
 
-  const recommendations = selectRecommendations(ranked, seed, limit, hasLastFmCandidates);
+  const recommendations = selectRecommendations(ranked, seed, limit, lastFmCandidates.length > 0);
 
   console.log(
     `[recommend] generated ${JSON.stringify({

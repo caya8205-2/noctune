@@ -39,7 +39,7 @@ for (const envPath of [
   path.resolve(process.cwd(), '..', '.env'),
 ]) {
   if (existsSync(envPath)) {
-    loadEnv({ path: envPath, override: false });
+    loadEnv({ path: envPath, override: true });
   }
 }
 

@@ -38,6 +38,7 @@ import { getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { getDiscordRpcStatus } from '../services/discordRpc.js';
 import { getRequestLog, clearRequestLog } from '../services/requestLog.js';
 import { isDemoMode } from '../services/demoMode.js';
+import { getMlModelStats, importProdDataset, predictMlRecommendationsWithScores } from '../services/mlRecommendation.js';
 import type { Track } from '../types/index.js';
 
 const MatcherQuery = z.object({
@@ -58,6 +59,7 @@ function buildStatus() {
     matchCache: getMatchCacheStats(),
     discordRpc: getDiscordRpcStatus(),
     demoMode: isDemoMode(),
+    mlModel: getMlModelStats(),
   };
 }
 
@@ -382,6 +384,22 @@ export async function debugRoutes(app: FastifyInstance) {
   app.delete('/debug/request-log', async () => {
     clearRequestLog();
     return { ok: true };
+  });
+
+  // ── Machine Learning Status & Control ──────────────────────────────────────
+  app.get('/debug/ml/status', async () => {
+    return { ok: true, stats: getMlModelStats() };
+  });
+
+  app.post('/debug/ml/import-prod', async () => {
+    const result = importProdDataset();
+    return result;
+  });
+
+  app.post<{ Body: { seed: Track; limit?: number } }>('/debug/ml/test-recommendation', async (req) => {
+    const { seed, limit = 10 } = req.body || {};
+    const predictions = predictMlRecommendationsWithScores(seed, { limit });
+    return { ok: true, seed, predictions, total: predictions.length };
   });
 
   // ── Full status snapshot ────────────────────────────────────────────────────

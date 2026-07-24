@@ -32,7 +32,7 @@
 
 </div>
 
-<p align="center">Noctune uses Spotify for metadata and discovery, Last.fm for similar-track signals, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.</p>
+<p align="center">Noctune uses Spotify for metadata and discovery, Last.fm & a local collaborative filtering ML model for personalized recommendations, then resolves playable audio through a local YouTube resolver. It keeps playback responsive with prefetching, learned mappings, audio URL caching, optional local audio file caching, queue-aware playback behavior, personalized Nightly Mixes, and desktop update checks through GitHub Releases.</p>
 
 ---
 
@@ -53,7 +53,7 @@
 
 - **Direct YouTube search** for users who want raw YouTube-style results.
 
-- **Nightly Mixes** generated from local listening history, top tracks, and optional Last.fm similar-track signals, cached for several hours so Home stays fast and API-friendly.
+- **Nightly Mixes** generated from local listening history, top tracks, Last.fm similar-track signals, and an on-the-go local ML recommendation model, cached for several hours so Home stays fast and API-friendly.
 
 - **Smarter autoqueue** that can top itself up near the end of the queue and uses recommendation signals instead of stopping after a short fixed list.
 
@@ -69,7 +69,7 @@
 
 - **Synced lyrics** through LRCLIB with auto-loading on track start, local lyrics cache, and Romaji mode for Japanese lyrics.
 
-- **Adaptive circular visualizer** around the album disk, using colors derived from the current artwork.
+- **Adaptive circular visualizer** around the album disk, with 6 distinct preset modes and live preview settings.
 
 - **Local playlists** with liked songs, drag reorder, rename, cover upload/crop, import from Spotify or YouTube playlist URLs, and playlist cache tools.
 
@@ -99,7 +99,7 @@ Search
 
 For Spotify-backed tracks, Noctune keeps the Spotify metadata visible in the UI while mapping the track to a playable YouTube stream behind the scenes.
 
-For personalized recommendations, Noctune blends local playback history with Last.fm similar-track results when `LAST_FM_KEY` is configured. The generated Nightly Mix cards are cached on the client for several hours, so opening Home does not repeatedly call the recommendation API.
+For personalized recommendations, Noctune offers selectable recommendation engines under Settings — blending local playback history with Last.fm similar-track results or an on-the-go local collaborative filtering ML model that continuously learns from your listening habits in the background. The generated Nightly Mix cards are cached on the client for several hours, so opening Home does not repeatedly call the recommendation API.
 
 The desktop frontend talks to the local backend through a small port resolver. It prefers the normal backend port, but can follow a compatible backend sidecar when that port is already occupied.
 
@@ -129,7 +129,7 @@ Noctune ranks YouTube candidates with lightweight heuristics:
 | Queue workers | p-queue |
 | Local database | SQLite via better-sqlite3 |
 | Lyrics | LRCLIB, Kuroshiro, Kuromoji |
-| Recommendations | Local playback history, Last.fm API |
+| Recommendations | Local playback history, Last.fm API, Hybrid Local ML Model |
 | External metadata | Spotify Web API, GitHub Releases API |
 | Runtime cache | SQLite, JSON files, and audio files in local data storage |
 
@@ -142,8 +142,6 @@ npm i
 ```
 
 Spotify credentials are optional. Since v2.0.0, Noctune already includes a built-in Spotify API credential for metadata search, Spotify playlist import, album and artist discovery, and new releases. You can still add your own Client ID and Client Secret from the app Settings screen to override the built-in credential. Due to Spotify Web API restrictions, custom credentials must belong to a Spotify Premium account.
-
-Last.fm credentials are optional but recommended for better Nightly Mixes and autoqueue recommendations. Set `LAST_FM_KEY` in `.env` to enable Last.fm similar-track lookup. `LAST_FM_SECRET` is included in `.env.example` for completeness, but current recommendation lookup only needs the API key.
 
 `yt-dlp` is optional for the fallback resolver. The main resolver path uses `youtubei.js`, so Noctune does not require users to install `yt-dlp` for the primary playback path.
 
@@ -201,10 +199,21 @@ Noctune stores runtime data locally and ignores it from git:
 - `spotify-youtube-map.json` - Spotify-to-YouTube match cache
 - `noctune.db` - local playlists and liked songs
 - `audio-cache/` - optional cached audio files
+- `seed-model.json` - local ML recommendation model weights trained on local listening history
 - lyrics cache - local LRCLIB lookup results
 - Nightly Mix cache - frontend cache for generated personalized mixes
 
 Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
+
+## Debug Dashboard
+
+Noctune includes a dedicated **Debug Dashboard** accessible from Settings. It provides comprehensive power-user diagnostics:
+
+- **Resolver Matcher Inspector**: View real-time YouTube candidate search results, confidence scores, and rule match evidence for any Spotify track.
+- **Learned Match Cache**: Browse and search all cached Spotify-to-YouTube video ID mappings, with 1-click single-entry deletion.
+- **Lyrics Cache Inspector**: View all cached plain and synced lyrics entries, line counts, and provider details with instant cache clearing.
+- **Playback Blacklist & Audio Cache Manager**: View and manage temporary failed video IDs and on-disk audio cache files with size statistics.
+- **HTTP Request Log**: Track real-time backend API requests, response status codes, and execution latency.
 
 ## FAQ (or frequently encountered problems)
 

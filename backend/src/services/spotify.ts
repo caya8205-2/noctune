@@ -188,7 +188,10 @@ function pickImage(images: Array<{ url: string; width: number; height: number }>
 
 async function getAccessToken(): Promise<string> {
     const config = getEnvConfig();
-    if (!config.spotifyClientId || !config.spotifyClientSecret) {
+    const clientId = config.spotifyClientId.trim();
+    const clientSecret = config.spotifyClientSecret.trim();
+
+    if (!clientId || !clientSecret) {
         throw new Error('Spotify credentials not configured');
     }
 
@@ -197,9 +200,7 @@ async function getAccessToken(): Promise<string> {
         return _token;
     }
 
-    const creds = Buffer.from(
-        `${config.spotifyClientId}:${config.spotifyClientSecret}`
-    ).toString('base64');
+    const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
     const res = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -221,18 +222,33 @@ async function getAccessToken(): Promise<string> {
     return _token;
 }
 
-/** Exported fetch helper for other modules that need Spotify API access */
-export async function spotifyFetch<T>(path: string): Promise<T> {
+/** Robust Spotify API fetch helper with automatic 401 token refresh & 1-step retry */
+export async function spotifyApiFetch<T>(urlInput: string | URL, retryCount = 0): Promise<T> {
     const token = await getAccessToken();
-    const res = await fetch(`https://api.spotify.com/v1${path}`, {
+    const url = typeof urlInput === 'string'
+        ? (urlInput.startsWith('http') ? urlInput : `https://api.spotify.com/v1${urlInput}`)
+        : urlInput.toString();
+
+    const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.status === 401) {
+
+    if (res.status === 401 && retryCount === 0) {
         invalidateToken();
-        throw new Error('Spotify token expired');
+        return spotifyApiFetch<T>(urlInput, 1);
     }
-    if (!res.ok) throw new Error(`Spotify ${path} failed: ${res.status}`);
+
+    if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Spotify API failed (${res.status}): ${errText || res.statusText}`);
+    }
+
     return res.json() as Promise<T>;
+}
+
+/** Exported fetch helper for other modules that need Spotify API access */
+export async function spotifyFetch<T>(path: string): Promise<T> {
+    return spotifyApiFetch<T>(path);
 }
 
 /** Invalidate cached token (call after 401) */
@@ -289,34 +305,20 @@ function spotifyAlbumTrackToTrack(
 
 /** Search Spotify catalog. Returns Track[] with spotify: prefixed ids. */
 export async function searchSpotify(query: string, limit = 10): Promise<Track[]> {
-    const token = await getAccessToken();
-
     const url = new URL('https://api.spotify.com/v1/search');
     url.searchParams.set('q', query);
     url.searchParams.set('type', 'track');
     url.searchParams.set('limit', String(limit));
 
-    const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.status === 401) {
-        invalidateToken();
-        throw new Error('Spotify token expired — retry');
-    }
-
-    if (!res.ok) {
-        throw new Error(`Spotify search failed: ${res.status}`);
-    }
-
-    const data = (await res.json()) as SpotifySearchResponse;
+    const data = await spotifyApiFetch<SpotifySearchResponse>(url);
     return data.tracks.items.map((t) => spotifyTrackToTrack(t, query));
 }
 
-/** Check if Spotify credentials are configured and valid */
+/** Check if Spotify credentials are configured and valid by calling Spotify API */
 export async function testSpotifyCredentials(): Promise<{ ok: boolean; error?: string }> {
     try {
-        await getAccessToken();
+        invalidateToken();
+        await spotifyApiFetch<SpotifySearchResponse>('/search?q=test&type=track&limit=1');
         return { ok: true };
     } catch (err) {
         return { ok: false, error: (err as Error).message };
@@ -324,54 +326,23 @@ export async function testSpotifyCredentials(): Promise<{ ok: boolean; error?: s
 }
 
 export async function getSpotifyTrackById(id: string, query = id): Promise<Track> {
-    const token = await getAccessToken();
-    const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.status === 401) {
-        invalidateToken();
-        throw new Error('Spotify token expired — retry');
-    }
-
-    if (!res.ok) {
-        throw new Error(`Spotify track failed: ${res.status}`);
-    }
-
-    return spotifyTrackToTrack((await res.json()) as SpotifyTrack, query);
-}
-
-async function spotifyGet<T>(path: string, token: string): Promise<T> {
-    const res = await fetch(`https://api.spotify.com/v1${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.status === 401) {
-        invalidateToken();
-        throw new Error('Spotify token expired - retry');
-    }
-
-    if (!res.ok) {
-        throw new Error(`Spotify request failed: ${res.status}`);
-    }
-
-    return (await res.json()) as T;
+    const data = await spotifyApiFetch<SpotifyTrack>(`/tracks/${id}`);
+    return spotifyTrackToTrack(data, query);
 }
 
 export async function getSpotifyTrackMetadata(id: string): Promise<SpotifyTrackMetadata> {
     const cached = getMetadataStore().tracks[id];
     if (cached && Date.now() - cached.cachedAt < METADATA_TTL_MS) return cached;
 
-    const token = await getAccessToken();
-    const track = await spotifyGet<SpotifyTrack>(`/tracks/${id}`, token);
+    const track = await spotifyApiFetch<SpotifyTrack>(`/tracks/${id}`);
     const artistIds = track.artists.map((artist) => artist.id).filter(Boolean);
 
     const [artists, album] = await Promise.all([
         artistIds.length
-            ? Promise.all(artistIds.map((artistId) => spotifyGet<SpotifyArtistDetail>(`/artists/${artistId}`, token)))
+            ? Promise.all(artistIds.map((artistId) => spotifyApiFetch<SpotifyArtistDetail>(`/artists/${artistId}`)))
             : Promise.resolve([]),
         track.album.id
-            ? spotifyGet<SpotifyAlbumDetail>(`/albums/${track.album.id}`, token)
+            ? spotifyApiFetch<SpotifyAlbumDetail>(`/albums/${track.album.id}`)
             : Promise.resolve(null),
     ]);
 
@@ -420,40 +391,23 @@ export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promis
     name: string;
     tracks: Track[];
 }> {
-    const token = await getAccessToken();
-
-    // First page — also gets playlist name
     const firstUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
     firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(id,name),album(id,name,images),external_urls)),tracks.next');
     firstUrl.searchParams.set('limit', '100');
 
-    const firstRes = await fetch(firstUrl.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (firstRes.status === 401) {
-        invalidateToken();
-        throw new Error('Spotify token expired — retry');
-    }
-    if (!firstRes.ok) {
-        throw new Error(`Spotify playlist failed: ${firstRes.status}`);
-    }
-
-    const firstData = (await firstRes.json()) as SpotifyPlaylistResponse;
+    const firstData = await spotifyApiFetch<SpotifyPlaylistResponse>(firstUrl);
     const playlistName = firstData.name || 'Spotify Playlist';
     const allItems = [...firstData.tracks.items];
     let nextUrl: string | null = firstData.tracks.next;
 
-    // Paginate until no more pages or limit reached
     while (nextUrl && allItems.length < limit) {
-        const pageRes = await fetch(nextUrl, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!pageRes.ok) break;
-
-        const pageData = (await pageRes.json()) as SpotifyPlaylistResponse['tracks'];
-        allItems.push(...pageData.items);
-        nextUrl = pageData.next;
+        try {
+            const pageData = await spotifyApiFetch<SpotifyPlaylistResponse['tracks']>(nextUrl);
+            allItems.push(...pageData.items);
+            nextUrl = pageData.next;
+        } catch {
+            break;
+        }
     }
 
     return {
@@ -467,25 +421,10 @@ export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promis
 }
 
 export async function getSpotifyNewReleaseTracks(limit = 8): Promise<Track[]> {
-    const token = await getAccessToken();
-
     const url = new URL('https://api.spotify.com/v1/browse/new-releases');
     url.searchParams.set('limit', String(Math.min(Math.max(limit, 1), 12)));
 
-    const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.status === 401) {
-        invalidateToken();
-        throw new Error('Spotify token expired — retry');
-    }
-
-    if (!res.ok) {
-        throw new Error(`Spotify new releases failed: ${res.status}`);
-    }
-
-    const data = (await res.json()) as SpotifyNewReleasesResponse;
+    const data = await spotifyApiFetch<SpotifyNewReleasesResponse>(url);
     const tracks: Track[] = [];
 
     for (const album of data.albums.items) {
@@ -494,16 +433,15 @@ export async function getSpotifyNewReleaseTracks(limit = 8): Promise<Track[]> {
         const tracksUrl = new URL(`https://api.spotify.com/v1/albums/${album.id}/tracks`);
         tracksUrl.searchParams.set('limit', '1');
 
-        const trackRes = await fetch(tracksUrl.toString(), {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!trackRes.ok) continue;
-
-        const albumTracks = (await trackRes.json()) as SpotifyAlbumTracksResponse;
-        const firstTrack = albumTracks.items[0];
-        if (!firstTrack) continue;
-        tracks.push(spotifyAlbumTrackToTrack(firstTrack, album, 'new releases'));
+        try {
+            const albumTracks = await spotifyApiFetch<SpotifyAlbumTracksResponse>(tracksUrl);
+            const firstTrack = albumTracks.items[0];
+            if (firstTrack) {
+                tracks.push(spotifyAlbumTrackToTrack(firstTrack, album, 'new releases'));
+            }
+        } catch {
+            continue;
+        }
     }
 
     return tracks;

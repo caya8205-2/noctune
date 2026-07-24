@@ -37,7 +37,7 @@ import {
   touchAudioCache,
 } from '../services/audioFileCache.js';
 import { getEnvConfig } from '../services/env.js';
-import { clearPlaybackBlacklistForId, markPlaybackFailed } from '../services/playbackBlacklist.js';
+import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed } from '../services/playbackBlacklist.js';
 
 const PlayParams = z.object({ videoId: z.string().min(5).max(64) });
 const audioCacheQueue = new PQueue({ concurrency: 2 });
@@ -115,8 +115,11 @@ function isYoutubeVideoId(id: string): boolean {
 
 async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?: string): Promise<string | null> {
   if (!videoId.startsWith('spotify:')) return isYoutubeVideoId(videoId) ? videoId : null;
-  if (youtubeId && isYoutubeVideoId(youtubeId)) return youtubeId;
   const spotifyId = videoId.replace(/^spotify:/, '');
+  if (youtubeId && isYoutubeVideoId(youtubeId) && !isPlaybackBlacklisted(youtubeId)) return youtubeId;
+  if (youtubeId && isPlaybackBlacklisted(youtubeId)) {
+    clearMatchCacheForSpotifyId(spotifyId);
+  }
 
   let trackTitle = query;
   let trackArtist = '';
@@ -827,59 +830,67 @@ export async function playerRoutes(app: FastifyInstance) {
         true
       );
       if (!ytRes.ok || !ytRes.body) {
-        if (ytRes.status === 403) {
-          ytRes.body?.cancel().catch(() => {});
-          try {
-            app.log.info({ videoId }, '[player] stream URL forbidden, resolving full track again');
-            const { track, audio } = await resolveTrack(videoId, cached.query || videoId);
-            const saved = upsertTrack(
-              cached.query || videoId,
-              {
-                ...track,
-                title: cached.title || track.title,
-                artist: cached.artist || track.artist,
-                album: cached.album ?? track.album,
-                duration: cached.duration || track.duration,
-                thumbnail: cached.thumbnail || track.thumbnail,
-                query: cached.query || track.query,
-                spotifyId: cached.spotifyId,
-                spotifyUrl: cached.spotifyUrl,
-                youtubeId: cached.youtubeId,
-                youtubeTitle: cached.youtubeTitle,
-                youtubeArtist: cached.youtubeArtist,
-                queueSource: cached.queueSource,
-              },
-              audio.url,
-              undefined,
-              audio.qualityPreference,
-              audio.format,
-              audio.quality
-            );
-            const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
-            if (retry.res.ok && retry.res.body) {
-              cached = saved;
-              if (retry.refreshed) {
-                app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
-              }
-              const retryNodeStream = Readable.fromWeb(retry.res.body as any);
-              reply
-                .status(retry.res.status === 206 ? 206 : 200)
-                .header('Content-Type', retry.res.headers.get('content-type') || 'audio/mp4')
-                .header('Access-Control-Allow-Origin', '*')
-                .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
-                .header('Cache-Control', 'public, max-age=3600');
-              const retryLength = retry.res.headers.get('content-length');
-              const retryRange = retry.res.headers.get('content-range');
-              if (retryLength) reply.header('Content-Length', retryLength);
-              if (retryRange) reply.header('Content-Range', retryRange);
-              return reply.send(retryNodeStream);
+        ytRes.body?.cancel().catch(() => {});
+        try {
+          app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL');
+          const { track, audio } = await resolveTrack(videoId, cached.query || videoId);
+          const saved = upsertTrack(
+            cached.query || videoId,
+            {
+              ...track,
+              title: cached.title || track.title,
+              artist: cached.artist || track.artist,
+              album: cached.album ?? track.album,
+              duration: cached.duration || track.duration,
+              thumbnail: cached.thumbnail || track.thumbnail,
+              query: cached.query || track.query,
+              spotifyId: cached.spotifyId,
+              spotifyUrl: cached.spotifyUrl,
+              youtubeId: cached.youtubeId,
+              youtubeTitle: cached.youtubeTitle,
+              youtubeArtist: cached.youtubeArtist,
+              queueSource: cached.queueSource,
+            },
+            audio.url,
+            undefined,
+            audio.qualityPreference,
+            audio.format,
+            audio.quality
+          );
+          const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
+          if (retry.res.ok && retry.res.body) {
+            cached = saved;
+            if (retry.refreshed) {
+              app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
             }
-          } catch (err) {
-            app.log.warn({ videoId, err }, '[player] full stream recovery failed');
+            const retryNodeStream = Readable.fromWeb(retry.res.body as any);
+            reply
+              .status(retry.res.status === 206 ? 206 : 200)
+              .header('Content-Type', retry.res.headers.get('content-type') || 'audio/mp4')
+              .header('Access-Control-Allow-Origin', '*')
+              .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
+              .header('Cache-Control', 'public, max-age=3600');
+            const retryLength = retry.res.headers.get('content-length');
+            const retryRange = retry.res.headers.get('content-range');
+            if (retryLength) reply.header('Content-Length', retryLength);
+            if (retryRange) reply.header('Content-Range', retryRange);
+            return reply.send(retryNodeStream);
           }
+        } catch (err) {
+          app.log.warn({ videoId, err }, '[player] full stream recovery failed');
         }
 
-        markPlaybackFailed(videoId);
+        // Only mark permanent blacklist if video is explicitly 404 (Video Deleted / Unavailable)
+        if (ytRes.status === 404) {
+          markPlaybackFailed(videoId);
+        }
+
+        clearAudioCacheForId(videoId);
+        clearTrackCache([videoId], cached.spotifyId);
+        clearPrefetchForId(videoId);
+        if (cached.spotifyId) {
+          clearMatchCacheForSpotifyId(cached.spotifyId);
+        }
         app.log.warn(
           {
             videoId,

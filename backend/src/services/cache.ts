@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { AudioQualityPreference, CacheStore, CachedTrack, Track } from '../types/index.js';
+import { recordMlPlayEvent } from './mlRecommendation.js';
 
 const CACHE_VERSION = 1;
 const URL_TTL_MS = 6 * 60 * 60 * 1000;        // 6 hours — YT URL expiry
@@ -50,7 +51,7 @@ function emptyStore(): CacheStore {
 // Singleton in-memory store (load once, write-through)
 let _store: CacheStore | null = null;
 
-function getStore(): CacheStore {
+export function getStore(): CacheStore {
   if (!_store) _store = loadStore();
   return _store;
 }
@@ -217,6 +218,7 @@ export function recordPlayWithMetadata(track: Track): CachedTrack | null {
 
   store.tracks[track.id] = updated;
   saveStore(store);
+  recordMlPlayEvent(updated as Track);
   return updated;
 }
 

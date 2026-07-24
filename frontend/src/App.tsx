@@ -24,6 +24,8 @@ import { useLyricsPrefetch } from './hooks/useLyrics';
 import { useSmartPlaylistsPrefetch } from './hooks/useSmartPlaylists';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { DownloadProvider } from './hooks/useDownloadTrack';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { ChangelogModal } from './components/ui/ChangelogModal';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
@@ -231,6 +233,7 @@ function AppInner() {
       </div>
 
       {updateToast}
+      <ChangelogModal />
 
       {/* Shortcuts help overlay */}
       {showShortcutsHelp && (
@@ -308,10 +311,12 @@ function AppInner() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={qc}>
-      <DownloadProvider>
-        <AppInner />
-      </DownloadProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={qc}>
+        <DownloadProvider>
+          <AppInner />
+        </DownloadProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

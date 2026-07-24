@@ -16,29 +16,43 @@ export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
+    recommendationEngine: 'hybrid-ml' | 'lastfm' | 'legacy';
     audioQualityPreference: 'auto' | 'high';
     audioCacheLimitMb: number;
     discordRpcEnabled: boolean;
+    recommendationEngineUserSelected?: boolean;
 }
 
 const DEFAULTS: EnvConfig = {
     spotifyClientId: '',
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
+    recommendationEngine: 'lastfm',
     audioQualityPreference: 'auto',
     audioCacheLimitMb: 1024,
     discordRpcEnabled: true,
+    recommendationEngineUserSelected: false,
 };
 
 function withProcessEnv(config: EnvConfig): EnvConfig {
     const envSearchEngine = process.env.SEARCH_ENGINE;
+    const envClientId = process.env.SPOTIFY_CLIENT_ID?.trim();
+    const envClientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
+
+    // If user hasn't explicitly saved an engine choice via Settings UI, default to lastfm
+    let recEngine = config.recommendationEngine ?? 'lastfm';
+    if (!config.recommendationEngineUserSelected && recEngine === 'hybrid-ml') {
+        recEngine = 'lastfm';
+    }
+
     return {
         ...config,
-        spotifyClientId: config.spotifyClientId || process.env.SPOTIFY_CLIENT_ID || '',
-        spotifyClientSecret: config.spotifyClientSecret || process.env.SPOTIFY_CLIENT_SECRET || '',
+        spotifyClientId: (envClientId || config.spotifyClientId || '').trim(),
+        spotifyClientSecret: (envClientSecret || config.spotifyClientSecret || '').trim(),
         searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
             ? envSearchEngine
             : config.searchEngine,
+        recommendationEngine: recEngine,
     };
 }
 
@@ -60,6 +74,10 @@ export function getEnvConfig(): EnvConfig {
         const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<EnvConfig>;
         _config = withProcessEnv({ ...DEFAULTS, ...parsed });
+        // If config on disk was stale hybrid-ml, update disk file to lastfm
+        if (parsed.recommendationEngine === 'hybrid-ml' && !parsed.recommendationEngineUserSelected) {
+            fs.writeFileSync(CONFIG_FILE, JSON.stringify(_config, null, 2), 'utf-8');
+        }
         return _config;
     } catch {
         _config = withProcessEnv({ ...DEFAULTS });
@@ -69,9 +87,13 @@ export function getEnvConfig(): EnvConfig {
 
 export function saveEnvConfig(partial: Partial<EnvConfig>): EnvConfig {
     const current = getEnvConfig();
-    _config = withProcessEnv({ ...current, ...partial });
+    const update = { ...partial };
+    if (partial.recommendationEngine) {
+        update.recommendationEngineUserSelected = true;
+    }
+    _config = withProcessEnv({ ...current, ...update });
     ensureDataDir();
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...current, ...partial }, null, 2), 'utf-8');
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...current, ...update }, null, 2), 'utf-8');
     return _config;
 }
 

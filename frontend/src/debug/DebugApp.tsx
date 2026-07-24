@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Copy, RotateCw, Music2, Ban, Save, FileText,
-  Wifi, HardDrive, List, X
+  Wifi, HardDrive, List, X, Brain
 } from 'lucide-react';
 import {
   debugApi, discoverBackend,
@@ -503,13 +503,13 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
                 {/* Option 1: Clear learned cache only */}
                 <button
                   onClick={() => runAction('Clear learned cache only', () => debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail }))}
-                  className="w-full flex items-center justify-between rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-left transition-colors hover:bg-accent/20"
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700"
                 >
                   <div>
-                    <div className="text-xs font-medium text-accent">Clear learned cache only</div>
+                    <div className="text-xs font-medium text-white">Clear learned cache only</div>
                     <div className="text-[11px] text-muted">Clear cached resolution for this track and search for the best audio stream again.</div>
                   </div>
-                  <RotateCw size={15} className="text-accent flex-shrink-0" />
+                  <Trash2 size={15} className="text-soft flex-shrink-0" />
                 </button>
 
                 {/* Option 2: Clear match only */}
@@ -526,6 +526,38 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
                   <div>
                     <div className="text-xs font-medium text-white">Clear match only</div>
                     <div className="text-[11px] text-muted">Clear Spotify → YouTube match mapping and re-resolve audio stream.</div>
+                  </div>
+                  <Trash2 size={15} className="text-soft flex-shrink-0" />
+                </button>
+
+                {/* Option 3: Clear learned cache and match */}
+                <button
+                  onClick={() =>
+                    runAction('Clear learned cache & match', async () => {
+                      if (spotifyId) await debugApi.clearCacheEntry(spotifyId);
+                      await debugApi.clearTrack({
+                        id: track.id,
+                        title: track.title,
+                        artist: track.artist,
+                        query: `${track.title} ${track.artist}`,
+                        spotifyId,
+                        youtubeId,
+                      });
+                      return debugApi.resolveAgain({
+                        spotifyId,
+                        youtubeId,
+                        title: track.title,
+                        artist: track.artist,
+                        duration: track.duration,
+                        thumbnail: track.thumbnail,
+                      });
+                    })
+                  }
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-white">Clear learned cache and match</div>
+                    <div className="text-[11px] text-muted">Clear both learned resolver cache and Spotify → YouTube match mapping, then re-resolve from scratch.</div>
                   </div>
                   <Trash2 size={15} className="text-soft flex-shrink-0" />
                 </button>
@@ -1811,11 +1843,177 @@ function QueueInspector() {
   );
 }
 
+// ── ML Model Inspector ────────────────────────────────────────────────────────
+
+function MlModelPanel() {
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const [stats, setStats] = useState<{ playLogCount: number; uniqueTracksCount: number; transitionPairsCount: number; lastTrainedAt: number; isReady: boolean; hasSeedModel: boolean; seedTrackCount: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [predictions, setPredictions] = useState<Array<{ track: any; transitionScore: number; metadataScore: number; playCountScore: number; recencyScore: number; nightBonus: number; totalScore: number }>>([]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await debugApi.getMlStatus();
+      setStats(res.stats);
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleImportProd = async () => {
+    setImporting(true);
+    setMsg(null);
+    try {
+      const res = await debugApi.importProdDataset();
+      setMsg({ ok: true, text: `Successfully imported ${res.importedTracks} tracks and ${res.totalPlays} play events from Noctune Prod!` });
+      await refresh();
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleTestPredictions = async () => {
+    if (!currentTrack) {
+      setMsg({ ok: false, text: 'No track currently playing to use as seed.' });
+      return;
+    }
+    setTesting(true);
+    setMsg(null);
+    try {
+      const res = await debugApi.testMlRecommendation(currentTrack, 8);
+      setPredictions(res.predictions);
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="surface-panel p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Brain size={16} className="text-purple-400" />
+          <h2 className="text-base font-semibold text-white">ML Recommendation Model</h2>
+          <span className={`rounded-md border px-2 py-0.5 font-mono text-xs ${stats?.isReady ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>
+            {stats?.isReady ? 'Model Active' : 'Cold Start'}
+          </span>
+          {stats?.hasSeedModel && (
+            <span className="rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 font-mono text-xs text-purple-300">
+              Base Model ({stats.seedTrackCount} tracks)
+            </span>
+          )}
+        </div>
+        <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh ML Status">
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      {msg && (
+        <div className={`flex items-center gap-1.5 text-xs ${msg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+          {msg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+          {msg.text}
+        </div>
+      )}
+
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-white/[0.04] bg-base-900/30 p-3">
+            <span className="text-[11px] text-muted">Recorded Play Events</span>
+            <div className="mt-1 font-mono text-base font-semibold text-white">{stats.playLogCount.toLocaleString()}</div>
+          </div>
+          <div className="rounded-lg border border-white/[0.04] bg-base-900/30 p-3">
+            <span className="text-[11px] text-muted">Unique Learned Tracks</span>
+            <div className="mt-1 font-mono text-base font-semibold text-white">{stats.uniqueTracksCount.toLocaleString()}</div>
+          </div>
+          <div className="rounded-lg border border-white/[0.04] bg-base-900/30 p-3">
+            <span className="text-[11px] text-muted">Transition Pair Matrix</span>
+            <div className="mt-1 font-mono text-base font-semibold text-white">{stats.transitionPairsCount.toLocaleString()}</div>
+          </div>
+          <div className="rounded-lg border border-white/[0.04] bg-base-900/30 p-3">
+            <span className="text-[11px] text-muted">ML Approach</span>
+            <div className="mt-1 font-mono text-xs font-semibold text-purple-300">Hybrid Collaborative</div>
+          </div>
+        </div>
+      )}
+
+      {/* Live ML Recommendation Sandbox */}
+      <div className="border-t border-white/[0.06] pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <span className="text-xs font-semibold text-white flex items-center gap-2">
+            <Terminal size={14} className="text-accent" /> Live ML Recommendation Sandbox
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportProd}
+              disabled={importing}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-1.5 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/10 disabled:opacity-40"
+              title="Import 888 tracks and 2,260 plays from Noctune Prod AppData"
+            >
+              {importing ? <RefreshCw size={13} className="animate-spin" /> : <HardDrive size={13} />}
+              {importing ? 'Importing...' : 'Import Prod Dataset'}
+            </button>
+            <button
+              onClick={handleTestPredictions}
+              disabled={testing || !currentTrack}
+              className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+            >
+              {testing ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
+              {testing ? 'Predicting...' : 'Test ML Predictions'}
+            </button>
+          </div>
+        </div>
+
+        {currentTrack && (
+          <div className="mb-3 text-xs text-soft">
+            Seed Track: <strong className="text-white">{currentTrack.title}</strong> — {currentTrack.artist}
+          </div>
+        )}
+
+        {predictions.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[11px] text-muted">Top ML Predicted Recommendations ({predictions.length}):</span>
+            {predictions.map((p, i) => (
+              <div key={p.track.id || i} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-base-900/40 p-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium text-white">
+                    {p.track.title} <span className="text-muted">— {p.track.artist}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted font-mono">
+                    <span className="rounded bg-accent/10 text-accent border border-accent/20 px-1.5 py-0.5 font-bold">
+                      Score: {(p.totalScore * 100).toFixed(1)}%
+                    </span>
+                    <span>Trans: {(p.transitionScore * 100).toFixed(0)}%</span>
+                    <span>Meta: {(p.metadataScore * 100).toFixed(0)}%</span>
+                    <span>Plays: {(p.playCountScore * 100).toFixed(0)}%</span>
+                    {p.nightBonus > 0 && <span className="text-purple-300">Night +{(p.nightBonus * 100).toFixed(0)}%</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Tools Panel (combines all tool panels) ────────────────────────────────────
 
 function ToolsPanel() {
   return (
     <div className="space-y-4">
+      <MlModelPanel />
       <BlacklistPanel />
       <AudioCachePanel />
       <RequestLogPanel />

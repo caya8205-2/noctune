@@ -1,6 +1,6 @@
 {
-  "name": "noctune",
-  "version": "2.4.0",
+  "name": "@noctune/monorepo",
+  "version": "3.0.0",
   "private": true,
   "workspaces": [
     "frontend",

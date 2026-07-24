@@ -20,6 +20,7 @@ const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
+    recommendationEngine: z.enum(['hybrid-ml', 'lastfm', 'legacy']).optional(),
     audioQualityPreference: z.enum(['auto', 'high']).optional(),
     audioCacheLimitMb: z.number().min(128).max(10240).optional(),
     discordRpcEnabled: z.boolean().optional(),
@@ -36,6 +37,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         const config = getEnvConfig();
         return reply.send({
             searchEngine: config.searchEngine,
+            recommendationEngine: config.recommendationEngine ?? 'lastfm',
             audioQualityPreference: config.audioQualityPreference,
             audioCacheLimitMb: config.audioCacheLimitMb,
             discordRpcEnabled: config.discordRpcEnabled,
@@ -86,6 +88,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         return reply.send({
             ok: true,
             searchEngine: updated.searchEngine,
+            recommendationEngine: updated.recommendationEngine ?? 'hybrid-ml',
             audioQualityPreference: updated.audioQualityPreference,
             audioCacheLimitMb: updated.audioCacheLimitMb,
             discordRpcEnabled: updated.discordRpcEnabled,

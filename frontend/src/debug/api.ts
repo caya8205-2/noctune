@@ -235,4 +235,14 @@ export const debugApi = {
     req<{ entries: Array<{ id: number; method: string; url: string; statusCode: number; durationMs: number; timestamp: number; error?: string }>; total: number }>(`/debug/request-log?limit=${limit}`),
   clearRequestLog: () =>
     req<{ ok: boolean }>('/debug/request-log', { method: 'DELETE' }),
+  getMlStatus: () =>
+    req<{ ok: boolean; stats: { playLogCount: number; uniqueTracksCount: number; transitionPairsCount: number; lastTrainedAt: number; isReady: boolean; hasSeedModel: boolean; seedTrackCount: number } }>('/debug/ml/status'),
+  importProdDataset: () =>
+    req<{ ok: boolean; importedTracks: number; totalPlays: number; pathUsed: string }>('/debug/ml/import-prod', { method: 'POST' }),
+  testMlRecommendation: (seed: any, limit = 10) =>
+    req<{ ok: boolean; predictions: Array<{ track: any; transitionScore: number; metadataScore: number; playCountScore: number; recencyScore: number; nightBonus: number; totalScore: number }>; total: number }>('/debug/ml/test-recommendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seed, limit }),
+    }),
 };

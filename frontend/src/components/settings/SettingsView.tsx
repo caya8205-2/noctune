@@ -23,11 +23,13 @@ import {
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { api, apiUrl, type BackendStatus, type UpdateInfo, IS_TAURI } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
+import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
 const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
+  recommendationEngine?: 'hybrid-ml' | 'lastfm' | 'legacy';
   audioQualityPreference: 'auto' | 'high';
   audioCacheLimitMb: number;
   discordRpcEnabled: boolean;
@@ -133,7 +135,17 @@ export function SettingsView() {
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
+  const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'legacy'>('lastfm');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
+  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
+    return (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
+  });
+
+  const handleVisualizerModeChange = (mode: VisualizerMode) => {
+    setVisualizerMode(mode);
+    localStorage.setItem('noctune:visualizer-mode', mode);
+    window.dispatchEvent(new Event('noctune:visualizer-mode-updated'));
+  };
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
@@ -148,7 +160,31 @@ export function SettingsView() {
     setClientId(d.spotify.clientId);
     setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
+    setRecommendationEngine(d.recommendationEngine ?? 'lastfm');
     setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
+  }
+
+  const [engineSaving, setEngineSaving] = useState(false);
+  const [engineSaved, setEngineSaved] = useState(false);
+
+  async function handleRecommendationEngineSave() {
+    setEngineSaving(true);
+    setEngineSaved(false);
+    try {
+      const res = await fetch(await apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recommendationEngine }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      if (updated.recommendationEngine) setRecommendationEngine(updated.recommendationEngine);
+      setEngineSaved(true);
+      setTimeout(() => setEngineSaved(false), 2500);
+    } catch (err) {
+      console.error('Failed to save recommendation engine:', err);
+    } finally {
+      setEngineSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -747,6 +783,136 @@ export function SettingsView() {
             </span>
           </button>
         )}
+      </section>
+
+      {/* Recommendation Engine */}
+      <section className="surface-panel flex flex-col gap-4 p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Recommendation Engine
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Select which algorithm powers your autoqueue recommendations and Nightly Mix playlists.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1 pr-4">
+              <label htmlFor="rec-engine-select" className="block text-sm font-medium text-white">
+                Active Engine
+              </label>
+              <p className="mt-1 text-xs text-muted leading-relaxed">
+                {recommendationEngine === 'hybrid-ml'
+                  ? 'ML Hybrid Collaborative: Combines local Markov chain transitions, metadata similarity, and play history.'
+                  : recommendationEngine === 'lastfm'
+                  ? 'Last.fm Similar Tracks: Uses Last.fm online graph API to suggest similar tracks.'
+                  : 'Legacy Noctune Search: Original query-based search engine fallback.'}
+              </p>
+            </div>
+            <select
+              id="rec-engine-select"
+              value={recommendationEngine}
+              onChange={(e) => setRecommendationEngine(e.target.value as any)}
+              className="rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
+            >
+              <option value="hybrid-ml" className="bg-base-900 text-white">
+                ML Hybrid Collaborative (Recommended)
+              </option>
+              <option value="lastfm" className="bg-base-900 text-white">
+                Last.fm Similar Tracks
+              </option>
+              <option value="legacy" className="bg-base-900 text-white">
+                Legacy Noctune Search
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleRecommendationEngineSave}
+            disabled={engineSaving}
+            className="btn-accent flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold"
+          >
+            {engineSaving ? (
+              <>
+                <Loader2 size={13} className="animate-spin" /> Saving...
+              </>
+            ) : engineSaved ? (
+              <>
+                <CheckCircle size={13} /> Saved!
+              </>
+            ) : (
+              'Save Engine'
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-base-950/60 p-3.5 text-xs text-muted">
+          <Info size={16} className="text-accent flex-shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <strong className="text-white">Note:</strong> Changing this option only affects which engine calculates your active autoqueue, recommendations, and Nightly Mixes. On-the-go ML background training will continue logging your listening habits seamlessly in the background so your model keeps learning.
+          </p>
+        </div>
+      </section>
+
+      {/* Audio Visualizer */}
+      <section className="surface-panel flex flex-col gap-4 p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Audio Visualizer Presets
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Select the visualizer animation style displayed around the album art CD disc in Player View.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-5 flex flex-col items-center sm:flex-row sm:items-start gap-6">
+          {/* Live Visualizer Preview Box (Vinyl disc with live visualizer preview) */}
+          <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center rounded-2xl border border-white/10 bg-base-950/90 shadow-2xl overflow-hidden p-2 shrink-0">
+            {/* Vinyl Disc Body (No album art) */}
+            <div className="absolute inset-[10%] rounded-full bg-base-900 border border-base-700/80 shadow-2xl flex items-center justify-center">
+              {/* Vinyl Grooves */}
+              <div className="absolute inset-3 rounded-full border border-white/[0.04]" />
+              <div className="absolute inset-7 rounded-full border border-white/[0.04]" />
+              <div className="absolute inset-11 rounded-full border border-white/[0.04]" />
+            </div>
+
+            {/* Live Animated Visualizer */}
+            <Visualizer mode={visualizerMode} preview={true} />
+
+            {/* Vinyl Center Hole */}
+            <div className="absolute inset-[42%] rounded-full bg-base-950 border border-base-600/70 shadow-inner z-20 flex items-center justify-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-base-800" />
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-4">
+            <div>
+              <label htmlFor="visualizer-preset-select" className="block text-sm font-semibold text-white">
+                Active Preset Style
+              </label>
+              <p className="mt-1.5 text-xs text-muted leading-relaxed">
+                {VISUALIZER_PRESETS.find((p) => p.id === visualizerMode)?.desc ?? ''}
+              </p>
+            </div>
+
+            <select
+              id="visualizer-preset-select"
+              value={visualizerMode}
+              onChange={(e) => handleVisualizerModeChange(e.target.value as VisualizerMode)}
+              className="w-full sm:w-auto rounded-xl border border-base-600/80 bg-base-800 px-4 py-2.5 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
+            >
+              {VISUALIZER_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id} className="bg-base-900 text-white">
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </section>
 
       {/* Diagnostics */}

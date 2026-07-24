@@ -72,9 +72,9 @@ function TopTrackRow({
   const { track, playCount } = entry;
 
   return (
-    <button
+    <div
       onClick={() => playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' })}
-      className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-white/[0.04]"
+      className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-white/[0.04] cursor-pointer"
     >
       <span className="w-6 shrink-0 text-right font-mono text-xs text-muted tabular-nums">
         {index + 1}
@@ -102,7 +102,7 @@ function TopTrackRow({
           </p>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 

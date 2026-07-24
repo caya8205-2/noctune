@@ -364,24 +364,32 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
 
   if (
     spotifyTitleCompact.length >= 2 &&
-    spotifyTitleCompact !== spotifyTitle &&
     candidateTitleCompact.includes(spotifyTitleCompact)
   ) {
     score += 60;
     reasons.push('title-compact');
   }
 
+  let maxPositiveTitleBonus = 0;
+  let bestPositiveKeyword = '';
   for (const keyword of positiveTitleKeywords) {
     if (hasKeyword(candidateTitle, keyword)) {
-      score += keyword.startsWith('official')
-        ? 110
+      const bonus = keyword.startsWith('official')
+        ? 60
         : keyword === 'mv' || keyword === 'music video'
-          ? 60
+          ? 40
           : keyword === 'original'
-            ? 45
-            : 30;
-      reasons.push(`positive-title:${keyword}`);
+            ? 30
+            : 20;
+      if (bonus > maxPositiveTitleBonus) {
+        maxPositiveTitleBonus = bonus;
+        bestPositiveKeyword = keyword;
+      }
     }
+  }
+  if (maxPositiveTitleBonus > 0) {
+    score += maxPositiveTitleBonus;
+    reasons.push(`positive-title:${bestPositiveKeyword}`);
   }
 
   for (const keyword of positiveChannelKeywords) {
@@ -444,6 +452,11 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
     reasons.push('live-visual');
   }
 
+  const hasTitleMatch =
+    reasons.includes('title-phrase') ||
+    reasons.includes('title-compact') ||
+    reasons.some((reason) => reason.startsWith('title-word-match:'));
+
   if (spotifyTrack.duration > 0 && candidate.duration > 0) {
     const diff = Math.abs(candidate.duration - spotifyTrack.duration);
     if (diff <= 5) {
@@ -453,7 +466,9 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
       score += 50;
       reasons.push('duration-near');
     } else if (diff >= 45) {
-      score -= diff >= 90 ? 110 : 70;
+      // If official channel + title match, MV has intro/outro animation; penalize mildly
+      const penalty = hasArtistChannelMatch && hasTitleMatch ? 30 : diff >= 90 ? 110 : 70;
+      score -= penalty;
       reasons.push('duration-far');
     }
   }
@@ -466,6 +481,12 @@ function hasArtistChannelMatch(candidate: ScoredCandidate): boolean {
 }
 
 export function hasTitleEvidence(candidate: ScoredCandidate): boolean {
+  if (
+    candidate.reasons.includes('artist-channel-match') &&
+    (candidate.reasons.includes('duration-close') || candidate.reasons.includes('duration-near'))
+  ) {
+    return true;
+  }
   return (
     candidate.reasons.includes('title-phrase') ||
     candidate.reasons.includes('title-compact') ||
@@ -617,17 +638,17 @@ async function runMatcherChain(
       .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
       .map((candidate) => scoreCandidate(spotifyTrack, candidate))
       .sort(compareCandidates);
-    const best = ranked[0];
-    lastBest = best ?? lastBest;
+    const bestAcceptable = ranked.find(isAcceptableCandidate) ?? ranked[0];
+    lastBest = bestAcceptable ?? lastBest;
     attempts.push({
       query,
       fallbackIndex: queries.indexOf(query),
       candidateCount: candidates.length,
-      best: best ?? null,
+      best: bestAcceptable ?? null,
       candidates: ranked,
     });
-    if (isAcceptableCandidate(best)) {
-      accepted = best ?? null;
+    if (isAcceptableCandidate(bestAcceptable)) {
+      accepted = bestAcceptable;
       break;
     }
   }

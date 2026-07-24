@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, Loader2, Search, Shuffle, X } from 'lucide-react';
+import { AlertTriangle, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, Search, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
@@ -38,7 +38,6 @@ export function QueueView() {
   const {
     queue,
     queueIndex,
-    currentTrack,
     queueHistory,
     playbackNotice,
     playTrack,
@@ -129,9 +128,7 @@ export function QueueView() {
 
         {queue.map((track, i) => {
           if (hideFailed && track.playbackError) return null;
-          const isActive =
-            currentTrack?.id === track.id ||
-            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+          const isActive = i === queueIndex;
           const isPast = i < queueIndex;
           const cacheStatus = cacheByTrackId.get(track.id);
 
@@ -176,21 +173,12 @@ export function QueueView() {
               />
               <TrackTitle track={track} isActive={isActive} setView={setView} />
               <div className="hidden md:flex items-center justify-end gap-1.5 flex-shrink-0 ml-3 mr-2">
-                {track.playbackError ? (
+                {track.playbackError && (
                   <span className="inline-flex w-20 items-center justify-center rounded-full border border-red-500/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-red-300">
                     <AlertTriangle size={10} className="mr-1" />
                     Failed
                   </span>
-                ) : cacheStatus?.cached || cacheStatus?.inFlight ? (
-                  <span className="inline-flex w-20 items-center justify-center rounded-full border border-accent/30 px-1 py-0.5 text-[10px] uppercase tracking-wide text-accent">
-                    {cacheStatus.cached ? (
-                      <CheckCircle2 size={10} className="mr-1" />
-                    ) : (
-                      <Loader2 size={10} className="mr-1 animate-spin" />
-                    )}
-                    {cacheStatus.cached ? 'Cached' : 'Caching'}
-                  </span>
-                ) : null}
+                )}
                 {(() => {
                   const { Icon, label } = queueSourceBadge(track.queueSource, track.originalSource);
                   return (
@@ -217,6 +205,7 @@ export function QueueView() {
                   className="hidden sm:flex items-center justify-end gap-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   iconSize={13}
                   showQueue={false}
+                  showDownload={true}
                   showMenu={false}
                   trailingActions={
                     <button
