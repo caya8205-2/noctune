@@ -38,7 +38,7 @@ import { getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { getDiscordRpcStatus } from '../services/discordRpc.js';
 import { getRequestLog, clearRequestLog } from '../services/requestLog.js';
 import { isDemoMode } from '../services/demoMode.js';
-import { getMlModelStats, importProdDataset, predictMlRecommendationsWithScores } from '../services/mlRecommendation.js';
+import { getMlModelStats, importProdDataset, clearMlDataset, submitMlTelemetry, importMlTelemetry, predictMlRecommendationsWithScores } from '../services/mlRecommendation.js';
 import type { Track } from '../types/index.js';
 
 const MatcherQuery = z.object({
@@ -120,12 +120,9 @@ export async function debugRoutes(app: FastifyInstance) {
     return { ok: true, cleared: result.cleared };
   });
 
-  app.delete('/debug/cache/:spotifyId', async (req, reply) => {
+  app.delete('/debug/cache/:spotifyId', async (req) => {
     const { spotifyId } = req.params as { spotifyId: string };
     const result = clearMatchCacheForSpotifyId(spotifyId);
-    if (!result.cleared) {
-      return reply.status(404).send({ ok: false, error: 'Cache entry not found' });
-    }
     return { ok: true, cleared: result.cleared, youtubeId: result.youtubeId };
   });
 
@@ -169,6 +166,7 @@ export async function debugRoutes(app: FastifyInstance) {
     artist: z.string().default(''),
     duration: z.coerce.number().min(0).default(0),
     thumbnail: z.string().optional(),
+    keepBlacklist: z.boolean().optional(),
   });
 
   app.post('/debug/resolve-again', async (req, reply) => {
@@ -176,21 +174,37 @@ export async function debugRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
     }
-    const { spotifyId, youtubeId, title, artist, duration, thumbnail = '' } = parsed.data;
+    const { spotifyId, youtubeId, title, artist, duration, thumbnail = '', keepBlacklist } = parsed.data;
     const preference = getEnvConfig().audioQualityPreference;
 
     // Clear every layer for the known ids so the resolve runs from scratch.
     if (spotifyId) clearMatchCacheForSpotifyId(spotifyId);
     if (youtubeId) {
       clearPrefetchForId(youtubeId);
-      clearPlaybackBlacklistForId(youtubeId);
+      if (!keepBlacklist) {
+        clearPlaybackBlacklistForId(youtubeId);
+      }
       clearAudioCacheForId(youtubeId);
     }
     clearTrackCache(youtubeId ? [youtubeId] : [], spotifyId);
 
     const query = `${title} ${artist}`.trim();
+
+    let targetVideoId = youtubeId;
+    if (!spotifyId && youtubeId && isPlaybackBlacklisted(youtubeId)) {
+      const { searchTracks } = await import('../services/audioResolver.js');
+      const results = await searchTracks(query, 6);
+      const cleanAlt = results.find((t) => {
+        const yId = (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim();
+        return /^[a-zA-Z0-9_-]{11}$/.test(yId) && !isPlaybackBlacklisted(yId);
+      });
+      if (cleanAlt) {
+        targetVideoId = (cleanAlt.youtubeId || cleanAlt.id).replace(/^(youtube|ytdlp):/, '').trim();
+      }
+    }
+
     const seedTrack: Track = {
-      id: spotifyId ? `spotify:${spotifyId}` : (youtubeId ?? ''),
+      id: spotifyId ? `spotify:${spotifyId}` : (targetVideoId ?? ''),
       title,
       artist,
       duration,
@@ -201,8 +215,8 @@ export async function debugRoutes(app: FastifyInstance) {
 
     try {
       const matched = spotifyId ? await matchSpotifyTrackToYoutube(seedTrack) : seedTrack;
-      if (!matched) {
-        return reply.send({ ok: false, error: 'No acceptable YouTube match found' });
+      if (!matched || !matched.id || isPlaybackBlacklisted(matched.id)) {
+        return reply.send({ ok: false, error: 'No acceptable non-blacklisted YouTube match found' });
       }
       const { track, audio } = await resolveTrack(matched.id, matched.query ?? query);
       const saved = upsertTrack(
@@ -244,16 +258,37 @@ export async function debugRoutes(app: FastifyInstance) {
 
   // ── Blacklist match endpoint ────────────────────────────────────────────────
   app.post('/debug/blacklist', async (req, reply) => {
-    const { youtubeId, spotifyId } = req.body as { youtubeId: string; spotifyId?: string };
+    const { youtubeId, spotifyId, title, artist, targetTitle, targetArtist, matchedTitle, matchedArtist } = req.body as {
+      youtubeId: string;
+      spotifyId?: string;
+      title?: string;
+      artist?: string;
+      targetTitle?: string;
+      targetArtist?: string;
+      matchedTitle?: string;
+      matchedArtist?: string;
+    };
     if (!youtubeId) return reply.status(400).send({ ok: false, error: 'youtubeId is required' });
 
-    markPlaybackFailed(youtubeId);
+    const cleanYoutubeId = youtubeId.replace(/^youtube:/, '').trim();
+    const cleanSpotifyId = spotifyId?.replace(/^spotify:/, '').trim();
+
+    markPlaybackFailed(cleanYoutubeId, {
+      targetTitle: targetTitle || title,
+      targetArtist: targetArtist || artist,
+      matchedTitle,
+      matchedArtist,
+    });
+    clearAudioCacheForId(cleanYoutubeId);
+    clearPrefetchForId(cleanYoutubeId);
+    clearTrackCache([cleanYoutubeId], cleanSpotifyId);
+
     let clearedMatch = 0;
-    if (spotifyId) {
-      clearedMatch = clearMatchCacheForSpotifyId(spotifyId).cleared;
+    if (cleanSpotifyId) {
+      clearedMatch = clearMatchCacheForSpotifyId(cleanSpotifyId).cleared;
     }
 
-    return reply.send({ ok: true, youtubeId, blacklisted: true, clearedMatch });
+    return reply.send({ ok: true, youtubeId: cleanYoutubeId, blacklisted: true, clearedMatch });
   });
 
   // ── Save manual YouTube match to cache ──────────────────────────────────────
@@ -271,11 +306,14 @@ export async function debugRoutes(app: FastifyInstance) {
       return reply.status(400).send({ ok: false, error: 'youtubeId is required' });
     }
 
-    const key = spotifyId?.trim() || `${spotifyTitle ?? ''}-${spotifyArtist ?? ''}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || youtubeId;
+    const cleanYoutubeId = youtubeId.replace(/^youtube:/, '').trim();
+    const cleanSpotifyId = spotifyId?.replace(/^spotify:/, '').trim();
+
+    const key = cleanSpotifyId || `${spotifyTitle ?? ''}-${spotifyArtist ?? ''}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || cleanYoutubeId;
 
     const matchEntry = saveMatchCacheEntry({
       spotifyId: key,
-      youtubeId,
+      youtubeId: cleanYoutubeId,
       youtubeTitle,
       youtubeArtist,
       spotifyTitle,
@@ -283,17 +321,22 @@ export async function debugRoutes(app: FastifyInstance) {
       score: score ?? 150,
     });
 
+    const query = `${spotifyTitle ?? ''} ${spotifyArtist ?? ''}`.trim() || cleanYoutubeId;
+
+    // Clear old cache for this ID/spotifyId so fresh resolution takes effect
+    clearTrackCache([cleanYoutubeId], cleanSpotifyId);
+
     const learnedTrack: Track = {
-      id: spotifyId ? `spotify:${spotifyId}` : key,
+      id: cleanSpotifyId ? `spotify:${cleanSpotifyId}` : key,
       title: spotifyTitle || youtubeTitle || key,
       artist: spotifyArtist || youtubeArtist || '',
-      spotifyId: spotifyId || undefined,
-      youtubeId,
+      spotifyId: cleanSpotifyId || undefined,
+      youtubeId: cleanYoutubeId,
       youtubeTitle,
       youtubeArtist,
       duration: 0,
-      thumbnail: `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`,
-      query: `${spotifyTitle ?? ''} ${spotifyArtist ?? ''}`.trim(),
+      thumbnail: `https://img.youtube.com/vi/${cleanYoutubeId}/hqdefault.jpg`,
+      query,
     };
 
     return reply.send({ ok: true, entry: matchEntry, track: learnedTrack });
@@ -394,6 +437,27 @@ export async function debugRoutes(app: FastifyInstance) {
   app.post('/debug/ml/import-prod', async () => {
     const result = importProdDataset();
     return result;
+  });
+
+  app.delete('/debug/ml/dataset', async () => {
+    const result = clearMlDataset();
+    return result;
+  });
+
+  app.post<{ Body: { customUrl?: string } }>('/debug/ml/submit-telemetry', async (req) => {
+    const { customUrl } = req.body || {};
+    const result = await submitMlTelemetry(customUrl);
+    return result;
+  });
+
+  app.post<{ Body: { payload: unknown } }>('/debug/ml/import-telemetry', async (req, reply) => {
+    const { payload } = req.body || {};
+    try {
+      const result = importMlTelemetry(payload as any);
+      return result;
+    } catch (err) {
+      return reply.status(400).send({ ok: false, error: (err as Error).message });
+    }
   });
 
   app.post<{ Body: { seed: Track; limit?: number } }>('/debug/ml/test-recommendation', async (req) => {

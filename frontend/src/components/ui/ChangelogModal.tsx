@@ -3,8 +3,43 @@ import { Sparkles, X, Check, FileText } from 'lucide-react';
 import { apiUrl } from '../../utils/api';
 
 const APP_VERSION = __APP_VERSION__;
-
 const LAST_SEEN_VERSION_KEY = 'noctune:last-seen-version';
+
+function parseLatestHighlights(fullText: string | null): Array<{ title: string; desc: string }> {
+  if (!fullText) return [];
+  const sections = fullText.split(/\n(?=##\s+v\d+)/g);
+  const latestSection = sections.find((s) => s.trim().startsWith('## '));
+  if (!latestSection) return [];
+
+  const lines = latestSection.split('\n');
+  const items: Array<{ title: string; desc: string }> = [];
+  let currentGroup = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('### ')) {
+      currentGroup = trimmed.replace(/^###\s+/, '').trim();
+    } else if (trimmed.startsWith('- ')) {
+      const content = trimmed.replace(/^-+\s+/, '');
+      const match = content.match(/^\*\*([^*]+)\*\*:\s*(.*)$/);
+      if (match) {
+        items.push({ title: match[1], desc: match[2] });
+      } else {
+        items.push({ title: currentGroup || 'Update', desc: content });
+      }
+    }
+  }
+
+  return items;
+}
+
+const DEFAULT_HIGHLIGHTS = [
+  { title: 'Playback Blacklist & Disk Cache Hardening', desc: 'Normalized Video ID prefixes so clearing cache or blacklisting a track physically deletes stale audio files from disk, and enforced HTTP 404 stream rejection for blacklisted IDs.' },
+  { title: 'Matcher Keyword Penalty Bypass', desc: 'Expanded matcher inspection to check title, artist, and search query so terms like "sings", "cover", "karaoke", "concert", or date formats are no longer penalized when present in target tracks.' },
+  { title: 'History Preservation & Deduplication', desc: 'Preserved track metadata when clearing track cache so tracks remain in History, and added automatic deduplication for repeated plays.' },
+  { title: 'Direct YouTube Resolution', desc: 'Direct YouTube clicks now resolve to exact Video IDs without unnecessary fallback query searches.' },
+  { title: 'Formatted Playback Blacklist', desc: 'Blacklist manager in Debug Tools now displays formatted track titles and artists (Artist — "Title" · VideoID).' },
+];
 
 export function ChangelogModal() {
   const [open, setOpen] = useState(false);
@@ -34,6 +69,9 @@ export function ChangelogModal() {
   }
 
   if (!open) return null;
+
+  const dynamicHighlights = parseLatestHighlights(changelogText);
+  const highlights = dynamicHighlights.length > 0 ? dynamicHighlights : DEFAULT_HIGHLIGHTS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -71,30 +109,12 @@ export function ChangelogModal() {
               <FileText size={15} className="text-accent" /> Highlights of this release:
             </h3>
             <ul className="space-y-2 text-muted">
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">Spotify 401 Auto-Recovery:</strong> Automatic token refresh and retry prevents 502 Bad Gateway errors when credentials expire or subscription changes.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">Audio Visualizer Library:</strong> 6 distinct presets (NCS Symmetrical, Liquid Wave, Orbit, Bars, Ambient, Off), smooth pause decay, 100% CD centering, and live preview in Settings.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">GPU Performance Boost:</strong> Reduced GPU usage from 45% to ~1-3% with optimized card styling.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">Installer Destination Fix:</strong> Setup executables now default to <code className="text-soft">AppData\Local\Programs\Noctune</code>.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">Selectable Recommendation Engines:</strong> Choose between Last.fm (default) and Hybrid Local ML engine under Settings.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-accent font-bold mt-0.5">•</span>
-                <span><strong className="text-white">Debug Dashboard:</strong> Expanded with Lyrics Cache Inspector, Playback Blacklist & Audio Cache Manager, and HTTP Request Log.</span>
-              </li>
+              {highlights.map((item, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-accent font-bold mt-0.5">•</span>
+                  <span><strong className="text-white">{item.title}:</strong> {item.desc}</span>
+                </li>
+              ))}
             </ul>
           </div>
 

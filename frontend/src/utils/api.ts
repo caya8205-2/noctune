@@ -564,3 +564,41 @@ export interface LocalFolder {
   totalDuration: number;
   isUngrouped: boolean;
 }
+
+/**
+ * Robust check if a track matches the currently playing track.
+ * Disambiguates YouTube video IDs so two different YouTube videos sharing
+ * the same Spotify metadata ID are never both marked as active.
+ */
+export function isTrackActive(currentTrack: Track | null | undefined, track: Track): boolean {
+  if (!currentTrack || !track) return false;
+
+  const cleanCurrentId = (currentTrack.id || '').replace(/^(youtube|spotify|ytdlp|local):/, '').trim();
+  const cleanTrackId = (track.id || '').replace(/^(youtube|spotify|ytdlp|local):/, '').trim();
+
+  // 1. Direct ID match
+  if (currentTrack.id === track.id || (cleanCurrentId && cleanCurrentId === cleanTrackId)) {
+    return true;
+  }
+
+  // 2. Explicit YouTube Video ID comparison
+  const currentYt = (
+    currentTrack.youtubeId ||
+    (currentTrack.id.startsWith('ytdlp:') || currentTrack.id.startsWith('youtube:') ? cleanCurrentId : '')
+  ).trim();
+  const trackYt = (
+    track.youtubeId ||
+    (track.id.startsWith('ytdlp:') || track.id.startsWith('youtube:') ? cleanTrackId : '')
+  ).trim();
+
+  if (currentYt && trackYt) {
+    return currentYt === trackYt;
+  }
+
+  // 3. Spotify ID comparison (only if YouTube IDs didn't conflict)
+  if (currentTrack.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId) {
+    return true;
+  }
+
+  return false;
+}

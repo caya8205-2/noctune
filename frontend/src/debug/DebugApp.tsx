@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useRef, createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Copy, RotateCw, Music2, Ban, Save, FileText,
-  Wifi, HardDrive, List, X, Brain
+  Wifi, HardDrive, List, X, Brain, UploadCloud
 } from 'lucide-react';
 import {
   debugApi, discoverBackend,
@@ -14,6 +14,91 @@ import { usePlayerStore } from '../store/player';
 import type { CachedTrack } from '../utils/api';
 
 type Tab = 'resolver' | 'lyrics' | 'status' | 'tools';
+
+export interface ConfirmConfig {
+  title: string;
+  message: string;
+  confirmText?: string;
+  variant?: 'danger' | 'warning' | 'info' | 'emerald' | 'purple';
+  onConfirm: () => void | Promise<void>;
+}
+
+const ConfirmContext = createContext<(config: ConfirmConfig) => void>(() => {});
+
+export function useConfirmAction() {
+  return useContext(ConfirmContext);
+}
+
+function ConfirmModal({ config, onClose }: { config: ConfirmConfig; onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await config.onConfirm();
+    } finally {
+      setLoading(false);
+      onClose();
+    }
+  };
+
+  const getConfirmBtnStyle = () => {
+    if (config.variant === 'danger') {
+      return 'btn-danger';
+    }
+    if (config.variant === 'emerald') {
+      return 'rounded-xl border border-emerald-500/30 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50';
+    }
+    if (config.variant === 'purple') {
+      return 'rounded-xl border border-purple-500/30 bg-purple-500/20 px-4 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/30 transition-colors disabled:opacity-50';
+    }
+    if (config.variant === 'warning') {
+      return 'rounded-xl border border-amber-500/30 bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors disabled:opacity-50';
+    }
+    return 'btn-accent text-xs py-2 px-4';
+  };
+
+  return (
+    <div className="modal-backdrop flex items-center justify-center p-4">
+      <div className="modal-panel max-w-md p-5 space-y-4 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <div className={`rounded-xl p-2.5 flex-shrink-0 ${
+            config.variant === 'emerald'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              : config.variant === 'purple'
+              ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+              : config.variant === 'warning'
+              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+          }`}>
+            <AlertCircle size={20} />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-white">{config.title}</h3>
+            <p className="text-xs text-soft mt-1 leading-relaxed">{config.message}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="btn-ghost px-4 py-2 text-xs font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className={`flex items-center gap-1.5 ${getConfirmBtnStyle()}`}
+          >
+            {loading && <RefreshCw size={13} className="animate-spin" />}
+            {config.confirmText || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function reasonColor(reason: string): string {
   if (reason.startsWith('positive')) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
@@ -75,9 +160,10 @@ function CandidateRow({
     setBusy('save');
     setMsg(null);
     try {
-      await debugApi.saveMatcherMatch({
+      const cleanYtId = candidate.track.id.replace(/^youtube:/, '').trim();
+      const res = await debugApi.saveMatcherMatch({
         spotifyId,
-        youtubeId: candidate.track.id,
+        youtubeId: cleanYtId,
         youtubeTitle: candidate.track.title,
         youtubeArtist: candidate.track.artist,
         spotifyTitle,
@@ -85,6 +171,20 @@ function CandidateRow({
         score: candidate.score,
       });
       setMsg({ ok: true, text: 'Saved to learned cache!' });
+
+      // If current playing track matches this, play the new match immediately
+      const currentTrack = usePlayerStore.getState().currentTrack;
+      if (currentTrack && res.track) {
+        const isMatch = (spotifyId && currentTrack.spotifyId === spotifyId) ||
+          (currentTrack.title.toLowerCase() === (spotifyTitle || candidate.track.title).toLowerCase());
+        if (isMatch) {
+          usePlayerStore.getState().playTrack({
+            ...currentTrack,
+            youtubeId: cleanYtId,
+            id: currentTrack.spotifyId ? `spotify:${currentTrack.spotifyId}` : cleanYtId,
+          });
+        }
+      }
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
     } finally {
@@ -97,7 +197,13 @@ function CandidateRow({
     setBusy('blacklist');
     setMsg(null);
     try {
-      await debugApi.blacklistMatch({ youtubeId: candidate.track.id, spotifyId });
+      const cleanYtId = candidate.track.id.replace(/^youtube:/, '').trim();
+      await debugApi.blacklistMatch({
+        youtubeId: cleanYtId,
+        spotifyId,
+        title: candidate.track.title || spotifyTitle,
+        artist: candidate.track.artist || spotifyArtist,
+      });
       setMsg({ ok: true, text: 'Blacklisted video.' });
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
@@ -299,7 +405,6 @@ function StatusRow({ label, value, tone }: { label: string; value: ReactNode; to
 function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   const [snapshot, setSnapshot] = useState<ResolverSnapshot | null>(null);
   const [snapLoading, setSnapLoading] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -340,18 +445,38 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showModal]);
 
-  async function runAction(name: string, fn: () => Promise<unknown>) {
-    setBusy(name);
+  const [modalBusyOption, setModalBusyOption] = useState<string | null>(null);
+  const [modalMsg, setModalMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function runModalAction(optionKey: string, name: string, fn: () => Promise<any>) {
+    setModalBusyOption(optionKey);
+    setModalMsg(null);
     setMsg(null);
     try {
-      await fn();
+      const res = await fn();
       await refreshSnapshot();
+      setModalMsg({ ok: true, text: `${name} completed!` });
       setMsg({ ok: true, text: `${name} done.` });
+
+      if (res?.resolved && track) {
+        usePlayerStore.getState().playTrack({
+          ...track,
+          title: track.title || res.resolved.title || '',
+          artist: track.artist || res.resolved.artist || '',
+          youtubeId: res.resolved.youtubeId || res.resolved.id,
+          id: track.spotifyId ? `spotify:${track.spotifyId}` : (res.resolved.youtubeId || res.resolved.id),
+        } as any);
+      }
+
+      setTimeout(() => {
+        setShowModal(false);
+        setModalMsg(null);
+      }, 1000);
     } catch (e) {
+      setModalMsg({ ok: false, text: (e as Error).message });
       setMsg({ ok: false, text: (e as Error).message });
     } finally {
-      setBusy(null);
-      setShowModal(false);
+      setModalBusyOption(null);
     }
   }
 
@@ -465,10 +590,10 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={() => setShowModal(true)}
-          disabled={!!busy}
+          disabled={!!modalBusyOption}
           className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
         >
-          {busy ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
+          {modalBusyOption ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
           Resolve again
         </button>
         <button
@@ -486,54 +611,75 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
           <div
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
             onClick={(e) => {
-              if (e.target === e.currentTarget) setShowModal(false);
+              if (e.target === e.currentTarget && !modalBusyOption) setShowModal(false);
             }}
           >
             <div className="w-full max-w-md rounded-xl border border-white/10 bg-base-900 p-5 shadow-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-white">Resolve Options</h3>
-                <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
+                <button onClick={() => setShowModal(false)} disabled={!!modalBusyOption} className="text-muted hover:text-white disabled:opacity-30">
                   <X size={18} />
                 </button>
               </div>
               <p className="text-xs text-muted">
                 Select resolve option for <strong className="text-white">{track.title}</strong>:
               </p>
+
+              {modalMsg && (
+                <div className={`flex items-center gap-1.5 rounded-lg border p-2.5 text-xs ${modalMsg.ok ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-red-500/20 bg-red-500/10 text-red-400'}`}>
+                  {modalMsg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {modalMsg.text}
+                </div>
+              )}
+
               <div className="space-y-2">
                 {/* Option 1: Clear learned cache only */}
                 <button
-                  onClick={() => runAction('Clear learned cache only', () => debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail }))}
-                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700"
+                  onClick={() =>
+                    runModalAction('opt1', 'Clear learned cache only', () =>
+                      debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail })
+                    )
+                  }
+                  disabled={!!modalBusyOption}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700 disabled:opacity-40"
                 >
                   <div>
                     <div className="text-xs font-medium text-white">Clear learned cache only</div>
                     <div className="text-[11px] text-muted">Clear cached resolution for this track and search for the best audio stream again.</div>
                   </div>
-                  <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  {modalBusyOption === 'opt1' ? (
+                    <RefreshCw size={15} className="animate-spin text-accent flex-shrink-0" />
+                  ) : (
+                    <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  )}
                 </button>
 
                 {/* Option 2: Clear match only */}
                 <button
                   onClick={() =>
-                    runAction('Clear match & re-resolve', async () => {
+                    runModalAction('opt2', 'Clear match & re-resolve', async () => {
                       if (spotifyId) await debugApi.clearCacheEntry(spotifyId);
                       return debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail });
                     })
                   }
-                  disabled={!spotifyId}
+                  disabled={!spotifyId || !!modalBusyOption}
                   className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700 disabled:opacity-40"
                 >
                   <div>
                     <div className="text-xs font-medium text-white">Clear match only</div>
                     <div className="text-[11px] text-muted">Clear Spotify → YouTube match mapping and re-resolve audio stream.</div>
                   </div>
-                  <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  {modalBusyOption === 'opt2' ? (
+                    <RefreshCw size={15} className="animate-spin text-accent flex-shrink-0" />
+                  ) : (
+                    <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  )}
                 </button>
 
                 {/* Option 3: Clear learned cache and match */}
                 <button
                   onClick={() =>
-                    runAction('Clear learned cache & match', async () => {
+                    runModalAction('opt3', 'Clear learned cache & match', async () => {
                       if (spotifyId) await debugApi.clearCacheEntry(spotifyId);
                       await debugApi.clearTrack({
                         id: track.id,
@@ -553,32 +699,58 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
                       });
                     })
                   }
-                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700"
+                  disabled={!!modalBusyOption}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-base-800 px-4 py-3 text-left transition-colors hover:bg-base-700 disabled:opacity-40"
                 >
                   <div>
                     <div className="text-xs font-medium text-white">Clear learned cache and match</div>
                     <div className="text-[11px] text-muted">Clear both learned resolver cache and Spotify → YouTube match mapping, then re-resolve from scratch.</div>
                   </div>
-                  <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  {modalBusyOption === 'opt3' ? (
+                    <RefreshCw size={15} className="animate-spin text-accent flex-shrink-0" />
+                  ) : (
+                    <Trash2 size={15} className="text-soft flex-shrink-0" />
+                  )}
                 </button>
 
-                {/* Option 3: Clear match, learned cache and blacklist this match */}
+                {/* Option 4: Clear match, learned cache and blacklist this match */}
                 <button
                   onClick={() => {
                     const activeYt = snapshot?.youtubeId ?? youtubeId;
-                    runAction('Blacklist, clear cache & re-resolve', async () => {
-                      if (activeYt) await debugApi.blacklistMatch({ youtubeId: activeYt, spotifyId });
-                      return debugApi.resolveAgain({ spotifyId, youtubeId, title: track.title, artist: track.artist, duration: track.duration, thumbnail: track.thumbnail });
+                    runModalAction('opt4', 'Blacklist, clear cache & re-resolve', async () => {
+                      if (activeYt) {
+                        await debugApi.blacklistMatch({
+                          youtubeId: activeYt,
+                          spotifyId,
+                          targetTitle: track.title,
+                          targetArtist: track.artist,
+                          matchedTitle: snapshot?.matchCache?.youtubeTitle || activeYt,
+                          matchedArtist: snapshot?.matchCache?.youtubeArtist || '',
+                        });
+                      }
+                      return debugApi.resolveAgain({
+                        spotifyId,
+                        youtubeId: activeYt,
+                        title: track.title,
+                        artist: track.artist,
+                        duration: track.duration,
+                        thumbnail: track.thumbnail,
+                        keepBlacklist: true,
+                      });
                     });
                   }}
-                  disabled={!(snapshot?.youtubeId ?? youtubeId)}
+                  disabled={!(snapshot?.youtubeId ?? youtubeId) || !!modalBusyOption}
                   className="w-full flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-left transition-colors hover:bg-red-500/20 disabled:opacity-40"
                 >
                   <div>
                     <div className="text-xs font-medium text-red-400">Clear match, learned cache and blacklist this match</div>
                     <div className="text-[11px] text-muted">Blacklist the active YouTube video, clear match & cache, and re-resolve to find a better match.</div>
                   </div>
-                  <Ban size={15} className="text-red-400 flex-shrink-0" />
+                  {modalBusyOption === 'opt4' ? (
+                    <RefreshCw size={15} className="animate-spin text-red-400 flex-shrink-0" />
+                  ) : (
+                    <Ban size={15} className="text-red-400 flex-shrink-0" />
+                  )}
                 </button>
               </div>
             </div>
@@ -619,10 +791,10 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-white">
-                  {snapshot?.matchCache?.youtubeTitle || snapshot?.learned?.youtubeTitle || '—'}
+                  {snapshot?.matchCache?.youtubeTitle || snapshot?.learned?.youtubeTitle || snapshot?.learned?.title || '—'}
                 </p>
                 <p className="truncate text-xs text-muted">
-                  {snapshot?.matchCache?.youtubeArtist || snapshot?.learned?.youtubeArtist || '—'}
+                  {snapshot?.matchCache?.youtubeArtist || snapshot?.learned?.youtubeArtist || snapshot?.learned?.artist || '—'}
                 </p>
               </div>
               {snapshot?.matchCache && (
@@ -779,26 +951,43 @@ function CachePanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const clearAll = async () => {
-    if (!confirm(`Clear all ${entries.length} cache entries?`)) return;
-    setLoading(true);
-    try {
-      await debugApi.clearAllCache();
-      await refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  const confirmAction = useConfirmAction();
+
+  const clearAll = () => {
+    confirmAction({
+      title: 'Clear Learned Cache',
+      message: `Clear all ${entries.length} Spotify → YouTube match entries?`,
+      confirmText: 'Clear All',
+      variant: 'danger',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          await debugApi.clearAllCache();
+          await refresh();
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
-  const clearOne = async (spotifyId: string) => {
-    try {
-      await debugApi.clearCacheEntry(spotifyId);
-      setEntries((prev) => prev.filter((e) => e.spotifyId !== spotifyId));
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  const clearOne = (spotifyId: string) => {
+    confirmAction({
+      title: 'Clear Learned Match',
+      message: `Clear learned match entry for Spotify track ID "${spotifyId}"?`,
+      confirmText: 'Clear Match',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await debugApi.clearCacheEntry(spotifyId);
+          setEntries((prev) => prev.filter((e) => e.spotifyId !== spotifyId));
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      },
+    });
   };
 
   const filtered = entries
@@ -941,15 +1130,25 @@ function CachedLyricsList() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const clearOne = async (key: string) => {
+  const confirmAction = useConfirmAction();
+
+  const clearOne = (key: string) => {
     const entry = entries.find((e) => e.key === key);
     if (!entry) return;
-    try {
-      await debugApi.clearLyricsCache({ title: entry.query.title, artist: entry.query.artist, duration: entry.query.duration });
-      setEntries((prev) => prev.filter((e) => e.key !== key));
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    confirmAction({
+      title: 'Clear Cached Lyrics',
+      message: `Clear cached lyrics entry for "${entry.query.title}"?`,
+      confirmText: 'Clear Lyrics',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await debugApi.clearLyricsCache({ title: entry.query.title, artist: entry.query.artist, duration: entry.query.duration });
+          setEntries((prev) => prev.filter((e) => e.key !== key));
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      },
+    });
   };
 
   const filtered = entries.filter((e) => {
@@ -1120,19 +1319,29 @@ function LyricsPanel() {
     }
   }
 
-  async function handleClearLyrics() {
+  const confirmAction = useConfirmAction();
+
+  function handleClearLyrics() {
     if (!currentTrack?.title) return;
-    setBusy('clear');
-    setMsg(null);
-    try {
-      await debugApi.clearLyricsCache({ title: currentTrack.title, artist: currentTrack.artist || '', duration: currentTrack.duration || 0 });
-      setMsg({ ok: true, text: 'Lyrics cache cleared.' });
-      await loadSnapshot();
-    } catch (e) {
-      setMsg({ ok: false, text: (e as Error).message });
-    } finally {
-      setBusy(null);
-    }
+    confirmAction({
+      title: 'Clear Lyrics Cache',
+      message: `Clear cached lyrics for "${currentTrack.title}"?`,
+      confirmText: 'Clear Lyrics',
+      variant: 'danger',
+      onConfirm: async () => {
+        setBusy('clear');
+        setMsg(null);
+        try {
+          await debugApi.clearLyricsCache({ title: currentTrack.title, artist: currentTrack.artist || '', duration: currentTrack.duration || 0 });
+          setMsg({ ok: true, text: 'Lyrics cache cleared.' });
+          await loadSnapshot();
+        } catch (e) {
+          setMsg({ ok: false, text: (e as Error).message });
+        } finally {
+          setBusy(null);
+        }
+      },
+    });
   }
 
   return (
@@ -1410,7 +1619,17 @@ function StatusPanel() {
 // ── Blacklist Manager ─────────────────────────────────────────────────────────
 
 function BlacklistPanel() {
-  const [entries, setEntries] = useState<Array<{ videoId: string; failedAt: number; expiresIn: number }>>([]);
+  const [entries, setEntries] = useState<Array<{
+    videoId: string;
+    failedAt: number;
+    title?: string;
+    artist?: string;
+    targetTitle?: string;
+    targetArtist?: string;
+    matchedTitle?: string;
+    matchedArtist?: string;
+    expiresIn: number;
+  }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1429,26 +1648,43 @@ function BlacklistPanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const clearOne = async (videoId: string) => {
-    try {
-      await debugApi.clearBlacklistEntry(videoId);
-      setEntries((prev) => prev.filter((e) => e.videoId !== videoId));
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  const confirmAction = useConfirmAction();
+
+  const clearOne = (videoId: string) => {
+    confirmAction({
+      title: 'Remove Blacklisted Entry',
+      message: `Remove video ID "${videoId}" from playback blacklist?`,
+      confirmText: 'Remove Entry',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await debugApi.clearBlacklistEntry(videoId);
+          setEntries((prev) => prev.filter((e) => e.videoId !== videoId));
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      },
+    });
   };
 
-  const clearAll = async () => {
-    if (!confirm(`Clear all ${entries.length} blacklist entries?`)) return;
-    setLoading(true);
-    try {
-      await debugApi.clearAllBlacklist();
-      await refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  const clearAll = () => {
+    confirmAction({
+      title: 'Clear Playback Blacklist',
+      message: `Clear all ${entries.length} playback blacklist entries?`,
+      confirmText: 'Clear All',
+      variant: 'danger',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          await debugApi.clearAllBlacklist();
+          await refresh();
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   return (
@@ -1483,30 +1719,49 @@ function BlacklistPanel() {
         {entries.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted">No blacklisted IDs.</div>
         ) : (
-          entries.map((e) => (
-            <div key={e.videoId} className="group flex items-center gap-3 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-2 transition-colors hover:border-white/[0.08]">
-              <img
-                src={ytThumb(e.videoId)}
-                alt=""
-                className="h-8 w-14 flex-shrink-0 rounded object-cover"
-                loading="lazy"
-                onError={(ev) => { (ev.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <div className="min-w-0 flex-1">
-                <code className="font-mono text-xs text-soft">{e.videoId}</code>
-                <div className="text-[11px] text-muted">
-                  Blacklisted {formatRelative(e.failedAt)} · Permanent
+          entries.map((e) => {
+            const targetLabel = e.targetTitle
+              ? `${e.targetArtist ? `${e.targetArtist} — ` : ''}${e.targetTitle}`
+              : e.title
+                ? `${e.artist ? `${e.artist} — ` : ''}${e.title}`
+                : null;
+            const matchLabel = e.matchedTitle
+              ? `${e.matchedArtist ? `${e.matchedArtist} — ` : ''}${e.matchedTitle}`
+              : e.videoId;
+
+            return (
+              <div key={e.videoId} className="group flex items-center gap-3 rounded-lg border border-white/[0.04] bg-base-900/30 px-3 py-2.5 transition-colors hover:border-white/[0.08]">
+                <img
+                  src={ytThumb(e.videoId)}
+                  alt=""
+                  className="h-8 w-14 flex-shrink-0 rounded object-cover"
+                  loading="lazy"
+                  onError={(ev) => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-white">
+                    <span className="font-semibold text-white">{targetLabel || 'Target Track'}</span>
+                    <span className="text-muted">➔</span>
+                    <span className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 font-mono text-[11px] text-red-400">
+                      <Ban size={11} className="text-red-400" />
+                      {matchLabel}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted mt-1">
+                    <span>YouTube ID: <code className="font-mono text-[10px] text-soft">{e.videoId}</code></span>
+                    <span>· Blacklisted {formatRelative(e.failedAt)}</span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => clearOne(e.videoId)}
+                  className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                  title="Remove from blacklist"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-              <button
-                onClick={() => clearOne(e.videoId)}
-                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-emerald-500/10 hover:text-emerald-400 group-hover:opacity-100"
-                title="Remove from blacklist"
-              >
-                <CheckCircle2 size={14} />
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1536,13 +1791,23 @@ function AudioCachePanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const clearOne = async (videoId: string) => {
-    try {
-      await debugApi.clearAudioCacheEntry(videoId);
-      setFiles((prev) => prev.filter((f) => f.videoId !== videoId));
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  const confirmAction = useConfirmAction();
+
+  const clearOne = (videoId: string) => {
+    confirmAction({
+      title: 'Delete Cached Audio',
+      message: `Delete cached audio file for video ID "${videoId}"?`,
+      confirmText: 'Delete Audio',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await debugApi.clearAudioCacheEntry(videoId);
+          setFiles((prev) => prev.filter((f) => f.videoId !== videoId));
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      },
+    });
   };
 
   const totalBytes = files.reduce((sum, f) => sum + f.bytes, 0);
@@ -1657,13 +1922,23 @@ function RequestLogPanel() {
     return () => clearInterval(id);
   }, [autoRefresh, refresh]);
 
-  const clearLog = async () => {
-    try {
-      await debugApi.clearRequestLog();
-      setEntries([]);
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  const confirmAction = useConfirmAction();
+
+  const clearLog = () => {
+    confirmAction({
+      title: 'Clear Request Log',
+      message: 'Clear all recorded HTTP request log entries?',
+      confirmText: 'Clear Log',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await debugApi.clearRequestLog();
+          setEntries([]);
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      },
+    });
   };
 
   function statusColor(code: number): string {
@@ -1868,18 +2143,101 @@ function MlModelPanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const handleImportProd = async () => {
-    setImporting(true);
-    setMsg(null);
-    try {
-      const res = await debugApi.importProdDataset();
-      setMsg({ ok: true, text: `Successfully imported ${res.importedTracks} tracks and ${res.totalPlays} play events from Noctune Prod!` });
-      await refresh();
-    } catch (err) {
-      setMsg({ ok: false, text: (err as Error).message });
-    } finally {
-      setImporting(false);
-    }
+  const confirmAction = useConfirmAction();
+
+  const handleImportProd = () => {
+    confirmAction({
+      title: 'Import Production Dataset',
+      message: 'Import tracks and play history from Noctune Prod AppData?',
+      confirmText: 'Import Dataset',
+      variant: 'purple',
+      onConfirm: async () => {
+        setImporting(true);
+        setMsg(null);
+        try {
+          const res = await debugApi.importProdDataset();
+          setMsg({ ok: true, text: `Successfully imported ${res.importedTracks} tracks and ${res.totalPlays} play events from Noctune Prod!` });
+          await refresh();
+        } catch (err) {
+          setMsg({ ok: false, text: (err as Error).message });
+        } finally {
+          setImporting(false);
+        }
+      },
+    });
+  };
+
+  const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImportTelemetryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        setImporting(true);
+        setMsg(null);
+        const res = await debugApi.importMlTelemetry(parsed);
+        setMsg({
+          ok: true,
+          text: `Successfully imported telemetry: ${res.importedTracks} tracks & ${res.importedTransitions} transition pairs (${res.totalLogEvents} total log events)!`,
+        });
+        await refresh();
+      } catch (err) {
+        setMsg({ ok: false, text: `Invalid telemetry JSON: ${(err as Error).message}` });
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleContributeDataset = () => {
+    confirmAction({
+      title: 'Submit Telemetry Contribution',
+      message: "Submit anonymous listening dataset contribution to Cloudflare worker to help train Noctune's base recommendation model? No personal data or IP is collected.",
+      confirmText: 'Submit Telemetry',
+      variant: 'emerald',
+      onConfirm: async () => {
+        setSubmitting(true);
+        setMsg(null);
+        try {
+          const res = await debugApi.submitMlTelemetry();
+          setMsg({ ok: true, text: `Thank you! Successfully submitted ${res.tracksCount} tracks and ${res.transitionsCount} transition pairs to Cloudflare Worker!` });
+        } catch (err) {
+          setMsg({ ok: false, text: (err as Error).message });
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
+
+  const handleClearDataset = () => {
+    confirmAction({
+      title: 'Clear ML Dataset',
+      message: 'Are you sure you want to clear all recorded ML play log history and reset recommendation model to baseline?',
+      confirmText: 'Clear Dataset',
+      variant: 'danger',
+      onConfirm: async () => {
+        setImporting(true);
+        setMsg(null);
+        try {
+          await debugApi.clearMlDataset();
+          setMsg({ ok: true, text: 'Cleared ML play log dataset and reset recommendation model to baseline.' });
+          setPredictions([]);
+          await refresh();
+        } catch (err) {
+          setMsg({ ok: false, text: (err as Error).message });
+        } finally {
+          setImporting(false);
+        }
+      },
+    });
   };
 
   const handleTestPredictions = async () => {
@@ -1909,8 +2267,8 @@ function MlModelPanel() {
             {stats?.isReady ? 'Model Active' : 'Cold Start'}
           </span>
           {stats?.hasSeedModel && (
-            <span className="rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 font-mono text-xs text-purple-300">
-              Base Model ({stats.seedTrackCount} tracks)
+            <span className="rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 font-mono text-xs text-purple-300" title="Pre-trained seed model + locally learned tracks from your listening history">
+              Trained Dataset ({stats.seedTrackCount.toLocaleString()} tracks)
             </span>
           )}
         </div>
@@ -1954,14 +2312,46 @@ function MlModelPanel() {
             <Terminal size={14} className="text-accent" /> Live ML Recommendation Sandbox
           </span>
           <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".json"
+              onChange={handleImportTelemetryFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-40"
+              title="Import telemetry JSON file exported from Cloudflare KV or another Noctune user"
+            >
+              <FileText size={13} /> Import Telemetry JSON
+            </button>
+            <button
+              onClick={handleContributeDataset}
+              disabled={submitting || importing}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
+              title="Submit anonymous listening dataset to help train Noctune's next base model"
+            >
+              {submitting ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+              {submitting ? 'Submitting...' : 'Help Improve ML Model'}
+            </button>
             <button
               onClick={handleImportProd}
               disabled={importing}
               className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-1.5 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/10 disabled:opacity-40"
-              title="Import 888 tracks and 2,260 plays from Noctune Prod AppData"
+              title="Import tracks and play history from Noctune Prod AppData"
             >
               {importing ? <RefreshCw size={13} className="animate-spin" /> : <HardDrive size={13} />}
               {importing ? 'Importing...' : 'Import Prod Dataset'}
+            </button>
+            <button
+              onClick={handleClearDataset}
+              disabled={importing}
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+              title="Clear all recorded play events and reset ML dataset"
+            >
+              <Trash2 size={13} /> Clear Dataset
             </button>
             <button
               onClick={handleTestPredictions}
@@ -2027,7 +2417,12 @@ function ToolsPanel() {
 export default function DebugApp() {
   const [tab, setTab] = useState<Tab>('resolver');
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig | null>(null);
   const setView = usePlayerStore((state) => state.setView);
+
+  const confirmAction = useCallback((config: ConfirmConfig) => {
+    setConfirmConfig(config);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -2048,63 +2443,69 @@ export default function DebugApp() {
   ];
 
   return (
-    <div className="relative z-10 flex h-full flex-col overflow-hidden text-white">
-      <div className="ambient-glow -top-40 left-1/4 h-72 w-72 bg-accent/10 animate-float" aria-hidden="true" />
+    <ConfirmContext.Provider value={confirmAction}>
+      <div className="relative z-10 flex h-full flex-col overflow-hidden text-white">
+        <div className="ambient-glow -top-40 left-1/4 h-72 w-72 bg-accent/10 animate-float" aria-hidden="true" />
 
-      {/* Header */}
-      <div className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-5 backdrop-blur-xl">
-        <span className="text-sm font-semibold text-white/90">Debug Dashboard</span>
-        <div className="ml-2 flex items-center gap-1">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-accent/10 text-accent'
-                    : 'text-muted hover:bg-white/[0.04] hover:text-soft'
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
+        {/* Header */}
+        <div className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-5 backdrop-blur-xl">
+          <span className="text-sm font-semibold text-white/90">Debug Dashboard</span>
+          <div className="ml-2 flex items-center gap-1">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-muted hover:bg-white/[0.04] hover:text-soft'
+                  }`}
+                >
+                  <Icon size={15} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {backendOk === null ? (
+              <span className="text-xs text-muted">Checking backend...</span>
+            ) : backendOk ? (
+              <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                <CheckCircle2 size={13} /> Backend connected
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs text-red-400">
+                <AlertCircle size={13} /> Backend not found
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setView('settings')}
+              className="rounded-lg px-3 py-1.5 text-xs text-muted transition-colors hover:bg-white/[0.04] hover:text-soft"
+            >
+              Back to settings
+            </button>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          {backendOk === null ? (
-            <span className="text-xs text-muted">Checking backend...</span>
-          ) : backendOk ? (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <CheckCircle2 size={13} /> Backend connected
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-xs text-red-400">
-              <AlertCircle size={13} /> Backend not found
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setView('settings')}
-            className="rounded-lg px-3 py-1.5 text-xs text-muted transition-colors hover:bg-white/[0.04] hover:text-soft"
-          >
-            Back to settings
-          </button>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-4xl">
-          {tab === 'resolver' && <ResolverPanel />}
-          {tab === 'lyrics' && <LyricsPanel />}
-          {tab === 'status' && <StatusPanel />}
-          {tab === 'tools' && <ToolsPanel />}
+        {/* Content */}
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="mx-auto max-w-4xl">
+            {tab === 'resolver' && <ResolverPanel />}
+            {tab === 'lyrics' && <LyricsPanel />}
+            {tab === 'status' && <StatusPanel />}
+            {tab === 'tools' && <ToolsPanel />}
+          </div>
         </div>
+
+        {confirmConfig && (
+          <ConfirmModal config={confirmConfig} onClose={() => setConfirmConfig(null)} />
+        )}
       </div>
-    </div>
+    </ConfirmContext.Provider>
   );
 }

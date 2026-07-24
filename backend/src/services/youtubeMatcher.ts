@@ -294,8 +294,9 @@ function titleWordStats(spotifyTitle: string, candidateTitle: string): { matched
   };
 }
 
-function keywordAllowed(keyword: string, spotifyTitle: string): boolean {
-  return hasKeyword(normalize(spotifyTitle), keyword);
+function keywordAllowed(keyword: string, spotifyTrack: Track): boolean {
+  const combined = normalize(`${spotifyTrack.title} ${spotifyTrack.artist} ${spotifyTrack.query ?? ''}`);
+  return hasKeyword(combined, keyword);
 }
 
 function splitArtistNames(value: string): string[] {
@@ -346,15 +347,23 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
     reasons.push(`title-word-match:${titleStats.matched}/${titleStats.total}`);
   }
 
+  let hasAnyArtistMatch = false;
   for (const artistName of splitArtistNames(spotifyTrack.artist)) {
     if (candidateArtist.includes(artistName)) {
       hasArtistChannelMatch = true;
+      hasAnyArtistMatch = true;
       score += 90;
       reasons.push('artist-channel-match');
     } else if (artistName && combined.includes(artistName)) {
+      hasAnyArtistMatch = true;
       score += 45;
       reasons.push('artist-match');
     }
+  }
+
+  if (spotifyTrack.artist && spotifyTrack.artist.trim().length > 0 && !hasAnyArtistMatch) {
+    score -= 150;
+    reasons.push('artist-mismatch-penalty');
   }
 
   if (candidateTitle.includes(spotifyTitle)) {
@@ -400,7 +409,7 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
   }
 
   for (const keyword of negativeKeywords) {
-    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack)) {
       if ((keyword === 'film' || keyword === 'movie') && hasArtistChannelMatch) {
         reasons.push(`ignored-negative:${keyword}`);
         continue;
@@ -422,32 +431,34 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
     hasKeyword(candidateArtist, 'vevo');
 
   for (const keyword of fanUploadKeywords) {
-    if (hasKeyword(combined, keyword) && !hasOfficialSignal) {
+    if (hasKeyword(combined, keyword) && !hasOfficialSignal && !keywordAllowed(keyword, spotifyTrack)) {
       score -= keyword.includes('sing') ? 120 : 65;
       reasons.push(`fan-upload:${keyword}`);
     }
   }
 
   for (const keyword of liveVersionKeywords) {
-    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack)) {
       score -= keyword === 'tour' ? 260 : 180;
       reasons.push(`live-version:${keyword}`);
     }
   }
 
   for (const keyword of alternateVersionKeywords) {
-    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack.title)) {
+    if (hasKeyword(combined, keyword) && !keywordAllowed(keyword, spotifyTrack)) {
       score -= 220;
       reasons.push(`alternate-version:${keyword}`);
     }
   }
 
-  if (!hasDateLikeTitle(spotifyTrack.title) && hasDateLikeTitle(candidate.title)) {
+  const spotifyCombinedText = `${spotifyTrack.title} ${spotifyTrack.artist} ${spotifyTrack.query ?? ''}`;
+
+  if (!hasDateLikeTitle(spotifyCombinedText) && hasDateLikeTitle(candidate.title)) {
     score -= 170;
     reasons.push('date-in-title');
   }
 
-  if (hasLiveVisualSignal(candidate.title) && !hasLiveVisualSignal(spotifyTrack.title)) {
+  if (hasLiveVisualSignal(candidate.title) && !hasLiveVisualSignal(spotifyCombinedText)) {
     score -= 210;
     reasons.push('live-visual');
   }

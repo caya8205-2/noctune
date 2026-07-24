@@ -110,26 +110,33 @@ export function recordMlPlayEvent(track: Track): void {
 
 interface SeedModelData {
   version: number;
-  trainedAt: number;
-  trackCount: number;
-  tracks: Record<string, Track>;
+  trainedAt?: number;
+  generatedAt?: number;
+  trackCount?: number;
+  tracks?: Record<string, any>;
   transitions: Record<string, Record<string, number>>;
 }
 
 let seedModelCache: SeedModelData | null = null;
+let seedModelFileMtime = 0;
 
 function loadSeedModel(): SeedModelData | null {
-  if (seedModelCache) return seedModelCache;
   try {
     const candidatePaths = [
+      path.join(getDataDir(), 'seed-model.json'),
       path.join(process.cwd(), 'src/data/seed-model.json'),
       path.join(process.cwd(), 'dist/data/seed-model.json'),
-      path.join(getDataDir(), 'seed-model.json'),
     ];
     for (const p of candidatePaths) {
       if (p && fs.existsSync(p)) {
+        const stat = fs.statSync(p);
+        if (seedModelCache && stat.mtimeMs === seedModelFileMtime) {
+          return seedModelCache;
+        }
         const raw = fs.readFileSync(p, 'utf-8');
         seedModelCache = JSON.parse(raw);
+        seedModelFileMtime = stat.mtimeMs;
+        transitionMatrixCache = null;
         return seedModelCache;
       }
     }
@@ -410,7 +417,17 @@ export function importProdDataset(): { ok: boolean; importedTracks: number; tota
   if (saveStore) saveStore();
 
   const currentLog = loadPlayLog();
-  const mergedLog = [...currentLog, ...newLogEvents];
+  const seenKeys = new Set<string>();
+  const mergedLog: PlayLogEvent[] = [];
+
+  for (const event of [...currentLog, ...newLogEvents]) {
+    const key = `${event.trackId}_${event.timestamp}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      mergedLog.push(event);
+    }
+  }
+
   if (mergedLog.length > 5000) mergedLog.splice(0, mergedLog.length - 5000);
   savePlayLog(mergedLog);
 
@@ -464,16 +481,188 @@ export function getMlModelStats(): MlModelStats {
   let pairCount = 0;
   for (const map of matrix.values()) pairCount += map.size;
 
-  const uniqueTracks = new Set(log.map((e) => e.trackId)).size;
-  const seedCount = seed?.trackCount ?? 0;
+  const seedCount = seed?.trackCount ?? (seed?.tracks ? Object.keys(seed.tracks).length : 0);
+  const storeTracksCount = Object.keys(getStore().tracks).length;
 
   return {
     playLogCount: log.length,
-    uniqueTracksCount: uniqueTracks,
+    uniqueTracksCount: matrix.size,
     transitionPairsCount: pairCount,
     lastTrainedAt: seed?.trainedAt || lastModelTrainTime || Date.now(),
-    isReady: log.length >= 3 || uniqueTracks >= 2 || seedCount > 0,
-    hasSeedModel: Boolean(seed),
-    seedTrackCount: seedCount,
+    isReady: seedCount > 0 || log.length > 0 || matrix.size > 0,
+    hasSeedModel: Boolean(seed && seedCount > 0),
+    seedTrackCount: Math.max(seedCount, storeTracksCount),
+  };
+}
+
+export function clearMlDataset(): { cleared: boolean; playLogCount: number } {
+  savePlayLog([]);
+
+  const userSeedModelPath = path.join(getDataDir(), 'seed-model.json');
+  try {
+    if (fs.existsSync(userSeedModelPath)) {
+      fs.unlinkSync(userSeedModelPath);
+    }
+  } catch (err) {
+    console.error('[ml] Failed to remove user seed model:', err);
+  }
+
+  seedModelCache = null;
+  seedModelFileMtime = 0;
+  transitionMatrixCache = null;
+  lastRecordedTrackId = null;
+  return { cleared: true, playLogCount: 0 };
+}
+
+const DEFAULT_TELEMETRY_URL = 'https://noctune-dataset-collector.caya8205.workers.dev';
+
+export async function submitMlTelemetry(customUrl?: string): Promise<{ ok: boolean; id?: string; tracksCount: number; transitionsCount: number }> {
+  const store = getStore();
+  const log = loadPlayLog();
+  const matrix = buildTransitionMatrix();
+
+  const tracks: Record<string, { id: string; title: string; artist: string; playCount?: number }> = {};
+  for (const [id, t] of Object.entries(store.tracks)) {
+    if (!id || !t) continue;
+    tracks[id] = {
+      id,
+      title: t.title || '',
+      artist: t.artist || '',
+      playCount: t.playCount || 0,
+    };
+  }
+
+  const transitions: Record<string, Record<string, number>> = {};
+  let transitionCount = 0;
+  for (const [fromId, targetMap] of matrix.entries()) {
+    transitions[fromId] = {};
+    for (const [toId, weight] of targetMap.entries()) {
+      transitions[fromId][toId] = weight;
+      transitionCount++;
+    }
+  }
+
+  const payload = {
+    version: 1,
+    submittedAt: Date.now(),
+    tracksCount: Object.keys(tracks).length,
+    logEventsCount: log.length,
+    transitionsCount: transitionCount,
+    tracks,
+    transitions,
+  };
+
+  const targetUrl = customUrl || DEFAULT_TELEMETRY_URL;
+  const res = await fetch(targetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Telemetry submission failed (${res.status} ${res.statusText})`);
+  }
+
+  const data = (await res.json()) as { ok: boolean; id?: string };
+  return {
+    ok: Boolean(data.ok),
+    id: data.id,
+    tracksCount: payload.tracksCount,
+    transitionsCount: transitionCount,
+  };
+}
+
+export interface TelemetryImportPayload {
+  version?: number;
+  submittedAt?: number;
+  tracksCount?: number;
+  transitionsCount?: number;
+  tracks?: Record<string, { id: string; title: string; artist: string; playCount?: number }>;
+  transitions?: Record<string, Record<string, number>>;
+}
+
+export function importMlTelemetry(payload: TelemetryImportPayload): {
+  ok: boolean;
+  importedTracks: number;
+  importedTransitions: number;
+  totalLogEvents: number;
+} {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid telemetry payload');
+  }
+
+  const store = getStore();
+  let importedTracks = 0;
+  let importedTransitions = 0;
+
+  // 1. Merge tracks metadata into store.tracks
+  if (payload.tracks && typeof payload.tracks === 'object') {
+    for (const [id, track] of Object.entries(payload.tracks)) {
+      if (!id || !track) continue;
+      const existing = store.tracks[id];
+      store.tracks[id] = {
+        ...existing,
+        id,
+        title: track.title || existing?.title || '',
+        artist: track.artist || existing?.artist || '',
+        playCount: Math.max(existing?.playCount ?? 0, track.playCount ?? 0),
+        query: existing?.query || `${track.title} ${track.artist}`.trim(),
+      } as CachedTrack;
+      importedTracks++;
+    }
+  }
+
+  // 2. Load existing seed model or initialize fresh seed model structure
+  const existingSeed = loadSeedModel();
+  const seedModel: SeedModelData = existingSeed
+    ? { ...existingSeed, transitions: { ...existingSeed.transitions } }
+    : {
+        version: 1,
+        trainedAt: Date.now(),
+        trackCount: 0,
+        transitions: {},
+      };
+
+  if (!seedModel.transitions) seedModel.transitions = {};
+
+  // 3. Merge transitions directly into seedModel.transitions
+  if (payload.transitions && typeof payload.transitions === 'object') {
+    for (const [fromId, targets] of Object.entries(payload.transitions)) {
+      if (!targets || typeof targets !== 'object') continue;
+      if (!seedModel.transitions[fromId]) seedModel.transitions[fromId] = {};
+      const currentMap = seedModel.transitions[fromId];
+
+      for (const [toId, weight] of Object.entries(targets)) {
+        if (!toId) continue;
+        currentMap[toId] = (currentMap[toId] ?? 0) + (typeof weight === 'number' ? weight : 1);
+        importedTransitions++;
+      }
+    }
+  }
+
+  // 4. Save updated seed-model.json to user data dir
+  seedModel.trackCount = Object.keys(seedModel.transitions).length;
+  const userSeedModelPath = path.join(getDataDir(), 'seed-model.json');
+  try {
+    fs.writeFileSync(userSeedModelPath, JSON.stringify(seedModel, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn(`[ml] failed to save user seed-model.json: ${(err as Error).message}`);
+  }
+
+  // Save track store updates
+  const saveStore = (getStore() as any)._saveStore || undefined;
+  if (saveStore) saveStore();
+
+  // Invalidate caches so model rebuilds with updated Base Model
+  seedModelCache = seedModel;
+  transitionMatrixCache = null;
+
+  const currentLog = loadPlayLog();
+
+  return {
+    ok: true,
+    importedTracks,
+    importedTransitions,
+    totalLogEvents: currentLog.length,
   };
 }

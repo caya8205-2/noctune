@@ -110,14 +110,31 @@ const ClearTrackCacheBody = PlayedBody.partial().extend({
 });
 
 function isYoutubeVideoId(id: string): boolean {
-  return /^[a-zA-Z0-9_-]{11}$/.test(id);
+  const clean = (id || '').replace(/^(youtube|ytdlp):/, '').trim();
+  return /^[a-zA-Z0-9_-]{11}$/.test(clean);
 }
 
 async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?: string): Promise<string | null> {
-  if (!videoId.startsWith('spotify:')) return isYoutubeVideoId(videoId) ? videoId : null;
+  const cleanVideoId = (videoId || '').replace(/^(youtube|ytdlp):/, '').trim();
+  if (!videoId.startsWith('spotify:')) {
+    if (isYoutubeVideoId(cleanVideoId) && !isPlaybackBlacklisted(cleanVideoId)) {
+      return cleanVideoId;
+    }
+    const { searchTracks } = await import('../services/audioResolver.js');
+    const results = await searchTracks(query, 6);
+    const cleanAlt = results.find((t) => {
+      const yId = (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim();
+      return isYoutubeVideoId(yId) && !isPlaybackBlacklisted(yId);
+    });
+    if (cleanAlt) {
+      return (cleanAlt.youtubeId || cleanAlt.id).replace(/^(youtube|ytdlp):/, '').trim();
+    }
+    return null;
+  }
   const spotifyId = videoId.replace(/^spotify:/, '');
-  if (youtubeId && isYoutubeVideoId(youtubeId) && !isPlaybackBlacklisted(youtubeId)) return youtubeId;
-  if (youtubeId && isPlaybackBlacklisted(youtubeId)) {
+  const cleanYtId = youtubeId ? youtubeId.replace(/^(youtube|ytdlp):/, '').trim() : undefined;
+  if (cleanYtId && isYoutubeVideoId(cleanYtId) && !isPlaybackBlacklisted(cleanYtId)) return cleanYtId;
+  if (cleanYtId && isPlaybackBlacklisted(cleanYtId)) {
     clearMatchCacheForSpotifyId(spotifyId);
   }
 
@@ -239,10 +256,12 @@ async function fetchAudioStream(
   boundedRange = true
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
   const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : (range ?? normalizeUpstreamRange(undefined));
-  const headers = { Range: upstreamRange };
-  const res = await fetch(audioUrl, {
-    headers,
-  });
+  const headers = {
+    Range: upstreamRange,
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+  let res = await fetch(audioUrl, { headers });
 
   const shouldRefresh =
     !res.ok ||
@@ -256,18 +275,26 @@ async function fetchAudioStream(
   }
 
   res.body?.cancel().catch(() => {});
-  const refreshedAudio = await resolveAudioUrl(videoId);
-  refreshTrackUrl(
-    videoId,
-    refreshedAudio.url,
-    refreshedAudio.qualityPreference,
-    refreshedAudio.format,
-    refreshedAudio.quality
-  );
-  const refreshedRes = await fetch(refreshedAudio.url, {
-    headers,
-  });
-  return { res: refreshedRes, refreshed: true, audioUrl: refreshedAudio.url };
+  try {
+    const refreshedAudio = await resolveAudioUrl(videoId);
+    refreshTrackUrl(
+      videoId,
+      refreshedAudio.url,
+      refreshedAudio.qualityPreference,
+      refreshedAudio.format,
+      refreshedAudio.quality
+    );
+    const refreshedRes = await fetch(refreshedAudio.url, { headers });
+    if (refreshedRes.ok) {
+      return { res: refreshedRes, refreshed: true, audioUrl: refreshedAudio.url };
+    }
+    refreshedRes.body?.cancel().catch(() => {});
+    res = refreshedRes;
+  } catch (err) {
+    console.warn(`[player] fetchAudioStream URL refresh failed for ${videoId}: ${(err as Error).message}`);
+  }
+
+  return { res, refreshed: false, audioUrl };
 }
 
 function parseContentRange(value: string | null): { start: number; end: number; total: number } | null {
@@ -767,6 +794,11 @@ export async function playerRoutes(app: FastifyInstance) {
     }
 
     const preference = getEnvConfig().audioQualityPreference;
+    const cleanStreamId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+    if (isPlaybackBlacklisted(cleanStreamId)) {
+      return reply.status(404).send({ error: 'Video is blacklisted' });
+    }
+
     let cached = getCachedById(videoId);
     if (!cached) {
       try {

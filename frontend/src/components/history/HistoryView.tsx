@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { api, type CachedTrack, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { isTrackActive } from '../../utils/api';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackTitle } from '../ui/TrackTitle';
 
@@ -151,9 +152,7 @@ export function HistoryView() {
         )}
 
         {tracks.map((track, i) => {
-          const isActive =
-            currentTrack?.id === track.id ||
-            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+          const isActive = isTrackActive(currentTrack, track);
           return (
               <div
               key={`${track.id}-${track.spotifyId ?? 'history'}-${i}`}

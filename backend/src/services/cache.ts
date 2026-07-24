@@ -190,19 +190,21 @@ export function recordPlay(videoId: string): void {
 }
 
 /** Increment play count and refresh display metadata used by history. */
-export function recordPlayWithMetadata(track: Track): CachedTrack | null {
+export function recordPlayWithMetadata(track: Track): CachedTrack {
   const store = getStore();
-  const existing = store.tracks[track.id];
-  if (!existing) return null;
+  const existing = store.tracks[track.id] || ({} as Partial<CachedTrack>);
 
   const updated: CachedTrack = {
     ...existing,
-    title: track.title || existing.title,
-    artist: track.artist || existing.artist,
+    audioUrl: existing.audioUrl || '',
+    audioUrlExpiry: existing.audioUrlExpiry || 0,
+    id: track.id,
+    title: track.title || existing.title || '',
+    artist: track.artist || existing.artist || '',
     album: track.album ?? existing.album,
-    duration: track.duration || existing.duration,
-    thumbnail: track.thumbnail || existing.thumbnail,
-    query: track.query || existing.query,
+    duration: track.duration || existing.duration || 0,
+    thumbnail: track.thumbnail || existing.thumbnail || '',
+    query: track.query || existing.query || track.title || '',
     spotifyId: track.spotifyId ?? existing.spotifyId,
     spotifyUrl: track.spotifyUrl ?? existing.spotifyUrl,
     youtubeId: track.youtubeId ?? existing.youtubeId,
@@ -233,10 +235,26 @@ export function getTopTracks(limit = 20): CachedTrack[] {
 /** Get cached tracks sorted by latest play time. */
 export function getRecentTracks(limit = 50): CachedTrack[] {
   const store = getStore();
-  return Object.values(store.tracks)
+  const sorted = Object.values(store.tracks)
     .filter((track) => Boolean(track.lastPlayed))
-    .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0))
-    .slice(0, limit);
+    .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
+
+  const seen = new Set<string>();
+  const result: CachedTrack[] = [];
+
+  for (const track of sorted) {
+    const cleanYt = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
+    const titleKey = `${(track.title || '').trim().toLowerCase()}|${(track.artist || '').trim().toLowerCase()}`;
+    const dedupeKey = track.spotifyId ? `spotify:${track.spotifyId}` : (cleanYt || titleKey);
+
+    if (!seen.has(dedupeKey)) {
+      seen.add(dedupeKey);
+      result.push(track);
+      if (result.length >= limit) break;
+    }
+  }
+
+  return result;
 }
 
 export function clearPlaybackHistory(): { updated: number } {
@@ -275,7 +293,12 @@ export function clearTrackCache(videoIds: string[], spotifyId?: string): { track
   let tracks = 0;
   for (const id of ids) {
     if (store.tracks[id]) {
-      delete store.tracks[id];
+      const track = store.tracks[id] as any;
+      delete track.audioUrl;
+      delete track.audioUrlExpiry;
+      delete track.localAudioPath;
+      delete track.audioFormat;
+      delete track.audioQuality;
       tracks += 1;
     }
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
-import { api, type Track } from '../../utils/api';
+import { api, isTrackActive, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { clsx } from 'clsx';
@@ -657,9 +657,7 @@ export function PlaylistView() {
         )}
 
         {visibleTracks.map(({ track, originalIndex }, visibleIndex) => {
-          const isActive =
-            currentTrack?.id === track.id ||
-            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+          const isActive = isTrackActive(currentTrack, track);
           const canReorder = editing && sortMode === 'custom' && !trackFilter.trim();
           return (
             <div

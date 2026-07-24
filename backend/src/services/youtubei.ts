@@ -182,13 +182,20 @@ function isLimitedIosStream(url: string): boolean {
 }
 
 async function validateStreamingUrl(url: string): Promise<void> {
-  const res = await fetch(url, {
-    headers: { Range: 'bytes=0-1048575' },
-  });
-  res.body?.cancel().catch(() => {});
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(url, {
+      headers: { Range: 'bytes=0-1048575' },
+      signal: controller.signal,
+    });
+    res.body?.cancel().catch(() => {});
 
-  if (!res.ok && res.status !== 206) {
-    throw new Error(`Resolved audio URL is not playable: ${res.status} ${res.statusText}`);
+    if (!res.ok && res.status !== 206) {
+      throw new Error(`Resolved audio URL is not playable: ${res.status} ${res.statusText}`);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

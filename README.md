@@ -199,11 +199,22 @@ Noctune stores runtime data locally and ignores it from git:
 - `spotify-youtube-map.json` - Spotify-to-YouTube match cache
 - `noctune.db` - local playlists and liked songs
 - `audio-cache/` - optional cached audio files
-- `seed-model.json` - local ML recommendation model weights trained on local listening history
+- `seed-model.json` - baseline dataset and pre-trained local ML recommendation model weights
 - lyrics cache - local LRCLIB lookup results
 - Nightly Mix cache - frontend cache for generated personalized mixes
 
 Settings includes controls for Spotify credentials, GitHub release update checks, cache export/import, audio cache limit, audio cache clearing, failed resolver IDs, and Spotify match cache clearing. Search, Playlist, History, and Queue also expose per-track cache clearing for fixing one problematic track without wiping good cache data.
+
+## ML Recommendation Model & Safe Dataset Importing
+
+Noctune features an on-the-go **Hybrid Collaborative Filtering ML Model**. Unlike heavy Generative AI / LLMs that require massive VRAM, `.jsonl` training sets, and `.safetensors` model weights, Noctune uses an efficient Graph Markov Chain recommendation architecture:
+
+- **Base Model (`seed-model.json`)**: Shipped directly with the application as lightweight baseline dataset weights (pre-computed transition matrix and track metadata).
+- **Current Baseline Disclaimer & Default Engine**: The initial base model is currently trained on a small starter seed dataset of **888 unique tracks**. To ensure a smooth, rich recommendation experience for new users out-of-the-box, **Last.fm remains the default recommendation engine**. However, the local ML model continuously improves in the background as you listen to music, and upgraded pre-trained seed models trained on expanding datasets will be shipped with every future app update.
+- **Community Telemetry Contribution (Help Improve ML Model)**: Users can optionally contribute anonymized listening dataset transitions to help train future baseline seed models by clicking **"Help Improve ML Model"** in **Debug Dashboard ➔ Tools**. Submissions are aggregated securely via Cloudflare Workers and can be viewed on the live [Noctune Dataset Collector Dashboard](https://noctune-dataset-collector.caya8205.workers.dev).
+- **Automatic Real-time Training**: As you listen to music, Noctune automatically updates its in-memory transition matrix and appends to your local `play-log.json` in real-time. No manual retraining commands needed for daily use.
+- **Safe Dataset Importing (Conflict-free)**: Power users with existing listening data can use **Debug Dashboard ➔ Tools ➔ "Import Prod Dataset"**. This instantly overlays listening history using additive matrix layering (`weight_base + weight_user`). It is **100% safe, conflict-free, and instant**, without risk of overwriting or breaking your local music preferences.
+- **Shipping Updated Seed Models (Developers Only)**: Developers preparing a new release installer can run `npm run train-model` in `backend/` to bake latest listening datasets into `src/data/seed-model.json` so new installs start with rich out-of-the-box recommendations.
 
 ## Debug Dashboard
 
@@ -213,6 +224,7 @@ Noctune includes a dedicated **Debug Dashboard** accessible from Settings. It pr
 - **Learned Match Cache**: Browse and search all cached Spotify-to-YouTube video ID mappings, with 1-click single-entry deletion.
 - **Lyrics Cache Inspector**: View all cached plain and synced lyrics entries, line counts, and provider details with instant cache clearing.
 - **Playback Blacklist & Audio Cache Manager**: View and manage temporary failed video IDs and on-disk audio cache files with size statistics.
+- **ML Recommendation Sandbox**: View live ML model stats, import production datasets, and run live recommendation predictions.
 - **HTTP Request Log**: Track real-time backend API requests, response status codes, and execution latency.
 
 ## FAQ (or frequently encountered problems)

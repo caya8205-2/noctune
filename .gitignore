@@ -1,6 +1,6 @@
 node_modules/
 dist/
-data/
+data/**
 backend/data/
 !backend/src/data/seed-model.json
 backend/dist/

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Disc3, ExternalLink, Music2 } from 'lucide-react';
-import { api, type Track } from '../../utils/api';
+import { api, isTrackActive, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -185,7 +185,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         <div className="space-y-0.5 pt-2">
           {data.tracks.map(track => {
-            const isActive = currentTrack?.id === track.id;
+            const isActive = isTrackActive(currentTrack, track);
             return (
               <div
                 key={track.id}

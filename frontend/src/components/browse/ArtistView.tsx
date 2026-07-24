@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, Music2, Users } from 'lucide-react';
-import { api, type Track } from '../../utils/api';
+import { api, isTrackActive, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -177,7 +177,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
           <h2 className="section-label mb-3">TOP TRACKS</h2>
           <div className="space-y-0.5">
             {data.topTracks.map((track, i) => {
-              const isActive = currentTrack?.id === track.id;
+              const isActive = isTrackActive(currentTrack, track);
               return (
                 <div
                   key={track.id}

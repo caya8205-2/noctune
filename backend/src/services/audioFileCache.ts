@@ -24,8 +24,9 @@ export function getAudioCachePath(
   preference: AudioQualityPreference = 'auto'
 ): string {
   ensureAudioCacheDir();
+  const clean = (videoId || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
   const ext = format === 'webm' ? 'webm' : 'm4a';
-  return path.join(AUDIO_CACHE_DIR, `${safeName(videoId)}${qualitySuffix(preference)}.${ext}`);
+  return path.join(AUDIO_CACHE_DIR, `${safeName(clean)}${qualitySuffix(preference)}.${ext}`);
 }
 
 export function getExistingAudioCachePath(
@@ -33,7 +34,8 @@ export function getExistingAudioCachePath(
   preference: AudioQualityPreference = 'auto'
 ): string | null {
   ensureAudioCacheDir();
-  const base = `${safeName(videoId)}${qualitySuffix(preference)}`;
+  const clean = (videoId || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
+  const base = `${safeName(clean)}${qualitySuffix(preference)}`;
   for (const ext of ['m4a', 'webm']) {
     const candidate = path.join(AUDIO_CACHE_DIR, `${base}.${ext}`);
     if (fs.existsSync(candidate)) return candidate;
@@ -129,7 +131,8 @@ export function clearAudioCache(): { files: number; bytes: number } {
 
 export function clearAudioCacheForId(videoId: string): { files: number; bytes: number } {
   ensureAudioCacheDir();
-  const base = safeName(videoId);
+  const cleanId = (videoId || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
+  const base = safeName(cleanId);
   let files = 0;
   let bytes = 0;
 

@@ -155,8 +155,9 @@ export const debugApi = {
     artist: string;
     duration: number;
     thumbnail?: string;
+    keepBlacklist?: boolean;
   }) =>
-    req<{ ok: boolean; error?: string; resolved?: unknown; snapshot?: ResolverSnapshot }>(`/debug/resolve-again`, {
+    req<{ ok: boolean; error?: string; resolved?: any; snapshot?: ResolverSnapshot }>(`/debug/resolve-again`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -174,7 +175,16 @@ export const debugApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(track),
     }),
-  blacklistMatch: (body: { youtubeId: string; spotifyId?: string }) =>
+  blacklistMatch: (body: {
+    youtubeId: string;
+    spotifyId?: string;
+    title?: string;
+    artist?: string;
+    targetTitle?: string;
+    targetArtist?: string;
+    matchedTitle?: string;
+    matchedArtist?: string;
+  }) =>
     req<{ ok: boolean; youtubeId: string; blacklisted: boolean; clearedMatch: number }>('/debug/blacklist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -222,7 +232,7 @@ export const debugApi = {
   listLyricsCache: () =>
     req<{ entries: Array<{ key: string; query: { title: string; artist: string; duration: number }; cachedAt: number; hasLyrics: boolean; synced: boolean; lineCount: number; provider: string; lyricsTitle: string; lyricsArtist: string }>; total: number }>('/debug/lyrics/cache/list'),
   listBlacklist: () =>
-    req<{ entries: Array<{ videoId: string; failedAt: number; expiresIn: number }>; total: number }>('/debug/blacklist/list'),
+    req<{ entries: Array<{ videoId: string; failedAt: number; title?: string; artist?: string; targetTitle?: string; targetArtist?: string; matchedTitle?: string; matchedArtist?: string; expiresIn: number }>; total: number }>('/debug/blacklist/list'),
   clearBlacklistEntry: (videoId: string) =>
     req<{ ok: boolean; cleared: number }>(`/debug/blacklist/${encodeURIComponent(videoId)}`, { method: 'DELETE' }),
   clearAllBlacklist: () =>
@@ -239,6 +249,20 @@ export const debugApi = {
     req<{ ok: boolean; stats: { playLogCount: number; uniqueTracksCount: number; transitionPairsCount: number; lastTrainedAt: number; isReady: boolean; hasSeedModel: boolean; seedTrackCount: number } }>('/debug/ml/status'),
   importProdDataset: () =>
     req<{ ok: boolean; importedTracks: number; totalPlays: number; pathUsed: string }>('/debug/ml/import-prod', { method: 'POST' }),
+  clearMlDataset: () =>
+    req<{ ok: boolean; cleared: boolean; playLogCount: number }>('/debug/ml/dataset', { method: 'DELETE' }),
+  submitMlTelemetry: (customUrl?: string) =>
+    req<{ ok: boolean; id?: string; tracksCount: number; transitionsCount: number }>('/debug/ml/submit-telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customUrl }),
+    }),
+  importMlTelemetry: (payload: any) =>
+    req<{ ok: boolean; importedTracks: number; importedTransitions: number; totalLogEvents: number }>('/debug/ml/import-telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload }),
+    }),
   testMlRecommendation: (seed: any, limit = 10) =>
     req<{ ok: boolean; predictions: Array<{ track: any; transitionScore: number; metadataScore: number; playCountScore: number; recencyScore: number; nightBonus: number; totalScore: number }>; total: number }>('/debug/ml/test-recommendation', {
       method: 'POST',

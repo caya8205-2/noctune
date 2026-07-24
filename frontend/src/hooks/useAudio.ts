@@ -80,7 +80,7 @@ export function useAudio() {
   const crossfadeActiveRef = useRef(false);
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
   const suppressNextErrorRef = useRef(false);
-  const recoveryAttemptRef = useRef<string | null>(null);
+  const recoveryAttemptsRef = useRef<Record<string, number>>({});
 
   const {
     currentTrack,
@@ -152,7 +152,15 @@ export function useAudio() {
       setLoading(false);
 
       const track = usePlayerStore.getState().currentTrack;
-      if (!track || track.localAudioPath || recoveryAttemptRef.current === track.id) {
+      if (!track || track.localAudioPath) {
+        setIsPlaying(false);
+        return;
+      }
+
+      const attemptCount = (recoveryAttemptsRef.current[track.id] || 0) + 1;
+      recoveryAttemptsRef.current[track.id] = attemptCount;
+      if (attemptCount > 2) {
+        console.warn(`[audio] max recovery attempts reached for ${track.id}`);
         setIsPlaying(false);
         return;
       }
@@ -161,12 +169,12 @@ export function useAudio() {
         0,
         target.currentTime || usePlayerStore.getState().progress || 0
       );
-      recoveryAttemptRef.current = track.id;
       setLoading(true);
       api.resolve(track.id, track.query)
         .then((resolved) => {
           const latestTrack = usePlayerStore.getState().currentTrack;
           if (!latestTrack || latestTrack.id !== track.id) return;
+          const newYtId = resolved.youtubeId || resolved.id;
           usePlayerStore.setState({
             currentTrack: {
               ...resolved,
@@ -177,13 +185,15 @@ export function useAudio() {
               query: latestTrack.query,
               spotifyId: latestTrack.spotifyId,
               spotifyUrl: latestTrack.spotifyUrl,
-              youtubeId: latestTrack.youtubeId ?? resolved.id,
+              youtubeId: newYtId,
               youtubeTitle: latestTrack.youtubeTitle,
               youtubeArtist: latestTrack.youtubeArtist,
             },
           });
-          return apiUrl(`/player/stream/${resolved.id}?retry=${Date.now()}`)
+          const streamPath = `/player/stream/${newYtId}?retry=${Date.now()}`;
+          return apiUrl(streamPath)
             .then((src) => {
+              target.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
               target.src = src;
               target.load();
               return waitForAudioReady(target);
@@ -220,11 +230,12 @@ export function useAudio() {
     if (!audio || !currentTrack) return;
 
     let cancelled = false;
-    apiUrl('/player/stream/' + currentTrack.id)
+    const targetId = (currentTrack.youtubeId || currentTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
+    apiUrl('/player/stream/' + targetId)
       .then((src) => {
         if (cancelled || !audioRef.current) return;
+        delete recoveryAttemptsRef.current[currentTrack.id];
         if (audio.src !== src) {
-          recoveryAttemptRef.current = null;
           audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
           audio.src = src;
           audio.load();
@@ -237,7 +248,7 @@ export function useAudio() {
     return () => {
       cancelled = true;
     };
-  }, [currentTrack?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTrack?.id, currentTrack?.youtubeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync play/pause
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Download, Loader2, Music, Search, X, XCircle, Zap } from 'lucide-react';
-import { api, apiUrl, type Track } from '../../utils/api';
+import { api, apiUrl, isTrackActive, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -406,9 +406,7 @@ export function SearchView() {
         )}
 
         {results.map((track, i) => {
-          const isActive =
-            currentTrack?.id === track.id ||
-            Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
+          const isActive = isTrackActive(currentTrack, track);
           return (
             <div
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
