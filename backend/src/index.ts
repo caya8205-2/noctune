@@ -86,6 +86,47 @@ async function bootstrap() {
   await app.register(cors, {
     origin: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Noctune-Api-Key', 'X-Api-Key'],
+  });
+
+  // API Key Authentication Hook
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.method === 'OPTIONS') return;
+
+    const url = request.url.split('?')[0];
+    if (url === '/status' || url === '/status/' || url.startsWith('/changelog')) return;
+
+    const envConfig = getEnvConfig();
+    const apiKey = envConfig.apiKey?.trim();
+    if (!apiKey) return;
+
+    if (envConfig.allowLocalhostBypass) {
+      const ip = request.ip;
+      const hostHeader = (request.headers.host || '').toLowerCase();
+      const isLocalIp = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+      const isLocalHostHeader =
+        hostHeader.startsWith('localhost:') ||
+        hostHeader.startsWith('127.0.0.1:') ||
+        hostHeader === 'localhost' ||
+        hostHeader === '127.0.0.1';
+      if (isLocalIp && isLocalHostHeader) return;
+    }
+
+    const headerKey = (request.headers['x-noctune-api-key'] || request.headers['x-api-key']) as string | undefined;
+    let authHeaderKey: string | undefined;
+    const authHeader = request.headers['authorization'];
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+      authHeaderKey = authHeader.slice(7).trim();
+    }
+    const query = (request.query as Record<string, string>) || {};
+    const queryKey = query.apiKey || query.api_key;
+
+    const providedKey = (headerKey || authHeaderKey || queryKey || '').trim();
+
+    if (providedKey !== apiKey) {
+      reply.status(401).send({ ok: false, error: 'Unauthorized: Invalid or missing Noctune API Key' });
+      return reply;
+    }
   });
 
   // Parse JSON bodies

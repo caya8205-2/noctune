@@ -21,6 +21,8 @@ export interface EnvConfig {
     audioCacheLimitMb: number;
     discordRpcEnabled: boolean;
     recommendationEngineUserSelected?: boolean;
+    apiKey: string;
+    allowLocalhostBypass: boolean;
 }
 
 const DEFAULTS: EnvConfig = {
@@ -32,12 +34,15 @@ const DEFAULTS: EnvConfig = {
     audioCacheLimitMb: 1024,
     discordRpcEnabled: true,
     recommendationEngineUserSelected: false,
+    apiKey: '',
+    allowLocalhostBypass: true,
 };
 
 function withProcessEnv(config: EnvConfig): EnvConfig {
     const envSearchEngine = process.env.SEARCH_ENGINE;
     const envClientId = process.env.SPOTIFY_CLIENT_ID?.trim();
     const envClientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
+    const envApiKey = process.env.NOCTUNE_API_KEY?.trim();
 
     // If user hasn't explicitly saved an engine choice via Settings UI, default to lastfm
     let recEngine = config.recommendationEngine ?? 'lastfm';
@@ -49,6 +54,8 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
         ...config,
         spotifyClientId: (envClientId || config.spotifyClientId || '').trim(),
         spotifyClientSecret: (envClientSecret || config.spotifyClientSecret || '').trim(),
+        apiKey: (envApiKey || config.apiKey || '').trim(),
+        allowLocalhostBypass: config.allowLocalhostBypass ?? true,
         searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
             ? envSearchEngine
             : config.searchEngine,

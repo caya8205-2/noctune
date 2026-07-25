@@ -24,6 +24,8 @@ const UpdateBody = z.object({
     audioQualityPreference: z.enum(['auto', 'high']).optional(),
     audioCacheLimitMb: z.number().min(128).max(10240).optional(),
     discordRpcEnabled: z.boolean().optional(),
+    apiKey: z.string().optional(),
+    allowLocalhostBypass: z.boolean().optional(),
 });
 
 const TestBody = z.object({
@@ -41,6 +43,8 @@ export async function settingsRoutes(app: FastifyInstance) {
             audioQualityPreference: config.audioQualityPreference,
             audioCacheLimitMb: config.audioCacheLimitMb,
             discordRpcEnabled: config.discordRpcEnabled,
+            apiKey: config.apiKey ?? '',
+            allowLocalhostBypass: config.allowLocalhostBypass ?? true,
             cache: {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),
@@ -92,6 +96,8 @@ export async function settingsRoutes(app: FastifyInstance) {
             audioQualityPreference: updated.audioQualityPreference,
             audioCacheLimitMb: updated.audioCacheLimitMb,
             discordRpcEnabled: updated.discordRpcEnabled,
+            apiKey: updated.apiKey ?? '',
+            allowLocalhostBypass: updated.allowLocalhostBypass ?? true,
             spotify: {
                 clientId: '',
                 clientSecretMasked: '',
