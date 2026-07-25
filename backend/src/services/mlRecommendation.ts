@@ -122,10 +122,17 @@ let seedModelFileMtime = 0;
 
 function loadSeedModel(): SeedModelData | null {
   try {
+    const execDir = path.dirname(process.execPath);
     const candidatePaths = [
       path.join(getDataDir(), 'seed-model.json'),
       path.join(process.cwd(), 'src/data/seed-model.json'),
       path.join(process.cwd(), 'dist/data/seed-model.json'),
+      path.join(__dirname, '../data/seed-model.json'),
+      path.join(__dirname, '../../src/data/seed-model.json'),
+      path.join(execDir, 'seed-model.json'),
+      path.join(execDir, 'resources', 'seed-model.json'),
+      path.join(execDir, '..', 'resources', 'seed-model.json'),
+      path.join(execDir, '..', 'resources', 'backend', 'src', 'data', 'seed-model.json'),
     ];
     for (const p of candidatePaths) {
       if (p && fs.existsSync(p)) {

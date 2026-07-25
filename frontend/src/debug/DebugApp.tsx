@@ -2323,7 +2323,7 @@ function MlModelPanel() {
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
               className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-40"
-              title="Import telemetry JSON file exported from Cloudflare KV or another Noctune user"
+              title="Import telemetry JSON file or full seed-model.json from Cloudflare KV Collector to update persistent Roaming seed-model.json"
             >
               <FileText size={13} /> Import Telemetry JSON
             </button>
@@ -2340,7 +2340,7 @@ function MlModelPanel() {
               onClick={handleImportProd}
               disabled={importing}
               className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-1.5 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/10 disabled:opacity-40"
-              title="Import tracks and play history from Noctune Prod AppData"
+              title="Import tracks & play history from songs.json into play-log.json in AppData Roaming (does not alter seed-model.json)"
             >
               {importing ? <RefreshCw size={13} className="animate-spin" /> : <HardDrive size={13} />}
               {importing ? 'Importing...' : 'Import Prod Dataset'}
@@ -2362,6 +2362,11 @@ function MlModelPanel() {
               {testing ? 'Predicting...' : 'Test ML Predictions'}
             </button>
           </div>
+        </div>
+
+        <div className="mb-3 rounded-lg border border-white/[0.04] bg-base-950/40 p-2.5 text-[11px] leading-relaxed text-muted space-y-1">
+          <p><strong className="text-blue-300">• Import Telemetry JSON:</strong> Accepts telemetry export files (e.g., <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">telemetry_xxx_xxx.json</code>) or full <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>. Merges transitions & saves directly to persistent Roaming <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>.</p>
+          <p><strong className="text-purple-300">• Import Prod Dataset:</strong> Extracts track history & play counts from local <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">songs.json</code> into <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">play-log.json</code> in Roaming (does not generate or alter <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">seed-model.json</code>).</p>
         </div>
 
         {currentTrack && (

@@ -42,6 +42,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "../CHANGELOG.md",
+      "../backend/src/data/seed-model.json"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",

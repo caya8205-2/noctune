@@ -34,11 +34,16 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
+  { title: 'Official Pre-trained Seed Model', desc: 'Shipped seed-model.json (888 baseline tracks & 11,300+ transition weights) directly out-of-the-box for instant local ML recommendations without cold start.' },
   { title: 'Playback Blacklist & Disk Cache Hardening', desc: 'Normalized Video ID prefixes so clearing cache or blacklisting a track physically deletes stale audio files from disk, and enforced HTTP 404 stream rejection for blacklisted IDs.' },
   { title: 'Matcher Keyword Penalty Bypass', desc: 'Expanded matcher inspection to check title, artist, and search query so terms like "sings", "cover", "karaoke", "concert", or date formats are no longer penalized when present in target tracks.' },
   { title: 'History Preservation & Deduplication', desc: 'Preserved track metadata when clearing track cache so tracks remain in History, and added automatic deduplication for repeated plays.' },
   { title: 'Direct YouTube Resolution', desc: 'Direct YouTube clicks now resolve to exact Video IDs without unnecessary fallback query searches.' },
-  { title: 'Formatted Playback Blacklist', desc: 'Blacklist manager in Debug Tools now displays formatted track titles and artists (Artist — "Title" · VideoID).' },
+  { title: 'Native Confirmation Modal', desc: 'Replaced browser confirmation dialogs in webview with a React Noctune-styled ConfirmModal for destructive debug actions.' },
+  { title: 'Auto Disk Sync for Seed Model', desc: 'Added mtimeMs file tracking so replacing or restoring seed-model.json on disk instantly invalidates RAM caches and reloads dataset without server restart.' },
+  { title: 'Log Event Deduplication', desc: 'Added automatic trackId_timestamp deduplication in importProdDataset() so importing production datasets is idempotent.' },
+  { title: 'Clear ML Dataset Action', desc: 'Added Clear Dataset button in Debug Tools to unlink user seed model from disk and reset in-memory caches.' },
+  { title: 'Anonymous Dataset Telemetry Submission', desc: 'Added Help Improve ML Model button to allow users to securely contribute anonymized listening datasets to Cloudflare Workers.' },
 ];
 
 export function ChangelogModal() {

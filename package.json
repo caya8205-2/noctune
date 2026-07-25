@@ -15,7 +15,8 @@
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "tauri": "node scripts/tauri-dev.mjs",
     "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
-    "version:sync": "node scripts/sync-version.js"
+    "version:sync": "node scripts/sync-version.js",
+    "sign": "powershell -ExecutionPolicy Bypass -File ./scripts/noctune-signing.ps1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",

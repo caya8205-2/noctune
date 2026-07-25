@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Noctune ASCII Logo" width="450" />
+  <img src="assets/ascii.svg" alt="Noctune ASCII Logo" width="450" />
 </p>
 
 <p align="center">A lightweight desktop music player perfect for playing youtube background noise without the memory-eating browser or spotify with no ads</p> 

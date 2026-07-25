@@ -6,7 +6,7 @@
   "bin": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"const fs=require('fs'); fs.mkdirSync('dist/data',{recursive:true}); fs.copyFileSync('src/data/seed-model.json','dist/data/seed-model.json')\"",
     "start": "node dist/index.js",
     "test:matcher": "tsx test/matcherFixture.ts",
     "train-model": "tsx src/scripts/train_seed_model.ts",
@@ -15,6 +15,8 @@
   "pkg": {
     "scripts": "dist/**/*.js",
     "assets": [
+      "src/data/seed-model.json",
+      "dist/data/seed-model.json",
       "../node_modules/better-sqlite3/prebuilds/**/*",
       "../node_modules/better-sqlite3/build/Release/**/*.node",
       "../node_modules/kuromoji/dict/**/*",
