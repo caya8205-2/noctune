@@ -8,31 +8,43 @@ class TrackTile extends StatelessWidget {
     required this.track,
     required this.onTap,
     this.index,
+    this.onLongPress,
+    this.isPlaying = false,
+    this.trailing,
     super.key,
   });
 
   final Track track;
   final int? index;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool isPlaying;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final titleColor = isPlaying ? noctuneGold : Colors.white;
+
     return Material(
-      color: Colors.transparent,
+      color: isPlaying ? noctuneSurfaceRaised.withValues(alpha: 0.5) : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
           child: Row(
             children: [
               SizedBox(
                 width: 28,
-                child: Text(
-                  index == null ? '' : '${index! + 1}',
-                  style: textTheme.bodySmall?.copyWith(color: noctuneMuted),
-                ),
+                child: isPlaying
+                    ? const Icon(Icons.volume_up_rounded, color: noctuneGold, size: 18)
+                    : Text(
+                        index == null ? '' : '${index! + 1}',
+                        style: textTheme.bodySmall?.copyWith(color: noctuneMuted),
+                      ),
               ),
               TrackArtwork(url: track.thumbnail),
               const SizedBox(width: 12),
@@ -44,7 +56,10 @@ class TrackTile extends StatelessWidget {
                       track.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleMedium,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: titleColor,
+                        fontWeight: isPlaying ? FontWeight.bold : FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -57,10 +72,13 @@ class TrackTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                _formatDuration(track.duration),
-                style: textTheme.bodySmall?.copyWith(color: noctuneMuted),
-              ),
+              if (trailing != null)
+                trailing!
+              else
+                Text(
+                  _formatDuration(track.duration),
+                  style: textTheme.bodySmall?.copyWith(color: noctuneMuted),
+                ),
             ],
           ),
         ),

@@ -8,16 +8,23 @@ class NoctuneApi {
   NoctuneApi({
     String baseUrl = const String.fromEnvironment(
       'NOCTUNE_API_BASE',
-      defaultValue: 'http://10.0.2.2:3131',
+      defaultValue: 'https://noctune.my.id',
+    ),
+    String apiKey = const String.fromEnvironment(
+      'NOCTUNE_API_KEY',
+      defaultValue: '',
     ),
     HttpClient? client,
   })  : _baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
+        _apiKey = apiKey.trim(),
         _client = client ?? HttpClient();
 
   final String _baseUrl;
+  final String _apiKey;
   final HttpClient _client;
 
   String get baseUrl => _baseUrl;
+  String get apiKey => _apiKey;
 
   void close() {
     _client.close(force: true);
@@ -29,11 +36,19 @@ class NoctuneApi {
     return uri.replace(queryParameters: query);
   }
 
+  void _applyHeaders(HttpClientRequest request) {
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (_apiKey.isNotEmpty) {
+      request.headers.set('X-Noctune-Api-Key', _apiKey);
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_apiKey');
+    }
+  }
+
   Future<dynamic> _request(String path, {Map<String, String>? query}) async {
     final request = await _client
         .getUrl(_uri(path, query))
         .timeout(const Duration(seconds: 8));
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    _applyHeaders(request);
     final response = await request.close().timeout(const Duration(seconds: 12));
     final body = await response.transform(utf8.decoder).join();
 
@@ -56,7 +71,7 @@ class NoctuneApi {
     final request = await _client
         .postUrl(_uri(path, query))
         .timeout(const Duration(seconds: 8));
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    _applyHeaders(request);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
     if (body != null) {
       request.write(jsonEncode(body));
@@ -79,7 +94,7 @@ class NoctuneApi {
     final request = await _client
         .patchUrl(_uri(path))
         .timeout(const Duration(seconds: 8));
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    _applyHeaders(request);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
     if (body != null) {
       request.write(jsonEncode(body));
@@ -102,7 +117,7 @@ class NoctuneApi {
     final request = await _client
         .deleteUrl(_uri(path))
         .timeout(const Duration(seconds: 8));
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    _applyHeaders(request);
     final response = await request.close().timeout(const Duration(seconds: 16));
     final responseBody = await response.transform(utf8.decoder).join();
 
@@ -123,8 +138,28 @@ class NoctuneApi {
   }
 
   Future<HomePayload> home() async {
-    final data = await _request('/home') as Map<String, dynamic>;
-    return HomePayload.fromJson(data);
+    final results = await Future.wait([
+      _request('/home'),
+      _request('/home/new-releases').catchError((_) => <String, dynamic>{}),
+    ]);
+    final homeData = results[0] as Map<String, dynamic>;
+    final releasesData = results[1] as Map<String, dynamic>;
+
+    final playlistsJson = homeData['playlists'];
+    final recentTracksJson = homeData['recentTracks'];
+    final newReleasesJson = releasesData['newReleases'];
+
+    return HomePayload(
+      playlists: playlistsJson is List
+          ? playlistsJson.whereType<Map<String, dynamic>>().map(Playlist.fromJson).toList()
+          : const [],
+      recentTracks: recentTracksJson is List
+          ? recentTracksJson.whereType<Map<String, dynamic>>().map(Track.fromJson).toList()
+          : const [],
+      newReleases: newReleasesJson is List
+          ? newReleasesJson.whereType<Map<String, dynamic>>().map(Track.fromJson).toList()
+          : const [],
+    );
   }
 
   Future<List<Track>> search(
@@ -185,6 +220,110 @@ class NoctuneApi {
     return Playlist.fromJson(data);
   }
 
+  Future<Playlist> createPlaylist(String name) async {
+    final data = await _post('/playlists', body: {'name': name})
+        as Map<String, dynamic>;
+    final playlist = data['playlist'];
+    if (playlist is Map<String, dynamic>) return Playlist.fromJson(playlist);
+    return Playlist.fromJson(data);
+  }
+
+  Future<void> deletePlaylist(String id) async {
+    await _delete('/playlists/${Uri.encodeComponent(id)}');
+  }
+
+  Future<Playlist> addTrackToPlaylist(String playlistId, Track track) async {
+    final data = await _post(
+      '/playlists/${Uri.encodeComponent(playlistId)}/tracks',
+      body: _trackToJson(track),
+    ) as Map<String, dynamic>;
+    final playlist = data['playlist'];
+    if (playlist is Map<String, dynamic>) return Playlist.fromJson(playlist);
+    return Playlist.fromJson(data);
+  }
+
+  Future<Playlist> toggleLike(Track track) async {
+    final data = await _post('/library/liked/toggle', body: _trackToJson(track))
+        as Map<String, dynamic>;
+    final playlist = data['playlist'];
+    if (playlist is Map<String, dynamic>) return Playlist.fromJson(playlist);
+    return Playlist.fromJson(data);
+  }
+
+  Future<void> recordPlayed(Track track) async {
+    try {
+      await _post('/player/played', body: {'track': _trackToJson(track)});
+    } catch (_) {
+      // Ignore errors for telemetries
+    }
+  }
+
+  Future<Playlist> reorderPlaylistTracks(
+    String playlistId,
+    int fromIndex,
+    int toIndex,
+  ) async {
+    final data = await _patch(
+      '/playlists/${Uri.encodeComponent(playlistId)}/tracks/reorder',
+      body: {'fromIndex': fromIndex, 'toIndex': toIndex},
+    ) as Map<String, dynamic>;
+    final playlist = data['playlist'];
+    if (playlist is Map<String, dynamic>) return Playlist.fromJson(playlist);
+    return Playlist.fromJson(data);
+  }
+
+  Future<List<NightlyMix>> nightlyMixes({
+    int limit = 4,
+    int tracks = 8,
+  }) async {
+    final data = await _request('/home/nightly-mix', query: {
+      'limit': '$limit',
+      'tracks': '$tracks',
+    }) as Map<String, dynamic>;
+    final mixes = data['mixes'];
+    if (mixes is! List) return const [];
+    return mixes
+        .whereType<Map<String, dynamic>>()
+        .map(NightlyMix.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<List<HistoryEntry>> history() async {
+    final data = await _request('/history') as Map<String, dynamic>;
+    final tracks = data['tracks'];
+    if (tracks is! List) return const [];
+    return tracks.whereType<Map<String, dynamic>>().map((json) {
+      final val = json['lastPlayed'] ?? json['playedAt'];
+      final timestamp = val is int ? val : (val is num ? val.toInt() : 0);
+      return HistoryEntry(
+        track: Track.fromJson(json),
+        playedAt: timestamp,
+      );
+    }).toList(growable: false);
+  }
+
+  Future<void> prefetchTracks(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    try {
+      await _post('/player/prefetch', body: {
+        'tracks': tracks.map(_trackToJson).toList(),
+      });
+    } catch (_) {
+      // Ignore prefetch failures
+    }
+  }
+
+  Future<void> cacheAudioTracks(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    try {
+      await _post('/player/cache-audio', body: {
+        'tracks': tracks.map(_trackToJson).toList(),
+      });
+    } catch (_) {
+      // Ignore cache errors
+    }
+  }
+
   Future<void> removePlaylistTrack(String playlistId, String trackId) async {
     await _delete(
       '/playlists/${Uri.encodeComponent(playlistId)}/tracks/${Uri.encodeComponent(trackId)}',
@@ -199,24 +338,79 @@ class NoctuneApi {
   Future<SettingsPayload> updateSettings({
     String? audioQualityPreference,
     String? searchEngine,
+    String? recommendationEngine,
+    bool? discordRpcEnabled,
   }) async {
     final body = <String, Object?>{};
     if (audioQualityPreference != null) {
       body['audioQualityPreference'] = audioQualityPreference;
     }
     if (searchEngine != null) body['searchEngine'] = searchEngine;
+    if (recommendationEngine != null) body['recommendationEngine'] = recommendationEngine;
+    if (discordRpcEnabled != null) body['discordRpcEnabled'] = discordRpcEnabled;
+
     final data = await _patch('/settings', body: body) as Map<String, dynamic>;
     return SettingsPayload.fromJson(data);
   }
 
+  Future<void> clearTrackCache() async {
+    await _delete('/settings/cache/tracks');
+  }
+
+  Future<void> clearLyricsCache() async {
+    await _delete('/settings/cache/lyrics');
+  }
+
+  Future<void> clearAudioFilesCache() async {
+    await _delete('/settings/cache/audio');
+  }
+
+  Future<void> resetResolverBlacklist() async {
+    await _delete('/settings/resolver-blacklist');
+  }
+
+  Future<List<Track>> topTracks({int limit = 20}) async {
+    try {
+      final data = await _request('/stats/top-tracks', query: {'limit': '$limit'})
+          as List<dynamic>;
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map((item) {
+            final t = item['track'];
+            if (t is Map<String, dynamic>) return Track.fromJson(t);
+            return null;
+          })
+          .whereType<Track>()
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<ArtistBrowse> artist(String id) async {
-    final data = await _request('/browse/artist/${Uri.encodeComponent(id)}')
+    var cleanId = id.trim();
+    if (cleanId.startsWith('spotify:artist:')) {
+      cleanId = cleanId.substring('spotify:artist:'.length);
+    } else if (cleanId.startsWith('spotify:album:')) {
+      cleanId = cleanId.substring('spotify:album:'.length);
+    } else if (cleanId.startsWith('spotify:')) {
+      cleanId = cleanId.substring('spotify:'.length);
+    }
+    final data = await _request('/browse/artist/${Uri.encodeComponent(cleanId)}')
         as Map<String, dynamic>;
     return ArtistBrowse.fromJson(data);
   }
 
   Future<AlbumBrowse> album(String id) async {
-    final data = await _request('/browse/album/${Uri.encodeComponent(id)}')
+    var cleanId = id.trim();
+    if (cleanId.startsWith('spotify:album:')) {
+      cleanId = cleanId.substring('spotify:album:'.length);
+    } else if (cleanId.startsWith('spotify:artist:')) {
+      cleanId = cleanId.substring('spotify:artist:'.length);
+    } else if (cleanId.startsWith('spotify:')) {
+      cleanId = cleanId.substring('spotify:'.length);
+    }
+    final data = await _request('/browse/album/${Uri.encodeComponent(cleanId)}')
         as Map<String, dynamic>;
     return AlbumBrowse.fromJson(data);
   }
@@ -259,7 +453,11 @@ class NoctuneApi {
   }
 
   String streamUrl(String videoId) {
-    return '$_baseUrl/player/stream/${Uri.encodeComponent(videoId)}';
+    final encodedId = Uri.encodeComponent(videoId);
+    if (_apiKey.isNotEmpty) {
+      return '$_baseUrl/player/stream/$encodedId?apiKey=${Uri.encodeComponent(_apiKey)}';
+    }
+    return '$_baseUrl/player/stream/$encodedId';
   }
 }
 

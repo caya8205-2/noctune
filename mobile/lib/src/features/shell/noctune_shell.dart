@@ -14,12 +14,12 @@ import 'package:noctune/src/shared/theme/noctune_theme.dart';
 class NoctuneShell extends StatefulWidget {
   const NoctuneShell({
     required this.api,
-    required this.onApiBaseChanged,
+    required this.onApiConfigChanged,
     super.key,
   });
 
   final NoctuneApi api;
-  final ValueChanged<String> onApiBaseChanged;
+  final void Function(String baseUrl, [String apiKey]) onApiConfigChanged;
 
   @override
   State<NoctuneShell> createState() => _NoctuneShellState();
@@ -27,51 +27,85 @@ class NoctuneShell extends StatefulWidget {
 
 class _NoctuneShellState extends State<NoctuneShell> {
   int _index = 0;
+  final List<GlobalKey<NavigatorState>> _navigatorKeys = List.generate(
+    5,
+    (_) => GlobalKey<NavigatorState>(),
+  );
 
   @override
   Widget build(BuildContext context) {
     final player = PlayerScope.of(context);
-    final screens = [
-      HomeScreen(
-        api: widget.api,
-        onPlay: _play,
-        onApiBaseChanged: widget.onApiBaseChanged,
-      ),
-      LibraryScreen(
-        api: widget.api,
-        onPlay: _play,
-        onApiBaseChanged: widget.onApiBaseChanged,
-      ),
-      SearchScreen(api: widget.api, onPlay: _play),
-      QueueScreen(onPlay: _play),
-      SettingsScreen(
-        api: widget.api,
-        onApiBaseChanged: widget.onApiBaseChanged,
-      ),
-    ];
 
-    return AnimatedBuilder(
-      animation: player,
-      builder: (context, _) {
-        return Scaffold(
-          body: IndexedStack(
-            index: _index,
-            children: screens,
-          ),
-          bottomNavigationBar: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (player.selectedTrack != null)
-                MiniPlayer(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final currentNav = _navigatorKeys[_index].currentState;
+        if (currentNav != null && currentNav.canPop()) {
+          currentNav.pop();
+        } else if (_index != 0) {
+          setState(() => _index = 0);
+        }
+      },
+      child: Scaffold(
+        body: IndexedStack(
+          index: _index,
+          children: [
+            _buildTabNavigator(0, HomeScreen(
+              api: widget.api,
+              onPlay: _play,
+              onApiBaseChanged: (url) => widget.onApiConfigChanged(url),
+            )),
+            _buildTabNavigator(1, LibraryScreen(
+              api: widget.api,
+              onPlay: _play,
+              onApiBaseChanged: (url) => widget.onApiConfigChanged(url),
+            )),
+            _buildTabNavigator(2, SearchScreen(api: widget.api, onPlay: _play)),
+            _buildTabNavigator(3, QueueScreen(onPlay: _play)),
+            _buildTabNavigator(4, SettingsScreen(
+              api: widget.api,
+              onApiConfigChanged: widget.onApiConfigChanged,
+            )),
+          ],
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListenableBuilder(
+              listenable: player,
+              builder: (context, _) {
+                if (player.selectedTrack == null) return const SizedBox.shrink();
+                return MiniPlayer(
                   onOpen: () => _openFullPlayer(context),
                   onClear: player.clear,
-                ),
-              _NoctuneBottomNav(
-                selectedIndex: _index,
-                onSelected: (value) => setState(() => _index = value),
-              ),
-            ],
-          ),
+                );
+              },
+            ),
+            _NoctuneBottomNav(
+              selectedIndex: _index,
+              onSelected: (value) {
+                if (value == _index) {
+                  // Pop to root of current tab if tapped again
+                  _navigatorKeys[value].currentState?.popUntil((r) => r.isFirst);
+                } else {
+                  setState(() => _index = value);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabNavigator(int index, Widget rootScreen) {
+    return Navigator(
+      key: _navigatorKeys[index],
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute<void>(
+          builder: (_) => rootScreen,
+          settings: settings,
         );
       },
     );
@@ -82,7 +116,7 @@ class _NoctuneShellState extends State<NoctuneShell> {
   }
 
   void _openFullPlayer(BuildContext context) {
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => FullPlayerScreen(api: widget.api, onPlay: _play),
       ),

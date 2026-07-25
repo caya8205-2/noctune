@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:noctune/src/core/api/noctune_api.dart';
 import 'package:noctune/src/core/models/noctune_models.dart';
-import 'package:noctune/src/features/shell/noctune_shell.dart';
+import 'package:noctune/src/core/state/player_controller.dart';
 import 'package:noctune/src/features/library/playlist_detail_screen.dart';
+import 'package:noctune/src/features/shell/noctune_shell.dart';
 import 'package:noctune/src/shared/theme/noctune_theme.dart';
 import 'package:noctune/src/shared/widgets/async_panel.dart';
 import 'package:noctune/src/shared/widgets/track_artwork.dart';
+import 'package:noctune/src/shared/widgets/track_options_sheet.dart';
 import 'package:noctune/src/shared/widgets/track_tile.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -43,9 +45,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final player = PlayerScope.of(context);
+
     return ScreenFrame(
       eyebrow: 'Library',
       title: 'Saved for later.',
+      trailing: IconButton.filled(
+        onPressed: _createNewPlaylist,
+        style: IconButton.styleFrom(backgroundColor: noctuneGold),
+        icon: const Icon(Icons.add_rounded, color: Colors.black),
+        tooltip: 'New Playlist',
+      ),
       onRefresh: _refresh,
       child: FutureBuilder<_LibraryPayload>(
         future: _future,
@@ -73,18 +83,114 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       (entry) => TrackTile(
                         index: entry.$1,
                         track: entry.$2,
+                        isPlaying: player.selectedTrack?.id == entry.$2.id,
                         onTap: () => widget.onPlay(entry.$2, data.liked.tracks),
+                        onLongPress: () => TrackOptionsSheet.show(
+                          context,
+                          widget.api,
+                          entry.$2,
+                          onPlay: widget.onPlay,
+                        ),
                       ),
                     ),
               const SizedBox(height: 20),
-              const SectionHeader('Playlists'),
+
+              // SMART PLAYLISTS SECTION (matching Noctune desktop)
+              const SectionHeader('Smart Playlists'),
+              if (data.smartPlaylists.isEmpty)
+                const AsyncPanel(message: 'Smart playlists will generate as you play music.')
+              else
+                SizedBox(
+                  height: 120,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: data.smartPlaylists.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final pl = data.smartPlaylists[index];
+                      final firstThumb = pl.tracks.isNotEmpty ? pl.tracks.first.thumbnail : '';
+
+                      return GestureDetector(
+                        onTap: () => _openPlaylist(pl),
+                        child: Container(
+                          width: 150,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: noctuneSurfaceRaised,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: noctuneGold.withValues(alpha: 0.3)),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                noctuneSurfaceRaised,
+                                noctuneGold.withValues(alpha: 0.08),
+                              ],
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.auto_awesome_rounded, color: noctuneGold, size: 16),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      pl.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  TrackArtwork(url: firstThumb, size: 44),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '${pl.tracks.length} tracks',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: noctuneMuted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SectionHeader('Playlists'),
+                  TextButton.icon(
+                    onPressed: _createNewPlaylist,
+                    icon: const Icon(Icons.add, size: 18, color: noctuneGold),
+                    label: const Text('New', style: TextStyle(color: noctuneGold)),
+                  ),
+                ],
+              ),
               if (data.playlists.isEmpty)
-                const AsyncPanel(message: 'Playlists created on desktop will appear here.')
+                const AsyncPanel(message: 'No custom playlists yet. Tap "New" above to create one.')
               else
                 ...data.playlists.map(
                   (playlist) => _PlaylistRow(
                     playlist: playlist,
                     onTap: () => _openPlaylist(playlist),
+                    onDelete: () => _deletePlaylist(playlist),
                   ),
                 ),
             ],
@@ -94,10 +200,191 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  Future<void> _createNewPlaylist() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: noctuneSurfaceRaised,
+        title: const Text('Create New Playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Playlist name',
+          ),
+          textCapitalization: TextCapitalization.sentences,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) Navigator.of(ctx).pop(text);
+            },
+            style: FilledButton.styleFrom(backgroundColor: noctuneGold),
+            child: const Text('Create', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+
+    if (name == null || name.isEmpty) return;
+
+    try {
+      await widget.api.createPlaylist(name);
+      _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Playlist "$name" created')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create playlist: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deletePlaylist(Playlist playlist) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: noctuneSurfaceRaised,
+        title: Text('Delete "${playlist.name}"?'),
+        content: const Text('This playlist will be permanently removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await widget.api.deletePlaylist(playlist.id);
+      _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Playlist "${playlist.name}" deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete playlist: $e')),
+        );
+      }
+    }
+  }
+
   Future<_LibraryPayload> _load() async {
     final liked = await widget.api.liked();
     final playlists = await widget.api.playlists();
-    return _LibraryPayload(liked: liked, playlists: playlists);
+
+    final smartPlaylists = <Playlist>[];
+    try {
+      final historyEntries = await widget.api.history();
+      final historyTracks = historyEntries.map((e) => e.track).toList();
+
+      // 1. Most Played
+      var mostPlayedTracks = await widget.api.topTracks(limit: 20);
+      if (mostPlayedTracks.isEmpty && historyTracks.isNotEmpty) {
+        final counts = <String, int>{};
+        final trackMap = <String, Track>{};
+        for (final entry in historyEntries) {
+          counts[entry.track.id] = (counts[entry.track.id] ?? 0) + 1;
+          trackMap[entry.track.id] = entry.track;
+        }
+        final sortedKeys = counts.keys.toList()
+          ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+        mostPlayedTracks = sortedKeys.take(20).map((k) => trackMap[k]!).toList();
+      }
+      if (mostPlayedTracks.isNotEmpty) {
+        smartPlaylists.add(
+          Playlist(
+            id: 'smart:most-played',
+            name: 'Most Played',
+            tracks: mostPlayedTracks,
+          ),
+        );
+      }
+
+      // 2. Recently Added
+      if (historyTracks.isNotEmpty) {
+        smartPlaylists.add(
+          Playlist(
+            id: 'smart:recently-added',
+            name: 'Recently Added',
+            tracks: historyTracks.take(20).toList(),
+          ),
+        );
+      }
+
+      // 3. Short Tracks (under 180s)
+      final shortTracks =
+          historyTracks.where((t) => t.duration > 0 && t.duration < 180).toList();
+      if (shortTracks.isNotEmpty) {
+        smartPlaylists.add(
+          Playlist(
+            id: 'smart:short-tracks',
+            name: 'Short Tracks',
+            tracks: shortTracks.take(20).toList(),
+          ),
+        );
+      }
+
+      // 4. Discover Weekly
+      try {
+        List<Track> recs = const [];
+        if (historyTracks.isNotEmpty) {
+          final seed = historyTracks.first;
+          final exclude = historyTracks.take(5).map((t) => t.id).toList();
+          recs = await widget.api.recommend(seed, excludeIds: exclude, limit: 20);
+        } else if (liked.tracks.isNotEmpty) {
+          final seed = liked.tracks.first;
+          recs = await widget.api.recommend(seed, limit: 20);
+        }
+
+        if (recs.isEmpty) {
+          final homeData = await widget.api.home();
+          recs = homeData.newReleases.isNotEmpty
+              ? homeData.newReleases
+              : (homeData.playlists.isNotEmpty
+                  ? homeData.playlists.first.tracks
+                  : const []);
+        }
+
+        if (recs.isNotEmpty) {
+          smartPlaylists.add(
+            Playlist(
+              id: 'smart:discover-weekly',
+              name: 'Discover Weekly',
+              tracks: recs,
+            ),
+          );
+        }
+      } catch (_) {}
+    } catch (_) {}
+
+    return _LibraryPayload(
+      liked: liked,
+      playlists: playlists,
+      smartPlaylists: smartPlaylists,
+    );
   }
 
   void _reload() {
@@ -126,10 +413,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
 }
 
 class _PlaylistRow extends StatelessWidget {
-  const _PlaylistRow({required this.playlist, required this.onTap});
+  const _PlaylistRow({
+    required this.playlist,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final Playlist playlist;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +432,7 @@ class _PlaylistRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
+          onLongPress: onDelete,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(14),
@@ -164,7 +457,10 @@ class _PlaylistRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: noctuneMuted),
+                IconButton(
+                  icon: const Icon(Icons.more_vert_rounded, color: noctuneMuted),
+                  onPressed: onDelete,
+                ),
               ],
             ),
           ),
@@ -208,8 +504,13 @@ class _PlaylistCover extends StatelessWidget {
 }
 
 class _LibraryPayload {
-  const _LibraryPayload({required this.liked, required this.playlists});
+  const _LibraryPayload({
+    required this.liked,
+    required this.playlists,
+    required this.smartPlaylists,
+  });
 
   final Playlist liked;
   final List<Playlist> playlists;
+  final List<Playlist> smartPlaylists;
 }

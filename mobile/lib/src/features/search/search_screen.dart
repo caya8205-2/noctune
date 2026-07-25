@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:noctune/src/core/api/noctune_api.dart';
 import 'package:noctune/src/core/models/noctune_models.dart';
+import 'package:noctune/src/core/state/player_controller.dart';
 import 'package:noctune/src/features/shell/noctune_shell.dart';
 import 'package:noctune/src/shared/theme/noctune_theme.dart';
 import 'package:noctune/src/shared/widgets/async_panel.dart';
+import 'package:noctune/src/shared/widgets/track_options_sheet.dart';
 import 'package:noctune/src/shared/widgets/track_tile.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -39,6 +41,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final player = PlayerScope.of(context);
+
     return ScreenFrame(
       eyebrow: 'Search',
       title: 'Find a seed track.',
@@ -84,14 +88,14 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               segments: const [
                 ButtonSegment(
-                  value: 'spotify',
-                  label: Text('Spotify'),
-                  icon: Icon(Icons.album_rounded),
-                ),
-                ButtonSegment(
                   value: 'youtube',
                   label: Text('YouTube'),
                   icon: Icon(Icons.smart_display_rounded),
+                ),
+                ButtonSegment(
+                  value: 'spotify',
+                  label: Text('Spotify'),
+                  icon: Icon(Icons.album_rounded),
                 ),
               ],
               selected: {_source},
@@ -114,7 +118,14 @@ class _SearchScreenState extends State<SearchScreen> {
               (entry) => TrackTile(
                 index: entry.$1,
                 track: entry.$2,
+                isPlaying: player.selectedTrack?.id == entry.$2.id,
                 onTap: () => widget.onPlay(entry.$2, _tracks),
+                onLongPress: () => TrackOptionsSheet.show(
+                  context,
+                  widget.api,
+                  entry.$2,
+                  onPlay: widget.onPlay,
+                ),
               ),
             ),
           ],

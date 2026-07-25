@@ -39,13 +39,16 @@ class _NoctuneAppState extends State<NoctuneApp> {
         title: 'Noctune',
         debugShowCheckedModeBanner: false,
         theme: buildNoctuneTheme(),
-        home: NoctuneShell(api: _api, onApiBaseChanged: _setApiBase),
+        home: NoctuneShell(
+          api: _api,
+          onApiConfigChanged: _setApiConfig,
+        ),
       ),
     );
   }
 
-  void _setApiBase(String baseUrl) {
-    final nextApi = NoctuneApi(baseUrl: baseUrl);
+  void _setApiConfig(String baseUrl, [String apiKey = '']) {
+    final nextApi = NoctuneApi(baseUrl: baseUrl, apiKey: apiKey);
     final nextPlayer = PlayerController(api: nextApi);
     setState(() {
       _player.dispose();

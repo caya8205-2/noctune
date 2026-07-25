@@ -128,6 +128,50 @@ class Playlist {
   }
 }
 
+class NightlyMix {
+  const NightlyMix({
+    required this.id,
+    required this.name,
+    required this.tracks,
+    this.seed,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final List<Track> tracks;
+  final Track? seed;
+  final int? updatedAt;
+
+  factory NightlyMix.fromJson(Map<String, dynamic> json) {
+    final rawSeed = json['seed'];
+    return NightlyMix(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Nightly Mix',
+      tracks: _readList(json['tracks'], Track.fromJson),
+      seed: rawSeed is Map<String, dynamic> ? Track.fromJson(rawSeed) : null,
+      updatedAt: _readNullableInt(json['updatedAt']),
+    );
+  }
+}
+
+class HistoryEntry {
+  const HistoryEntry({
+    required this.track,
+    required this.playedAt,
+  });
+
+  final Track track;
+  final int playedAt;
+
+  factory HistoryEntry.fromJson(Map<String, dynamic> json) {
+    return HistoryEntry(
+      track: Track.fromJson(json),
+      playedAt: _readInt(json['playedAt'] ?? json['lastPlayed']),
+    );
+  }
+}
+
 class HomePayload {
   const HomePayload({
     required this.playlists,
@@ -200,16 +244,26 @@ class SettingsPayload {
   const SettingsPayload({
     required this.searchEngine,
     required this.audioQualityPreference,
+    required this.recommendationEngine,
+    required this.discordRpcEnabled,
+    required this.spotifyConfigured,
   });
 
   final String searchEngine;
   final String audioQualityPreference;
+  final String recommendationEngine;
+  final bool discordRpcEnabled;
+  final bool spotifyConfigured;
 
   factory SettingsPayload.fromJson(Map<String, dynamic> json) {
+    final spotify = json['spotify'];
+    final isSpotifyConfigured = spotify is Map<String, dynamic> && spotify['configured'] == true;
     return SettingsPayload(
       searchEngine: json['searchEngine']?.toString() ?? 'spotify',
-      audioQualityPreference:
-          json['audioQualityPreference']?.toString() ?? 'auto',
+      audioQualityPreference: json['audioQualityPreference']?.toString() ?? 'auto',
+      recommendationEngine: json['recommendationEngine']?.toString() ?? 'hybrid-ml',
+      discordRpcEnabled: json['discordRpcEnabled'] ?? true,
+      spotifyConfigured: isSpotifyConfigured,
     );
   }
 }
