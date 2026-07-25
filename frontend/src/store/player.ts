@@ -91,6 +91,19 @@ interface PlayerState {
   restoreQueueState: () => void;
   pushQueueHistory: (track: Track) => void;
 
+  // ── Lyrics Offset ─────────────────────────────────────────────────────────
+  lyricsOffsets: Record<string, number>;
+  setTrackLyricsOffset: (trackId: string, offset: number) => void;
+  getTrackLyricsOffset: (trackId?: string) => number;
+}
+
+function loadInitialLyricsOffsets(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem('noctune:lyrics-offsets');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -109,6 +122,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   eqEnabled: false,
   eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   eqPreset: 'flat',
+  lyricsOffsets: loadInitialLyricsOffsets(),
+
+  setTrackLyricsOffset: (trackId: string, offset: number) => {
+    set((s) => {
+      const next = { ...s.lyricsOffsets, [trackId]: offset };
+      try {
+        localStorage.setItem('noctune:lyrics-offsets', JSON.stringify(next));
+      } catch (e) {
+        console.warn('[player] Failed to save lyrics offsets:', e);
+      }
+      return { lyricsOffsets: next };
+    });
+  },
+
+  getTrackLyricsOffset: (trackId?: string) => {
+    if (!trackId) return 0;
+    return get().lyricsOffsets[trackId] ?? 0;
+  },
   queue: [],
   queueIndex: -1,
   isAutoQueueLoading: false,

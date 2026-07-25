@@ -224,12 +224,16 @@ export function recordPlayWithMetadata(track: Track): CachedTrack {
   return updated;
 }
 
-/** Get all cached tracks sorted by play count (for "frequently played" features). */
-export function getTopTracks(limit = 20): CachedTrack[] {
-  const store = getStore();
-  return Object.values(store.tracks)
-    .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
-    .slice(0, limit);
+/** Get all cached tracks without limits. */
+export function getAllCachedTracks(): CachedTrack[] {
+  return Object.values(getStore().tracks);
+}
+
+/** Get cached tracks sorted by play count. */
+export function getTopTracks(limit?: number): CachedTrack[] {
+  const sorted = Object.values(getStore().tracks)
+    .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0));
+  return typeof limit === 'number' && limit > 0 ? sorted.slice(0, limit) : sorted;
 }
 
 /** Get cached tracks sorted by latest play time. */

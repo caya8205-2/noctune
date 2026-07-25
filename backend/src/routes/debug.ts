@@ -126,6 +126,25 @@ export async function debugRoutes(app: FastifyInstance) {
     return { ok: true, cleared: result.cleared, youtubeId: result.youtubeId };
   });
 
+  const SetMatchBody = z.object({
+    spotifyId: z.string().min(1),
+    youtubeId: z.string().min(1),
+    youtubeTitle: z.string().optional(),
+    youtubeArtist: z.string().optional(),
+    spotifyTitle: z.string().optional(),
+    spotifyArtist: z.string().optional(),
+    score: z.number().optional(),
+  });
+
+  app.post('/debug/resolver/set-match', async (req, reply) => {
+    const parsed = SetMatchBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+    const entry = saveMatchCacheEntry(parsed.data);
+    return { ok: true, entry };
+  });
+
   // ── Resolver snapshot for a specific track ──────────────────────────────────
   app.get<{ Querystring: { spotifyId?: string; youtubeId?: string } }>(
     '/debug/resolver-snapshot',

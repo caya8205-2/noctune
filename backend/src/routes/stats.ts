@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getTopTracks } from '../services/cache.js';
+import { getAllCachedTracks } from '../services/cache.js';
 import { getSpotifyTrackMetadata } from '../services/spotify.js';
 import type { CachedTrack } from '../types/index.js';
 
@@ -21,7 +21,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const query = req.query as { period?: Period };
     const period = query.period || 'all';
     
-    const allTracks = getTopTracks(1000); // Get all cached tracks
+    const allTracks = getAllCachedTracks(); // Get all cached tracks
     const filteredTracks = filterByPeriod(allTracks, period);
     
     const totalPlays = filteredTracks.reduce((sum, t) => sum + (t.playCount || 0), 0);
@@ -43,7 +43,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const period = query.period || 'all';
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     
-    const allTracks = getTopTracks(1000);
+    const allTracks = getAllCachedTracks();
     const filteredTracks = filterByPeriod(allTracks, period);
     
     // Sort by play count
@@ -75,7 +75,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const period = query.period || 'all';
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     
-    const allTracks = getTopTracks(1000);
+    const allTracks = getAllCachedTracks();
     const filteredTracks = filterByPeriod(allTracks, period);
     
     // Aggregate by artist
@@ -136,7 +136,7 @@ export async function statsRoutes(app: FastifyInstance) {
     const query = req.query as { days?: string };
     const days = Math.min(365, Math.max(7, Number(query.days) || 30));
     
-    const allTracks = getTopTracks(1000);
+    const allTracks = getAllCachedTracks();
     
     // Aggregate by date
     const dayMap = new Map<string, { date: string; playCount: number; minutes: number }>();
@@ -174,4 +174,5 @@ export async function statsRoutes(app: FastifyInstance) {
     
     return reply.send(result);
   });
+
 }

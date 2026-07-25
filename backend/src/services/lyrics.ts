@@ -120,8 +120,23 @@ async function getRomanizer(): Promise<Kuroshiro> {
   return romanizerPromise;
 }
 
-function hasJapaneseScript(value: string): boolean {
+export function hasJapaneseScript(value: string): boolean {
   return JAPANESE_SCRIPT_RE.test(value);
+}
+
+export async function toRomajiText(text: string): Promise<string> {
+  if (!text || !hasJapaneseScript(text)) return text;
+  try {
+    const romanizer = await getRomanizer();
+    const result = await romanizer.convert(text, {
+      to: 'romaji',
+      mode: 'spaced',
+      romajiSystem: 'hepburn',
+    });
+    return result.replace(/\s+/g, ' ').trim();
+  } catch {
+    return text;
+  }
 }
 
 async function addRomanizedLines(lyrics: LyricsResult): Promise<LyricsResult> {

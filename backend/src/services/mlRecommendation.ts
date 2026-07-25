@@ -664,12 +664,10 @@ export function importMlTelemetry(payload: TelemetryImportPayload): {
   seedModelCache = seedModel;
   transitionMatrixCache = null;
 
-  const currentLog = loadPlayLog();
-
   return {
     ok: true,
     importedTracks,
     importedTransitions,
-    totalLogEvents: currentLog.length,
+    totalLogEvents: (loadPlayLog() ?? []).length,
   };
 }

@@ -204,6 +204,20 @@ export const debugApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  setMatch: (body: {
+    spotifyId: string;
+    youtubeId: string;
+    youtubeTitle?: string;
+    youtubeArtist?: string;
+    spotifyTitle?: string;
+    spotifyArtist?: string;
+    score?: number;
+  }) =>
+    req<{ ok: boolean; entry: MatchCacheEntry }>('/debug/resolver/set-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   lyricsSnapshot: (params: { title: string; artist?: string; duration?: number }) => {
     const q = new URLSearchParams({ title: params.title });
     if (params.artist) q.set('artist', params.artist);

@@ -25,6 +25,8 @@ import { TrackDetailsContent } from './TrackDetailsSidebar';
 import { api, type LyricsResult, type Track } from '../../utils/api';
 import { lyricsQueryOptions } from '../../hooks/useLyrics';
 
+import { extractDominantColor } from '../../utils/colorExtractor';
+
 const sourceMeta = {
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
   cache: { label: 'Cache', Icon: Database, className: 'bg-base-700 text-soft border-base-600/40' },
@@ -34,13 +36,14 @@ const sourceMeta = {
 
 const JAPANESE_SCRIPT_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
 
-function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: number): number {
+function getActiveLyricIndex(lyrics: LyricsResult | null | undefined, progress: number, offset: number = 0): number {
   if (!lyrics?.synced) return -1;
   const lyricLeadSeconds = 0.3;
+  const adjustedProgress = progress + offset;
   let active = -1;
   for (let i = 0; i < lyrics.lines.length; i++) {
     const time = lyrics.lines[i].time;
-    if (time === null || time > progress + lyricLeadSeconds) break;
+    if (time === null || time > adjustedProgress + lyricLeadSeconds) break;
     active = i;
   }
   return active;
@@ -50,11 +53,15 @@ function LyricsPanel({ track }: { track: Track }) {
   const [lyricsMode, setLyricsMode] = useState<'original' | 'romaji'>('original');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const progress = usePlayerStore((state) => state.progress);
+  const trackId = track.spotifyId ? `spotify:${track.spotifyId}` : track.id;
+  const offset = usePlayerStore((s) => s.lyricsOffsets[trackId] ?? 0);
+  const setTrackLyricsOffset = usePlayerStore((s) => s.setTrackLyricsOffset);
+
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
   const { data: lyrics, isLoading, isError } = useQuery(lyricsQueryOptions(track));
 
-  const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress), [lyrics, progress]);
+  const activeIndex = useMemo(() => getActiveLyricIndex(lyrics, progress, offset), [lyrics, progress, offset]);
   const hasJapaneseLyrics = useMemo(
     () => Boolean(lyrics?.lines.some((line) => JAPANESE_SCRIPT_RE.test(line.text))),
     [lyrics]
@@ -130,31 +137,63 @@ function LyricsPanel({ track }: { track: Track }) {
 
   return (
     <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden">
-      <div className="flex items-center justify-end gap-1 border-b border-base-600/50 px-4 py-2">
-        <button
-          type="button"
-          onClick={() => setLyricsMode('original')}
-          className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${
-            lyricsMode === 'original'
-              ? 'bg-accent text-base-950'
-              : 'text-muted hover:bg-base-700/70 hover:text-white'
-          }`}
-        >
-          Original
-        </button>
-        <button
-          type="button"
-          onClick={() => setLyricsMode('romaji')}
-          disabled={!hasJapaneseLyrics}
-          className={`rounded-lg px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-            lyricsMode === 'romaji'
-              ? 'bg-accent text-base-950'
-              : 'text-muted hover:bg-base-700/70 hover:text-white'
-          }`}
-          title={hasJapaneseLyrics ? 'Show Japanese lyrics as romaji' : 'No Japanese lyrics detected'}
-        >
-          Romaji
-        </button>
+      <div className="flex items-center justify-between border-b border-base-600/50 px-4 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted">
+          <span>Sync Offset:</span>
+          <button
+            type="button"
+            onClick={() => setTrackLyricsOffset(trackId, Math.round((offset - 0.5) * 10) / 10)}
+            className="rounded bg-base-700/60 px-2 py-0.5 font-mono hover:text-white"
+            title="Slower -0.5s"
+          >
+            -0.5s
+          </button>
+          <span className="font-mono text-accent font-semibold">{offset > 0 ? `+${offset}s` : `${offset}s`}</span>
+          <button
+            type="button"
+            onClick={() => setTrackLyricsOffset(trackId, Math.round((offset + 0.5) * 10) / 10)}
+            className="rounded bg-base-700/60 px-2 py-0.5 font-mono hover:text-white"
+            title="Faster +0.5s"
+          >
+            +0.5s
+          </button>
+          {offset !== 0 && (
+            <button
+              type="button"
+              onClick={() => setTrackLyricsOffset(trackId, 0)}
+              className="ml-1 text-[10px] text-amber-400 hover:underline"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setLyricsMode('original')}
+            className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${
+              lyricsMode === 'original'
+                ? 'bg-accent text-base-950 font-medium'
+                : 'text-muted hover:bg-base-700/70 hover:text-white'
+            }`}
+          >
+            Original
+          </button>
+          <button
+            type="button"
+            onClick={() => setLyricsMode('romaji')}
+            disabled={!hasJapaneseLyrics}
+            className={`rounded-lg px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              lyricsMode === 'romaji'
+                ? 'bg-accent text-base-950 font-medium'
+                : 'text-muted hover:bg-base-700/70 hover:text-white'
+            }`}
+            title={hasJapaneseLyrics ? 'Show Japanese lyrics as romaji' : 'No Japanese lyrics detected'}
+          >
+            Romaji
+          </button>
+        </div>
       </div>
       <div ref={lyricsScrollRef} className="h-[calc(100%-41px)] overflow-y-auto px-6 py-5">
         <div className="min-h-full flex flex-col justify-center gap-3">
@@ -210,6 +249,15 @@ export function PlayerView() {
     return (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
   });
   const [bassEnergy, setBassEnergy] = useState(0);
+  const [ambientColor, setAmbientColor] = useState('rgba(190,255,32,0.25)');
+
+  useEffect(() => {
+    if (currentTrack?.thumbnail) {
+      void extractDominantColor(currentTrack.thumbnail).then(setAmbientColor);
+    } else {
+      setAmbientColor('rgba(190,255,32,0.25)');
+    }
+  }, [currentTrack?.thumbnail]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -251,10 +299,10 @@ export function PlayerView() {
             <div className="relative mt-2 sm:mt-4 w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center flex-shrink-0">
               {/* Ambient Glow Aura */}
               <div
-                className="absolute inset-4 rounded-full blur-2xl transition-opacity duration-300 pointer-events-none"
+                className="absolute inset-4 rounded-full blur-2xl transition-all duration-700 pointer-events-none"
                 style={{
-                  background: 'radial-gradient(circle, rgba(190,255,32,0.25) 0%, rgba(217,70,239,0.18) 55%, transparent 75%)',
-                  opacity: isPlaying ? 0.3 + bassEnergy * 0.5 : 0.08,
+                  background: `radial-gradient(circle, ${ambientColor} 0%, rgba(217,70,239,0.18) 55%, transparent 75%)`,
+                  opacity: isPlaying ? 0.35 + bassEnergy * 0.5 : 0.08,
                 }}
               />
 

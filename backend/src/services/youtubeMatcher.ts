@@ -5,6 +5,7 @@ import type { Track } from '../types/index.js';
 import { searchTracks } from './audioResolver.js';
 import { getDataDir } from './env.js';
 import { isPlaybackBlacklisted } from './playbackBlacklist.js';
+import { hasJapaneseScript, toRomajiText } from './lyrics.js';
 
 interface MatchCacheEntry {
   spotifyId: string;
@@ -326,30 +327,49 @@ function hasLiveVisualSignal(value: string): boolean {
   return lower.includes('live映像') || lower.includes('ライブ映像') || lower.includes('ライブ') || lower.includes('公演');
 }
 
-export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCandidate {
+export function scoreCandidate(
+  spotifyTrack: Track,
+  candidate: Track,
+  romajiMeta?: { title?: string; artist?: string }
+): ScoredCandidate {
   const spotifyTitle = normalize(spotifyTrack.title);
   const spotifyArtist = normalize(spotifyTrack.artist);
   const candidateTitle = normalize(candidate.title);
   const candidateArtist = normalize(candidate.artist);
+  const romajiTitle = romajiMeta?.title ? normalize(romajiMeta.title) : '';
+  const romajiArtist = romajiMeta?.artist ? normalize(romajiMeta.artist) : '';
+
   const spotifyTitleCompact = spotifyTitle.replace(/\s+/g, '');
   const candidateTitleCompact = candidateTitle.replace(/\s+/g, '');
+  const romajiTitleCompact = romajiTitle.replace(/\s+/g, '');
   const combined = `${candidateTitle} ${candidateArtist}`;
   const reasons: string[] = [];
   let score = 0;
   let hasArtistChannelMatch = false;
-  const titleStats = titleWordStats(spotifyTrack.title, candidateTitle);
 
-  if (titleStats.matched > 0) {
-    score += titleStats.matched * 10;
+  const titleStats = titleWordStats(spotifyTrack.title, candidateTitle);
+  const romajiTitleStats = romajiTitle ? titleWordStats(romajiTitle, candidateTitle) : { matched: 0, total: 0, ratio: 0 };
+  const maxTitleMatched = Math.max(titleStats.matched, romajiTitleStats.matched);
+
+  if (maxTitleMatched > 0) {
+    score += maxTitleMatched * 10;
   }
 
-  if (titleStats.total > 0 && (titleStats.ratio >= 0.67 || titleStats.matched >= 3)) {
-    reasons.push(`title-word-match:${titleStats.matched}/${titleStats.total}`);
+  if (
+    (titleStats.total > 0 && (titleStats.ratio >= 0.67 || titleStats.matched >= 3)) ||
+    (romajiTitleStats.total > 0 && (romajiTitleStats.ratio >= 0.67 || romajiTitleStats.matched >= 3))
+  ) {
+    reasons.push(`title-word-match:${maxTitleMatched}/${Math.max(titleStats.total, romajiTitleStats.total)}`);
   }
 
   let hasAnyArtistMatch = false;
-  for (const artistName of splitArtistNames(spotifyTrack.artist)) {
-    if (candidateArtist.includes(artistName)) {
+  const artistCandidates = [
+    ...splitArtistNames(spotifyTrack.artist),
+    ...(romajiArtist ? splitArtistNames(romajiArtist) : []),
+  ];
+
+  for (const artistName of artistCandidates) {
+    if (artistName && candidateArtist.includes(artistName)) {
       hasArtistChannelMatch = true;
       hasAnyArtistMatch = true;
       score += 90;
@@ -366,14 +386,14 @@ export function scoreCandidate(spotifyTrack: Track, candidate: Track): ScoredCan
     reasons.push('artist-mismatch-penalty');
   }
 
-  if (candidateTitle.includes(spotifyTitle)) {
+  if (candidateTitle.includes(spotifyTitle) || (romajiTitle && candidateTitle.includes(romajiTitle))) {
     score += 60;
     reasons.push('title-phrase');
   }
 
   if (
-    spotifyTitleCompact.length >= 2 &&
-    candidateTitleCompact.includes(spotifyTitleCompact)
+    (spotifyTitleCompact.length >= 2 && candidateTitleCompact.includes(spotifyTitleCompact)) ||
+    (romajiTitleCompact.length >= 2 && candidateTitleCompact.includes(romajiTitleCompact))
   ) {
     score += 60;
     reasons.push('title-compact');
@@ -607,6 +627,41 @@ export interface MatcherChainResult {
   lastBest: ScoredCandidate | null;
 }
 
+export async function buildMatcherQueriesAsync(spotifyTrack: Track): Promise<{ queries: string[]; romajiMeta?: { title: string; artist: string } }> {
+  const syncQueries = buildMatcherQueries(spotifyTrack);
+  const hasJapanese = hasJapaneseScript(spotifyTrack.title) || hasJapaneseScript(spotifyTrack.artist);
+  if (!hasJapanese) {
+    return { queries: syncQueries };
+  }
+
+  try {
+    const [romajiTitle, romajiArtist] = await Promise.all([
+      toRomajiText(spotifyTrack.title),
+      toRomajiText(spotifyTrack.artist),
+    ]);
+
+    const romajiCanonical = `${romajiTitle} - ${romajiArtist}`.trim();
+    const romajiTitleOnly = romajiTitle.trim();
+    const romajiArtistOnly = romajiArtist.trim();
+
+    const queries = [...new Set([
+      ...syncQueries,
+      romajiCanonical,
+      `${romajiTitleOnly} ${romajiArtistOnly}`,
+      romajiTitleOnly,
+      `${spotifyTrack.title} ${romajiArtistOnly}`,
+      `${romajiTitleOnly} ${spotifyTrack.artist}`,
+    ].map((q) => q.trim()))].filter((q) => q.length > 0);
+
+    return {
+      queries,
+      romajiMeta: { title: romajiTitle, artist: romajiArtist },
+    };
+  } catch {
+    return { queries: syncQueries };
+  }
+}
+
 export function buildMatcherQueries(spotifyTrack: Track): string[] {
   const stripPunctuation = (value: string): string =>
     value.replace(/[!?.…]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -637,7 +692,8 @@ export function buildMatcherQueries(spotifyTrack: Track): string[] {
 async function runMatcherChain(
   spotifyTrack: Track,
   queries: string[],
-  limit: number
+  limit: number,
+  romajiMeta?: { title?: string; artist?: string }
 ): Promise<MatcherChainResult> {
   const attempts: QueryAttempt[] = [];
   let accepted: ScoredCandidate | null = null;
@@ -647,7 +703,7 @@ async function runMatcherChain(
     const candidates = await searchTracks(query, limit);
     const ranked = candidates
       .filter((candidate) => !isPlaybackBlacklisted(candidate.id))
-      .map((candidate) => scoreCandidate(spotifyTrack, candidate))
+      .map((candidate) => scoreCandidate(spotifyTrack, candidate, romajiMeta))
       .sort(compareCandidates);
     const bestAcceptable = ranked.find(isAcceptableCandidate) ?? ranked[0];
     lastBest = bestAcceptable ?? lastBest;
@@ -671,11 +727,11 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
   const cached = fromCache(spotifyTrack);
   if (cached) return cached;
 
-  const queries = buildMatcherQueries(spotifyTrack);
+  const { queries, romajiMeta } = await buildMatcherQueriesAsync(spotifyTrack);
 
   const result = await matchQueue.add<Track | null>(async () => {
     const startedAt = Date.now();
-    const { attempts, accepted, lastBest } = await runMatcherChain(spotifyTrack, queries, 12);
+    const { attempts, accepted, lastBest } = await runMatcherChain(spotifyTrack, queries, 12, romajiMeta);
     const usedQuery = attempts.length > 0 ? attempts[attempts.length - 1].query : queries[0];
 
     console.log(

@@ -144,12 +144,14 @@ function CandidateRow({
   spotifyId,
   spotifyTitle,
   spotifyArtist,
+  activeMatchYoutubeId,
 }: {
   candidate: ScoredCandidate;
   rank: number;
   spotifyId?: string;
   spotifyTitle?: string;
   spotifyArtist?: string;
+  activeMatchYoutubeId?: string;
 }) {
   const [open, setOpen] = useState(rank === 0);
   const [busy, setBusy] = useState<string | null>(null);
@@ -161,20 +163,30 @@ function CandidateRow({
     setMsg(null);
     try {
       const cleanYtId = candidate.track.id.replace(/^youtube:/, '').trim();
-      const res = await debugApi.saveMatcherMatch({
-        spotifyId,
-        youtubeId: cleanYtId,
-        youtubeTitle: candidate.track.title,
-        youtubeArtist: candidate.track.artist,
-        spotifyTitle,
-        spotifyArtist,
-        score: candidate.score,
-      });
-      setMsg({ ok: true, text: 'Saved to learned cache!' });
+      const res = spotifyId
+        ? await debugApi.setMatch({
+            spotifyId,
+            youtubeId: cleanYtId,
+            youtubeTitle: candidate.track.title,
+            youtubeArtist: candidate.track.artist,
+            spotifyTitle,
+            spotifyArtist,
+            score: candidate.score,
+          })
+        : await debugApi.saveMatcherMatch({
+            spotifyId,
+            youtubeId: cleanYtId,
+            youtubeTitle: candidate.track.title,
+            youtubeArtist: candidate.track.artist,
+            spotifyTitle,
+            spotifyArtist,
+            score: candidate.score,
+          });
+      setMsg({ ok: true, text: 'Set as active match & updated cache!' });
 
       // If current playing track matches this, play the new match immediately
       const currentTrack = usePlayerStore.getState().currentTrack;
-      if (currentTrack && res.track) {
+      if (currentTrack && res.entry) {
         const isMatch = (spotifyId && currentTrack.spotifyId === spotifyId) ||
           (currentTrack.title.toLowerCase() === (spotifyTitle || candidate.track.title).toLowerCase());
         if (isMatch) {
@@ -212,8 +224,13 @@ function CandidateRow({
     }
   };
 
+  const cleanCandidateYtId = candidate.track.id.replace(/^youtube:/, '').trim();
+  const isActiveCachedMatch = Boolean(
+    activeMatchYoutubeId && cleanCandidateYtId === activeMatchYoutubeId.replace(/^youtube:/, '').trim()
+  );
+
   return (
-    <div className={`rounded-lg border ${rank === 0 ? 'border-accent/20 bg-accent/[0.03]' : 'border-white/[0.04] bg-base-900/30'}`}>
+    <div className={`rounded-lg border ${isActiveCachedMatch ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : rank === 0 ? 'border-accent/20 bg-accent/[0.03]' : 'border-white/[0.04] bg-base-900/30'}`}>
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left">
         <span className="flex-shrink-0 text-muted">
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -226,7 +243,14 @@ function CandidateRow({
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs text-white">{candidate.track.title}</div>
+          <div className="flex items-center gap-2 truncate text-xs text-white">
+            <span className="truncate">{candidate.track.title}</span>
+            {isActiveCachedMatch && (
+              <span className="flex-shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-emerald-400">
+                📌 Active Cached Match
+              </span>
+            )}
+          </div>
           <div className="truncate text-[11px] text-muted">{candidate.track.artist} · {candidate.track.id}</div>
         </div>
         <span className={`flex-shrink-0 text-xs font-semibold tabular-nums ${scoreColor(candidate.score)}`}>
@@ -256,7 +280,7 @@ function CandidateRow({
                 className="flex items-center gap-1 rounded bg-accent/10 border border-accent/30 px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/20 disabled:opacity-40"
               >
                 {busy === 'save' ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11} />}
-                Save as Match
+                Set as Active Match & Clear Cache Old
               </button>
               <button
                 type="button"
@@ -377,6 +401,7 @@ function MatcherResultView({
                         spotifyId={activeSpotifyId}
                         spotifyTitle={activeTitle}
                         spotifyArtist={activeArtist}
+                        activeMatchYoutubeId={result.cached?.youtubeId}
                       />
                     ))
                   )}

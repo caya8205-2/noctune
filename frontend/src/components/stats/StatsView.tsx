@@ -313,6 +313,8 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
   );
 }
 
+
+
 export function StatsView() {
   const [period, setPeriod] = useState<Period>('30d');
 
@@ -414,6 +416,8 @@ export function StatsView() {
           <DailyChart data={daily} />
         )}
       </section>
+
+
 
       {/* Top tracks + Top artists */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">

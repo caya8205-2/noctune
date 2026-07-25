@@ -92,7 +92,6 @@ export function useAudio() {
     setDuration,
     setIsPlaying,
     setLoading,
-    setVolume,
     next,
   } = usePlayerStore();
 
@@ -272,10 +271,9 @@ export function useAudio() {
     if (audioRef.current) audioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
-  // Sleep timer countdown + fade out
+  // Sleep timer
   useEffect(() => {
     if (!sleepTimerEnd) return;
-    const FADE_MS = 15_000;
     const TICK = 1_000;
 
     const timer = window.setInterval(() => {
@@ -284,30 +282,15 @@ export function useAudio() {
         window.clearInterval(timer);
         const audio = audioRef.current;
         if (audio && !audio.paused) {
-          // Fade out over FADE_MS
-          const startVolume = usePlayerStore.getState().volume;
-          const startTime = Date.now();
-          const fadeTimer = window.setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const ratio = Math.max(0, 1 - elapsed / FADE_MS);
-            setVolume(startVolume * ratio);
-            if (ratio <= 0) {
-              window.clearInterval(fadeTimer);
-              audio.pause();
-              setIsPlaying(false);
-              usePlayerStore.setState({ sleepTimerEnd: null });
-              // Restore volume after pause
-              setTimeout(() => setVolume(startVolume), 100);
-            }
-          }, 100);
-        } else {
-          usePlayerStore.setState({ sleepTimerEnd: null });
+          audio.pause();
+          setIsPlaying(false);
         }
+        usePlayerStore.setState({ sleepTimerEnd: null });
       }
     }, TICK);
 
     return () => window.clearInterval(timer);
-  }, [sleepTimerEnd, setVolume, setIsPlaying]);
+  }, [sleepTimerEnd, setIsPlaying]);
 
   // Crossfade: when nearing end of track, start next track and fade
   useEffect(() => {
