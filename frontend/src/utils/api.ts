@@ -189,6 +189,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tracks }),
     }),
+  downloadTracks: (tracks: Track[]) =>
+    request<{ ok: boolean; downloadDir: string; downloaded: Array<{ id: string; title: string; file: string }>; failed: Array<{ id: string; title: string; reason: string }>; message: string }>('/player/download-tracks', {
+      method: 'POST',
+      body: JSON.stringify({ tracks }),
+    }),
+  getDiscoverWeekly: () =>
+    request<{ generatedAt: number; tracks: Track[] }>('/player/discover-weekly'),
+  refreshDiscoverWeekly: () =>
+    request<{ generatedAt: number; tracks: Track[] }>('/player/discover-weekly/refresh', { method: 'POST' }),
+  openDownloadDir: () =>
+    request<{ ok: boolean; path: string }>('/settings/open-download-dir', { method: 'POST' }),
   clearTrackCache: (track: Track) =>
     request<ClearTrackCacheResult>('/player/cache/clear-track', {
       method: 'POST',

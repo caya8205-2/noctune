@@ -350,12 +350,11 @@ export function StatsView() {
     <div className="flex h-full flex-col gap-8 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="section-label mb-2 text-accent">Wrapped</p>
-          <h1 className="font-display text-3xl font-light leading-tight text-white sm:text-4xl">
-            Your listening<br />
-            <span className="italic text-accent">stats.</span>
+          <p className="section-label text-accent">Stats</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">
+            Your Listening stats.
           </h1>
-          <p className="mt-3 max-w-lg text-sm text-soft">
+          <p className="text-xs text-muted mt-2">
             See what you've been spinning — tracks, artists, and hours lost to the night.
           </p>
         </div>

@@ -34,30 +34,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       title: track.title,
       artist: track.artist,
       status: 'downloading',
-      message: `Downloading "${track.title}" to audio cache...`,
+      message: `Downloading "${track.title}" to Downloads folder...`,
     });
 
     try {
-      // Trigger actual audio file caching (POST /player/cache-audio)
-      await api.cacheAudioTracks([track]);
-
-      // Poll status until cached or max attempts reached (e.g. 40 * 1.5s = 60s max)
-      let attempts = 0;
-      const maxAttempts = 40;
-      let isDone = false;
-
-      while (attempts < maxAttempts && !isDone) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        attempts++;
-        try {
-          const statusRes = await api.audioCacheStatus([track]);
-          const trackStatus = statusRes.tracks[0];
-          if (trackStatus && trackStatus.cached) {
-            isDone = true;
-          }
-        } catch {
-          // Ignore transient polling errors
-        }
+      const res = await api.downloadTracks([track]);
+      if (res.failed && res.failed.length > 0) {
+        throw new Error(res.failed[0]?.reason || 'Download failed');
       }
 
       setDownloadedIds((prev) => new Set(prev).add(trackId));
@@ -74,7 +57,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         title: track.title,
         artist: track.artist,
         status: 'completed',
-        message: `Successfully saved "${track.title}" to audio cache!`,
+        message: `Saved "${track.title}" to Downloads folder!`,
       });
 
       // Auto dismiss completed toast after 3.5s

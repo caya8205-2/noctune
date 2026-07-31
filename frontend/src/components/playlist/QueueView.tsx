@@ -38,6 +38,7 @@ export function QueueView() {
   const {
     queue,
     queueIndex,
+    isPlaying,
     queueHistory,
     playbackNotice,
     playTrack,
@@ -146,7 +147,7 @@ export function QueueView() {
               onDragEnd={() => setDragIndex(null)}
               className={clsx(
                 'group flex items-center px-4 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100',
-                isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
+                isActive && 'bg-accent/10',
                 track.playbackError && 'border-red-500/20 bg-red-500/5',
                 isPast && 'opacity-40',
                 dragIndex === i && 'opacity-50'
@@ -162,9 +163,19 @@ export function QueueView() {
               >
                 <GripVertical size={14} />
               </div>
-              <span className="w-6 mr-3 text-xs text-muted text-center font-mono tabular-nums flex-shrink-0">
-                {i + 1}
-              </span>
+              <div className="w-6 mr-3 flex-shrink-0 flex items-center justify-center">
+                {isActive && isPlaying ? (
+                  <div className="flex gap-0.5 items-end h-3 justify-center">
+                    <div className="w-0.5 h-3 bg-accent rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <div className="w-0.5 h-1.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <div className="w-0.5 h-2.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                ) : (
+                  <span className={clsx('text-xs font-mono', isActive ? 'text-accent font-semibold' : 'text-muted')}>
+                    {i + 1}
+                  </span>
+                )}
+              </div>
               <img
                 src={track.thumbnail}
                 alt=""

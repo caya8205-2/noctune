@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Menu, Search, X } from 'lucide-react';
+import clsx from 'clsx';
 import { Sidebar } from './components/ui/Sidebar';
 import { PlayerBar } from './components/player/PlayerBar';
 import { TrackDetailsSidebar } from './components/player/TrackDetailsSidebar';
@@ -34,11 +35,11 @@ const qc = new QueryClient({
 function viewRouteId(
   view: ReturnType<typeof usePlayerStore.getState>['activeView'],
   ids: { playlistId: string | null; artistId: string | null; albumId: string | null }
-) {
-  if (view === 'playlist') return ids.playlistId;
-  if (view === 'artist') return ids.artistId;
-  if (view === 'album') return ids.albumId;
-  return null;
+): string {
+  if (view === 'playlist') return ids.playlistId || 'playlist';
+  if (view === 'artist') return ids.artistId || 'artist';
+  if (view === 'album') return ids.albumId || 'album';
+  return view;
 }
 
 function AppInner() {
@@ -52,6 +53,8 @@ function AppInner() {
     activePlaylistId,
     showTrackDetails,
     showShortcutsHelp,
+    sidebarCompact,
+    currentTrack,
     setView,
     toggleShortcutsHelp,
     activeArtistId,
@@ -125,6 +128,64 @@ function AppInner() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [IS_TAURI]);
 
+  const mainRef = useRef<HTMLElement | null>(null);
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
+
+  const currentRouteId = viewRouteId(activeView, {
+    playlistId: activePlaylistId,
+    artistId: activeArtistId,
+    albumId: activeAlbumId,
+  });
+
+  useEffect(() => {
+    const mainEl = mainRef.current;
+    if (!mainEl) return;
+
+    function handleScroll(e: Event) {
+      const target = e.target as HTMLElement;
+      if (!target || typeof target.scrollTop !== 'number') return;
+      if (
+        target === mainEl ||
+        target.classList.contains('overflow-y-auto') ||
+        target.parentElement === mainEl
+      ) {
+        const routeId = activeRouteIdRef.current;
+        if (routeId) {
+          scrollPositionsRef.current.set(routeId, target.scrollTop);
+        }
+      }
+    }
+
+    mainEl.addEventListener('scroll', handleScroll, true);
+    return () => mainEl.removeEventListener('scroll', handleScroll, true);
+  }, []);
+
+  useLayoutEffect(() => {
+    const targetScroll = scrollPositionsRef.current.get(currentRouteId) ?? 0;
+    let r1: number;
+    let r2: number;
+
+    const restore = () => {
+      const mainEl = mainRef.current;
+      if (!mainEl) return;
+      const scrollEl = (mainEl.querySelector('.overflow-y-auto') as HTMLElement) || (mainEl.firstElementChild as HTMLElement);
+      if (scrollEl) {
+        scrollEl.scrollTop = targetScroll;
+      }
+    };
+
+    restore();
+    r1 = requestAnimationFrame(() => {
+      restore();
+      r2 = requestAnimationFrame(restore);
+    });
+
+    return () => {
+      cancelAnimationFrame(r1);
+      cancelAnimationFrame(r2);
+    };
+  }, [currentRouteId]);
+
   useEffect(() => {
     const routeId = viewRouteId(activeView, {
       playlistId: activePlaylistId,
@@ -188,12 +249,9 @@ function AppInner() {
             </button>
           </div>
         )}
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="font-display text-[13px] font-medium tracking-tight text-white/90">Noctune</span>
+        <div className="ml-auto hidden items-center gap-1.5 md:flex" title="Noctune">
+          <img src="/app-icon.png" alt="Noctune" className="h-6 w-6" />
         </div>
-        <span className="justify-self-center font-display text-base text-white md:hidden">
-          Noctune
-        </span>
         <button
           type="button"
           onClick={() => setView('search')}
@@ -205,12 +263,17 @@ function AppInner() {
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
-        <div className="hidden w-60 flex-shrink-0 border-r border-white/[0.06] md:block">
+        <div
+          className={clsx(
+            'hidden flex-shrink-0 border-r border-white/[0.06] transition-all duration-300 md:block',
+            sidebarCompact ? 'w-16' : 'w-60'
+          )}
+        >
           <Sidebar />
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {activeView === 'home' && <HomeView />}
             {activeView === 'player' && <PlayerView />}
             {activeView === 'search' && <SearchView />}
@@ -224,13 +287,15 @@ function AppInner() {
             {activeView === 'album' && activeAlbumId && <AlbumView albumId={activeAlbumId} />}
             {activeView === 'debug' && <DebugApp />}
           </main>
-          {showTrackDetails && <TrackDetailsSidebar />}
+          {showTrackDetails && currentTrack && <TrackDetailsSidebar />}
         </div>
       </div>
 
-      <div className={playerBarClass}>
-        <PlayerBar />
-      </div>
+      {currentTrack && (
+        <div className={playerBarClass}>
+          <PlayerBar />
+        </div>
+      )}
 
       {updateToast}
       <ChangelogModal />

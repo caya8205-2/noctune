@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   FileUp,
+  FolderOpen,
   Info,
   ListMusic,
   Loader2,
@@ -33,6 +34,7 @@ interface SettingsData {
   audioQualityPreference: 'auto' | 'high';
   audioCacheLimitMb: number;
   discordRpcEnabled: boolean;
+  downloadDir?: string;
   cache?: {
     learning: { total: number; totalQueries: number };
     lyrics: { total: number; hits: number; misses: number };
@@ -137,6 +139,9 @@ export function SettingsView() {
   const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
   const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'legacy'>('lastfm');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
+  const [downloadDir, setDownloadDir] = useState('');
+  const [downloadDirSaving, setDownloadDirSaving] = useState(false);
+  const [downloadDirSaved, setDownloadDirSaved] = useState(false);
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
     return (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
   });
@@ -153,6 +158,7 @@ export function SettingsView() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const setView = usePlayerStore((state) => state.setView);
+
   async function loadSettings() {
     const res = await fetch(await apiUrl('/settings'));
     const d = (await res.json()) as SettingsData;
@@ -162,6 +168,35 @@ export function SettingsView() {
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
     setRecommendationEngine(d.recommendationEngine ?? 'lastfm');
     setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
+    if (d.downloadDir) setDownloadDir(d.downloadDir);
+  }
+
+  async function handleOpenDownloadDir() {
+    try {
+      await api.openDownloadDir();
+    } catch (err) {
+      console.error('Failed to open download dir:', err);
+    }
+  }
+
+  async function handleSaveDownloadDir() {
+    setDownloadDirSaving(true);
+    setDownloadDirSaved(false);
+    try {
+      const res = await fetch(await apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ downloadDir }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      if (updated.downloadDir) setDownloadDir(updated.downloadDir);
+      setDownloadDirSaved(true);
+      setTimeout(() => setDownloadDirSaved(false), 2500);
+    } catch (err) {
+      console.error('Failed to save download dir:', err);
+    } finally {
+      setDownloadDirSaving(false);
+    }
   }
 
   const [engineSaving, setEngineSaving] = useState(false);
@@ -602,6 +637,48 @@ export function SettingsView() {
               >
                 <ExternalLink size={14} />
                 Update
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Download Location */}
+      <section className="surface-panel flex flex-col gap-4 p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Download Location
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Downloaded tracks are saved to this directory on your computer with formatted filenames (Artist - Title).
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <input
+              type="text"
+              value={downloadDir}
+              onChange={(e) => setDownloadDir(e.target.value)}
+              placeholder="e.g. C:\Users\Username\Downloads\Noctune"
+              className="input-base font-mono text-xs flex-1"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveDownloadDir}
+                disabled={downloadDirSaving}
+                className="px-3 py-2 rounded-xl text-sm btn-accent disabled:opacity-50"
+              >
+                {downloadDirSaving ? 'Saving...' : downloadDirSaved ? 'Saved!' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenDownloadDir}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all"
+              >
+                <FolderOpen size={14} />
+                Open Folder
               </button>
             </div>
           </div>

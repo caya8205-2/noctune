@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, Loader2, Music2, Pencil, Play, Save, Search, Trash2, X } from 'lucide-react';
+import { Check, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, ListMusic, Loader2, Music2, Pencil, Play, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 import { api, isTrackActive, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -286,8 +286,9 @@ export function PlaylistView() {
   const [sortMode, setSortMode] = useState<PlaylistSort>('custom');
   const [pendingRemoveTrack, setPendingRemoveTrack] = useState<Track | null>(null);
   const [removingTrack, setRemovingTrack] = useState(false);
+  const [refreshingDiscover, setRefreshingDiscover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { activePlaylistId, activePersonalMix, playTrack, currentTrack, setView } = usePlayerStore();
+  const { activePlaylistId, activePersonalMix, playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
   const qc = useQueryClient();
   const isSmartPlaylist = Boolean(activePlaylistId?.startsWith('smart:'));
   const hasVirtualPlaylistId = Boolean(activePlaylistId?.startsWith('nightly:'));
@@ -300,6 +301,31 @@ export function PlaylistView() {
   } = useSmartPlaylists();
   const smartPlaylist = isSmartPlaylist ? getSmartPlaylist(activePlaylistId!) : undefined;
   const isDiscoverWeekly = activePlaylistId === 'smart:discover-weekly';
+
+  async function handleRefreshMixOrSmartPlaylist() {
+    setRefreshingDiscover(true);
+    try {
+      if (isDiscoverWeekly) {
+        await api.refreshDiscoverWeekly();
+        qc.invalidateQueries({ queryKey: ['smart', 'discover-weekly'] });
+      } else if (isSmartPlaylist) {
+        qc.invalidateQueries({ queryKey: ['smart'] });
+        qc.invalidateQueries({ queryKey: ['history'] });
+        qc.invalidateQueries({ queryKey: ['stats'] });
+      } else if (isNightlyMix && activePersonalMix) {
+        const res = await api.nightlyMixes();
+        const updatedMix = res.mixes?.find((m: { id: string }) => m.id === activePersonalMix.id);
+        if (updatedMix) {
+          usePlayerStore.getState().openPersonalMix(updatedMix);
+        }
+        qc.invalidateQueries({ queryKey: ['home'] });
+      }
+    } catch (err) {
+      console.error('Failed to refresh mix or smart playlist:', err);
+    } finally {
+      setRefreshingDiscover(false);
+    }
+  }
 
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', activePlaylistId],
@@ -500,9 +526,10 @@ export function PlaylistView() {
           onApply={handleApplyCover}
         />
       )}
-      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col gap-5">
+        {/* Top: Cover + Details */}
         <div className="flex items-end gap-5 min-w-0">
-          <div className="w-28 h-28 rounded-xl bg-base-800 border border-base-600/60 flex items-center justify-center text-muted overflow-hidden flex-shrink-0">
+          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-xl bg-base-800 border border-base-600/60 flex items-center justify-center text-muted overflow-hidden flex-shrink-0">
             {playlistCover ? (
               <img src={playlistCover} alt="" className="w-full h-full object-cover" />
             ) : isLikedPlaylist ? (
@@ -511,7 +538,7 @@ export function PlaylistView() {
               <ListMusic size={34} strokeWidth={1.3} />
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="section-label text-accent">{playlistLabel}</p>
             {editing && canEditPlaylist ? (
               <form onSubmit={handleRename} className="mt-2 flex items-center gap-2">
@@ -524,22 +551,27 @@ export function PlaylistView() {
                 <button
                   type="submit"
                   disabled={savingDetails || !draftName.trim() || draftName.trim() === playlist?.name}
-                  className="btn-accent p-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="btn-accent p-2.5 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                   title="Save name"
                 >
                   <Save size={16} />
                 </button>
               </form>
             ) : (
-              <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2 truncate">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mt-1.5 truncate max-w-full" title={playlistName}>
                 {playlistName}
               </h1>
             )}
             <p className="text-xs text-muted mt-2">
               {isPlaylistLoading ? 'Loading tracks' : tracks.length + ' tracks'}
             </p>
+            {isNightlyMix && activePersonalMix?.description && (
+              <p className="text-xs text-muted/90 mt-1.5 leading-relaxed max-w-2xl">
+                {activePersonalMix.description}
+              </p>
+            )}
             {editing && canEditPlaylist && (
-              <div className="flex items-center gap-2 mt-4">
+              <div className="flex items-center gap-2 mt-3">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -551,7 +583,7 @@ export function PlaylistView() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={savingDetails}
-                  className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40"
+                  className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 whitespace-nowrap"
                 >
                   <ImagePlus size={14} />
                   Upload cover
@@ -561,7 +593,7 @@ export function PlaylistView() {
                     type="button"
                     onClick={handleRemoveCover}
                     disabled={savingDetails}
-                    className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 text-muted hover:text-red-400 disabled:opacity-40"
+                    className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 text-muted hover:text-red-400 disabled:opacity-40 whitespace-nowrap"
                   >
                     <ImageOff size={14} />
                     Remove cover
@@ -571,24 +603,45 @@ export function PlaylistView() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {!isSmartPlaylist && (
+
+        {/* Bottom: Action bar */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handlePlayAll}
+            disabled={tracks.length === 0}
+            className="btn-accent whitespace-nowrap px-5 py-2.5 text-xs gap-2 rounded-full shadow-lg shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+          >
+            <Play size={14} fill="currentColor" />
+            Play all
+          </button>
+          {(isSmartPlaylist || isNightlyMix) && (
             <button
               type="button"
-              onClick={handleCachePlaylist}
-              disabled={tracks.length === 0 || cachingAudio}
-              className="btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={handleRefreshMixOrSmartPlaylist}
+              disabled={refreshingDiscover || isSmartPlaylistLoading}
+              className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+              title={isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
             >
-              {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
-              {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+              {refreshingDiscover ? <Loader2 size={14} className="animate-spin text-accent" /> : <RefreshCw size={14} />}
+              {isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={handleCachePlaylist}
+            disabled={tracks.length === 0 || cachingAudio}
+            className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
+            {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+          </button>
           {canEditPlaylist && (
             <button
               type="button"
               onClick={() => setEditing((value) => !value)}
               className={clsx(
-                'btn-ghost px-3 py-2 text-xs gap-1.5 border border-base-600/40',
+                'btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl',
                 editing && 'text-accent border-accent/30 bg-accent/10'
               )}
             >
@@ -596,15 +649,6 @@ export function PlaylistView() {
               {editing ? 'Done' : 'Edit playlist'}
             </button>
           )}
-          <button
-            type="button"
-            onClick={handlePlayAll}
-            disabled={tracks.length === 0}
-            className="btn-accent px-4 py-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Play size={14} fill="currentColor" />
-            Play all
-          </button>
         </div>
       </div>
 
@@ -675,7 +719,7 @@ export function PlaylistView() {
               className={clsx(
                 'group flex items-center px-3 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 transition-colors duration-100',
                 canReorder ? 'cursor-grab' : 'cursor-pointer',
-                isActive && 'bg-base-700 ring-1 ring-accent/20 border-accent/20',
+                isActive && 'bg-accent/10',
                 dragIndex === originalIndex && 'opacity-50'
               )}
               onClick={() => {
@@ -688,7 +732,19 @@ export function PlaylistView() {
               )}>
                 <GripVertical size={14} />
               </div>
-              <span className="w-5 text-xs text-muted text-center flex-shrink-0">{visibleIndex + 1}</span>
+              <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                {isActive && isPlaying ? (
+                  <div className="flex gap-0.5 items-end h-3 justify-center">
+                    <div className="w-0.5 h-3 bg-accent rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <div className="w-0.5 h-1.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <div className="w-0.5 h-2.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                ) : (
+                  <span className={clsx('text-xs font-mono', isActive ? 'text-accent font-semibold' : 'text-muted')}>
+                    {visibleIndex + 1}
+                  </span>
+                )}
+              </div>
               {track.thumbnail ? (
                 <img
                   src={track.thumbnail}
