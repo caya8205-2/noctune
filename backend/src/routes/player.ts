@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import path from 'path';
 import PQueue from 'p-queue';
+import { getDiscoverWeekly } from '../services/discoverWeekly.js';
 import {
   clearTrackCache,
   cacheMatchesAudioQuality,
@@ -1097,5 +1099,77 @@ export async function playerRoutes(app: FastifyInstance) {
       cachedIds: playableIds.filter((id) => Boolean(getExistingAudioCachePath(id, preference))),
       message: 'Audio cache queued',
     });
+  });
+
+  const DownloadTracksBody = z.object({
+    tracks: z.array(z.any()).min(1),
+  });
+
+  app.post('/player/download-tracks', async (req, reply) => {
+    const parsed = DownloadTracksBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const tracks: Track[] = parsed.data.tracks;
+    const envConfig = getEnvConfig();
+    const downloadDir = envConfig.downloadDir;
+
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true });
+    }
+
+    const preference = envConfig.audioQualityPreference;
+    const downloaded: Array<{ id: string; title: string; file: string }> = [];
+    const failed: Array<{ id: string; title: string; reason: string }> = [];
+
+    for (const track of tracks) {
+      try {
+        let existing = getExistingAudioCachePath(track.id, preference);
+        if (!existing) {
+          const videoId = track.id;
+          const cached = getCachedById(videoId);
+          const audioUrl = cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)
+            ? cached.audioUrl
+            : (await resolveAudioUrl(videoId)).url;
+          await cacheAudioFile(videoId, audioUrl);
+          existing = getExistingAudioCachePath(videoId, preference);
+        }
+
+        if (!existing || !fs.existsSync(existing)) {
+          failed.push({ id: track.id, title: track.title, reason: 'Failed to obtain audio file' });
+          continue;
+        }
+
+        const ext = path.extname(existing) || '.m4a';
+        const cleanArtist = (track.artist || 'Unknown Artist').replace(/[/\\?%*:|"<>]/g, '_').trim();
+        const cleanTitle = (track.title || 'Untitled').replace(/[/\\?%*:|"<>]/g, '_').trim();
+        const filename = `${cleanArtist} - ${cleanTitle}${ext}`;
+        const targetPath = path.join(downloadDir, filename);
+
+        fs.copyFileSync(existing, targetPath);
+        downloaded.push({ id: track.id, title: track.title, file: targetPath });
+      } catch (err) {
+        failed.push({ id: track.id, title: track.title, reason: (err as Error).message });
+      }
+    }
+
+    return reply.send({
+      ok: true,
+      downloadDir,
+      downloaded,
+      failed,
+      message: `Downloaded ${downloaded.length} track(s) to ${downloadDir}`,
+    });
+  });
+
+  app.get('/player/discover-weekly', async (_req, reply) => {
+    const data = await getDiscoverWeekly(false);
+    return reply.send(data);
+  });
+
+  app.post('/player/discover-weekly/refresh', async (_req, reply) => {
+    const data = await getDiscoverWeekly(true);
+    return reply.send(data);
   });
 }

@@ -2,6 +2,30 @@
 
 All notable Noctune changes are documented here.
 
+## v3.2.0 - 2026-08-01
+
+### New Features & Views
+- **Continue Listening Section**: Added a new horizontal autoscroll section on Home View fed directly from the persisted audio queue so users can seamlessly resume listening across application sessions.
+- **New Releases Horizontal Autoscroll Carousel**: Built a hardware-accelerated horizontal autoscroll carousel for Spotify New Releases on Home View with smooth GPU layer compositing (`transform: translate3d(-Xpx, 0, 0)`), 2.5-second hold on the final card, mouse wheel horizontal scroll support, and hover pause.
+- **Compact Sidebar Mode**: Added a collapsible icon-only sidebar (`w-16`) toggled via top header toggle button (`PanelLeftOpen`/`PanelLeftClose`), featuring centered navigation items, hover tooltips, and playlist cover artwork thumbnails.
+- **Custom Audio Download Location Setting**: Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.
+- **Smart Playlists System**: Implemented automated Smart Playlists (`Top Favorites`, `Recently Played`, `Short Tracks`, and `Discover Weekly`) with real-time algorithm generation and a dedicated backend `Discover Weekly` recommendation engine.
+
+### Home View & Sidebar UI Redesign
+- **Home View Header & Greeting Clean Up**: Replaced redundant greetings and taglines with a clean title header ("Home") and subtitle to eliminate duplication with sidebar greetings.
+- **Your Playlists Manual Horizontal Carousel**: Converted `Your Playlists` section into a manual horizontal scroll row (`ManualHorizontalCarousel`) with mouse wheel direction conversion, keeping all user playlists accessible without vertical page sprawl.
+- **Compact Playlist Cards**: Standardized playlist cover cards to compact dimensions (`w-28 sm:w-32`) matching Noctune's aesthetic guidelines.
+- **Create Playlist Button In-List Placement**: Placed the Create Playlist (`+`) button inside the playlist scrollable list container on compact sidebar mode, aligning its center axis to the exact pixel of all sidebar items with zero scrollbar misalignment.
+- **Standardized Rounded Square Buttons**: Unified hover shapes for all sidebar items and action buttons to `rounded-xl` (rounded square), removing inconsistent circular button borders.
+- **Clean Title Bar Logo**: Positioned the official Noctune `/app-icon.png` logo on the far right (`ml-auto`) of the title bar with clean borderless styling.
+
+### Now Playing & Dynamic Visibility Enhancements
+- **Unified Now Playing 3 Audio Bars Indicator**: Standardized playing indicators across all track list views (*Home View Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View*) with 3 animated accent audio bars (`PlayingBars`) when playing and accent row numbers when paused.
+- **Cover Card Playing Indicator Alignment**: Aligned 3 animated audio bars right next to track titles on cover cards (`CleanCoverCard`), vertically centered between title and artist name with clean right margin (`mr-1.5`) for breathing space.
+- **Clean Cover Artwork Outline**: Applied crisp accent border outline (`border border-accent`) around active cover artwork while keeping track title text white (`text-white hover:text-accent`) to preserve album navigation hover states.
+- **Unified Active Track Row Styling**: Replaced heavy dark box borders in `PlaylistView` and `QueueView` with Noctune's global standard `bg-accent/10` active row background.
+- **Dynamic Mini Player & Track Details Visibility**: Conditioned Mini Player (`PlayerBar`) and Sidebar Track Details (`TrackDetailsSidebar`) rendering on `Boolean(currentTrack)`, automatically hiding both components when no track is loaded to maximize screen real estate.
+
 ## v3.1.0 - 2026-07-25
 
 ### Playback Blacklist & Disk Audio Cache Hardening

@@ -16,6 +16,8 @@ import { clearMatchCache, getMatchCacheStats } from '../services/youtubeMatcher.
 import { clearPrefetchCache } from '../services/prefetch.js';
 import { clearDiscordActivity, refreshDiscordActivity } from '../services/discordRpc.js';
 
+import { exec } from 'child_process';
+
 const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
@@ -26,6 +28,7 @@ const UpdateBody = z.object({
     discordRpcEnabled: z.boolean().optional(),
     apiKey: z.string().optional(),
     allowLocalhostBypass: z.boolean().optional(),
+    downloadDir: z.string().optional(),
 });
 
 const TestBody = z.object({
@@ -45,6 +48,7 @@ export async function settingsRoutes(app: FastifyInstance) {
             discordRpcEnabled: config.discordRpcEnabled,
             apiKey: config.apiKey ?? '',
             allowLocalhostBypass: config.allowLocalhostBypass ?? true,
+            downloadDir: config.downloadDir,
             cache: {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),
@@ -60,6 +64,23 @@ export async function settingsRoutes(app: FastifyInstance) {
                 configured: Boolean(config.spotifyClientId && config.spotifyClientSecret),
             },
         });
+    });
+
+    // POST /settings/open-download-dir — open download directory in OS File Explorer
+    app.post('/settings/open-download-dir', async (_req, reply) => {
+        const config = getEnvConfig();
+        const downloadDir = config.downloadDir;
+        if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir, { recursive: true });
+        }
+        if (process.platform === 'win32') {
+            exec(`explorer "${downloadDir}"`);
+        } else if (process.platform === 'darwin') {
+            exec(`open "${downloadDir}"`);
+        } else {
+            exec(`xdg-open "${downloadDir}"`);
+        }
+        return reply.send({ ok: true, path: downloadDir });
     });
 
     // PATCH /settings — update config
@@ -98,6 +119,7 @@ export async function settingsRoutes(app: FastifyInstance) {
             discordRpcEnabled: updated.discordRpcEnabled,
             apiKey: updated.apiKey ?? '',
             allowLocalhostBypass: updated.allowLocalhostBypass ?? true,
+            downloadDir: updated.downloadDir,
             spotify: {
                 clientId: '',
                 clientSecretMasked: '',

@@ -27,14 +27,8 @@ export function useSmartPlaylistsPrefetch() {
       queryKey: ['smart', 'discover-weekly'],
       queryFn: async (): Promise<Track[]> => {
         try {
-          const hist = await api.history();
-          const recentTracks = hist.tracks.slice(0, 5);
-          if (recentTracks.length === 0) return [];
-
-          const seed = recentTracks[0];
-          const excludeIds = recentTracks.map(t => t.id);
-          const recs = await api.recommend(seed, excludeIds, 20);
-          return recs.tracks;
+          const res = await api.getDiscoverWeekly();
+          return res.tracks;
         } catch {
           return [];
         }
@@ -45,7 +39,7 @@ export function useSmartPlaylistsPrefetch() {
 }
 
 export function useSmartPlaylists() {
-  // Most Played — top 20 tracks by playCount via stats endpoint
+  // Top Favorites — top 20 tracks by playCount via stats endpoint
   const mostPlayedQuery = useQuery({
     queryKey: ['smart', 'most-played'],
     queryFn: async (): Promise<Track[]> => {
@@ -64,7 +58,7 @@ export function useSmartPlaylists() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Recently Added — last 20 tracks by cachedAt from history
+  // Recently Played — last 20 tracks from history
   const recentlyAddedQuery = useQuery({
     queryKey: ['smart', 'recently-added'],
     queryFn: async (): Promise<Track[]> => {
@@ -72,7 +66,7 @@ export function useSmartPlaylists() {
         const hist = await api.history();
         return hist.tracks
           .slice()
-          .sort((a, b) => (b.cachedAt ?? 0) - (a.cachedAt ?? 0))
+          .sort((a, b) => (b.lastPlayed ?? b.cachedAt ?? 0) - (a.lastPlayed ?? a.cachedAt ?? 0))
           .slice(0, 20);
       } catch {
         return [];
@@ -97,42 +91,33 @@ export function useSmartPlaylists() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Discover Weekly — recommendations based on recent history, excluding already-played tracks
-  // Refetch every week (7 days) to get fresh recommendations
+  // Discover Weekly — 7-day persistent cached recommendations from backend
   const discoverWeeklyQuery = useQuery({
     queryKey: ['smart', 'discover-weekly'],
     queryFn: async (): Promise<Track[]> => {
       try {
-        const hist = await api.history();
-        const recentTracks = hist.tracks.slice(0, 5);
-        if (recentTracks.length === 0) return [];
-
-        // Use the most recent track as seed
-        const seed = recentTracks[0];
-        const excludeIds = recentTracks.map(t => t.id);
-        const recs = await api.recommend(seed, excludeIds, 20);
-        return recs.tracks;
+        const res = await api.getDiscoverWeekly();
+        return res.tracks;
       } catch {
         return [];
       }
     },
     staleTime: 1000 * 60 * 60 * 24 * 7, // 7 days
-    refetchInterval: 1000 * 60 * 60 * 24 * 7, // Refetch every 7 days
-    refetchIntervalInBackground: true, // Keep refetching even if tab is not focused
-    refetchOnMount: true, // Refetch if the query exists but is stale when the component mounts
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const smartPlaylists: SmartPlaylist[] = [
     {
       id: 'smart:most-played',
-      name: 'Most Played',
+      name: 'Top Favorites',
       description: 'Your top 20 tracks',
       cover: getStableCover(mostPlayedQuery.data ?? []),
       tracks: mostPlayedQuery.data ?? [],
     },
     {
       id: 'smart:recently-added',
-      name: 'Recently Added',
+      name: 'Recently Played',
       description: 'Latest tracks in your history',
       cover: getStableCover(recentlyAddedQuery.data ?? []),
       tracks: recentlyAddedQuery.data ?? [],

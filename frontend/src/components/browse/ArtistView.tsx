@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, Music2, Users } from 'lucide-react';
 import { api, isTrackActive, type Track } from '../../utils/api';
+import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -184,12 +185,19 @@ export function ArtistView({ artistId }: { artistId: string }) {
                   className={`track-row group ${isActive ? 'active' : ''}`}
                   onClick={() => handlePlay(track)}
                 >
-                  <span className="w-5 flex-shrink-0 text-right text-xs text-muted">
-                    {isActive && isPlaying
-                      ? <span className="text-accent">▶</span>
-                      : i + 1
-                    }
-                  </span>
+                  <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                    {isActive && isPlaying ? (
+                      <div className="flex gap-0.5 items-end h-3 justify-center">
+                        <div className="w-0.5 h-3 bg-accent rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                        <div className="w-0.5 h-1.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                        <div className="w-0.5 h-2.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    ) : (
+                      <span className={clsx('text-xs font-mono', isActive ? 'text-accent font-semibold' : 'text-muted')}>
+                        {i + 1}
+                      </span>
+                    )}
+                  </div>
                   <img
                     src={track.thumbnail}
                     alt=""

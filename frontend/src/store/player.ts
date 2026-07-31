@@ -40,11 +40,15 @@ interface PlayerState {
   activeView: 'home' | 'player' | 'search' | 'history' | 'playlist' | 'queue' | 'settings' | 'artist' | 'album' | 'debug' | 'stats' | 'local-files';
   activePlaylistId: string | null;
   activePersonalMix: PersonalMix | null;
+  personalMixesMap: Record<string, PersonalMix>;
   activeArtistId: string | null;
   activeAlbumId: string | null;
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
+  sidebarCompact: boolean;
   playbackNotice: string | null;
+
+  toggleSidebarCompact: () => void;
 
   // ── Equalizer ──────────────────────────────────────────────────────────────
   eqEnabled: boolean;
@@ -147,11 +151,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activeView: 'home',
   activePlaylistId: null,
   activePersonalMix: null,
+  personalMixesMap: {},
   activeArtistId: null,
   activeAlbumId: null,
   showTrackDetails: true,
   showShortcutsHelp: false,
+  sidebarCompact: Boolean(localStorage.getItem('noctune:sidebar-compact') === 'true'),
   playbackNotice: null,
+
+  toggleSidebarCompact: () =>
+    set((s) => {
+      const next = !s.sidebarCompact;
+      try {
+        localStorage.setItem('noctune:sidebar-compact', String(next));
+      } catch {}
+      return { sidebarCompact: next };
+    }),
 
   setLoading: (v) => set({ isLoading: v }),
   setIsPlaying: (v) => set({ isPlaying: v }),
@@ -642,25 +657,31 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setCrossfadeDuration: (seconds) => set({ crossfadeDuration: Math.min(12, Math.max(0, seconds)) }),
 
   setView: (view, id) =>
-    set((state) => ({
-      activeView: view,
-      activePlaylistId: view === 'playlist' ? (id ?? null) : null,
-      activePersonalMix:
-        view === 'playlist' && id && state.activePersonalMix && `nightly:${state.activePersonalMix.id}` === id
-          ? state.activePersonalMix
-          : null,
-      activeArtistId: view === 'artist' ? (id ?? null) : null,
-      activeAlbumId: view === 'album' ? (id ?? null) : null,
-    })),
+    set((state) => {
+      const isNightly = view === 'playlist' && id?.startsWith('nightly:');
+      const mixId = isNightly ? id!.replace(/^nightly:/, '') : null;
+      const mix = mixId
+        ? (state.personalMixesMap[mixId] || (state.activePersonalMix && state.activePersonalMix.id === mixId ? state.activePersonalMix : null))
+        : null;
+
+      return {
+        activeView: view,
+        activePlaylistId: view === 'playlist' ? (id ?? null) : null,
+        activePersonalMix: mix,
+        activeArtistId: view === 'artist' ? (id ?? null) : null,
+        activeAlbumId: view === 'album' ? (id ?? null) : null,
+      };
+    }),
 
   openPersonalMix: (mix) =>
-    set({
+    set((state) => ({
       activeView: 'playlist',
       activePlaylistId: `nightly:${mix.id}`,
       activePersonalMix: mix,
+      personalMixesMap: { ...state.personalMixesMap, [mix.id]: mix },
       activeArtistId: null,
       activeAlbumId: null,
-    }),
+    })),
 
   saveQueueState: () => {
     const { queue, queueIndex } = get();

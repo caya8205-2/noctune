@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import os from 'os';
+
 // APP_DATA_DIR can be set at launch (e.g. via Tauri sidecar env) so the data
 // folder always ends up in a predictable location. Falls back to <cwd>/data.
 const DATA_DIR = process.env.APP_DATA_DIR
@@ -10,6 +12,10 @@ const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 export function getDataDir(): string {
     return DATA_DIR;
+}
+
+export function getDefaultDownloadDir(): string {
+    return path.join(process.env.USERPROFILE || os.homedir(), 'Downloads', 'Noctune');
 }
 
 export interface EnvConfig {
@@ -23,6 +29,7 @@ export interface EnvConfig {
     recommendationEngineUserSelected?: boolean;
     apiKey: string;
     allowLocalhostBypass: boolean;
+    downloadDir: string;
 }
 
 const DEFAULTS: EnvConfig = {
@@ -36,6 +43,7 @@ const DEFAULTS: EnvConfig = {
     recommendationEngineUserSelected: false,
     apiKey: '',
     allowLocalhostBypass: true,
+    downloadDir: getDefaultDownloadDir(),
 };
 
 function withProcessEnv(config: EnvConfig): EnvConfig {
@@ -60,6 +68,7 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
             ? envSearchEngine
             : config.searchEngine,
         recommendationEngine: recEngine,
+        downloadDir: config.downloadDir || getDefaultDownloadDir(),
     };
 }
 

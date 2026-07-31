@@ -1,8 +1,19 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Disc3, Heart, ListOrdered, Music2, Radio, Search, Sparkles } from 'lucide-react';
-import { api, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
+import {
+  Clock,
+  Compass,
+  Disc3,
+  Heart,
+  ListMusic,
+  ListOrdered,
+  Music2,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
+import clsx from 'clsx';
+import { api, isTrackActive, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -35,7 +46,7 @@ function writeNightlyMixCache(data: NightlyMixCache['data'], updatedAt: number) 
   try {
     localStorage.setItem(NIGHTLY_MIX_CACHE_KEY, JSON.stringify({ data, updatedAt }));
   } catch {
-    // Cache is only a speed/rate-limit helper; failing to persist should not break Home.
+    // best-effort cache
   }
 }
 
@@ -69,7 +80,7 @@ function writeHomeLocalCache(data: HomeLocalCache['data'], updatedAt: number) {
   try {
     localStorage.setItem(HOME_LOCAL_CACHE_KEY, JSON.stringify({ data, updatedAt }));
   } catch {
-    // best-effort cache; ignore failures
+    // best-effort cache
   }
 }
 
@@ -89,121 +100,424 @@ function writeNewReleasesCache(data: NewReleasesCache['data'], updatedAt: number
   try {
     localStorage.setItem(HOME_NEW_RELEASES_CACHE_KEY, JSON.stringify({ data, updatedAt }));
   } catch {
-    // best-effort cache; ignore failures
+    // best-effort cache
   }
 }
 
-function TrackCard({
+// ── Minimalist Quick Shortcut Pill ──────────────────────────────────────────
+function ShortcutPill({
+  title,
+  icon: Icon,
+  accentColor = 'text-accent',
+  onClick,
+}: {
+  title: string;
+  icon: LucideIcon;
+  accentColor?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-base-900/60 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:border-accent/40 hover:bg-base-800 hover:text-accent"
+    >
+      <Icon size={14} className={clsx(accentColor, 'transition-transform group-hover:scale-110')} />
+      <span>{title}</span>
+    </button>
+  );
+}
+
+// ── Clean Track Row (Recently Played) ──────────────────────────────────────
+function OpenTrackRow({
   track,
+  index,
   onPlay,
 }: {
   track: Track;
+  index: number;
   onPlay: (track: Track) => void;
 }) {
+  const { currentTrack, isPlaying, setView } = usePlayerStore();
+  const active = isTrackActive(currentTrack, track);
+
+  const needsSpotifyNavigation = Boolean(track.spotifyId && (!track.albumId || !track.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track.spotifyId],
+    queryFn: () => api.spotifyMetadata(track.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+
+  const albumViewId = track.albumId ?? spotifyMetadata?.album?.id;
+  const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id;
+
+  const handleTitleClick = (e: React.MouseEvent) => {
+    if (albumViewId) {
+      e.stopPropagation();
+      setView('album', albumViewId);
+    }
+  };
+
+  const handleArtistClick = (e: React.MouseEvent) => {
+    if (artistViewId) {
+      e.stopPropagation();
+      setView('artist', artistViewId);
+    }
+  };
+
   return (
     <div
-      className="group min-w-36 cursor-pointer rounded-2xl border border-white/[0.06] bg-base-800/60 p-3 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.1] hover:bg-base-700/70 sm:min-w-0"
       onClick={() => onPlay(track)}
-    >
-      <div className="relative mb-3 block w-full overflow-hidden rounded-xl text-left">
-        {track.thumbnail ? (
-          <img
-            src={track.thumbnail}
-            alt=""
-            className="aspect-square w-full rounded-xl border border-white/[0.06] object-cover transition-transform duration-300 group-hover:scale-[1.04]"
-            onError={(e) => (e.currentTarget.style.display = 'none')}
-          />
-        ) : (
-          <div className="flex aspect-square w-full items-center justify-center rounded-xl border border-white/[0.06] bg-base-700 text-muted">
-            <Music2 size={28} strokeWidth={1.4} />
-          </div>
-        )}
-      </div>
-      <p className="truncate text-sm font-semibold text-white">{track.title}</p>
-      <p className="mt-1 truncate text-xs text-muted">{track.artist}</p>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] tabular-nums text-muted">{formatDuration(track.duration)}</span>
-        <TrackActionButtons
-          track={track}
-          className="opacity-100 transition-opacity group-hover:opacity-100 sm:opacity-0"
-          showClearCache={false}
-        />
-      </div>
-    </div>
-  );
-}
-
-function HomeCardIcon({ icon: Icon }: { icon: LucideIcon }) {
-  return (
-    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
-      <Icon size={18} strokeWidth={2} />
-    </div>
-  );
-}
-
-function PlaylistCover({ playlist }: { playlist: Playlist }) {
-  const isLikedPlaylist = playlist.id === 'system-liked-songs';
-  return (
-    <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl border border-white/[0.06] bg-base-700 text-accent">
-      {playlist.coverDataUrl ? (
-        <img src={playlist.coverDataUrl} alt="" className="h-full w-full object-cover" />
-      ) : isLikedPlaylist ? (
-        <Heart size={30} strokeWidth={1.5} fill="currentColor" />
-      ) : (
-        <ListOrdered size={30} strokeWidth={1.4} />
+      className={clsx(
+        'group flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-white/[0.05]',
+        active && 'bg-accent/10'
       )}
+    >
+      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        <div className="w-5 flex-shrink-0 flex items-center justify-center">
+          {active && isPlaying ? (
+            <div className="flex gap-0.5 items-end h-3 justify-center">
+              <div className="w-0.5 h-3 bg-accent rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+              <div className="w-0.5 h-1.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+              <div className="w-0.5 h-2.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+            </div>
+          ) : (
+            <span className={clsx('text-xs font-mono', active ? 'text-accent font-semibold' : 'text-muted')}>
+              {index + 1}
+            </span>
+          )}
+        </div>
+
+        <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md bg-base-800">
+          {track.thumbnail ? (
+            <img src={track.thumbnail} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted">
+              <Music2 size={16} />
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p
+            onClick={albumViewId ? handleTitleClick : undefined}
+            className={clsx(
+              'truncate text-sm font-medium transition-colors',
+              active ? 'text-accent font-semibold' : 'text-white',
+              albumViewId && 'hover:text-accent cursor-pointer'
+            )}
+            title={track.title}
+          >
+            {track.title}
+          </p>
+          {artistViewId ? (
+            <p
+              onClick={handleArtistClick}
+              className="truncate text-xs text-muted transition-colors hover:text-accent cursor-pointer"
+              title={`Go to artist: ${track.artist}`}
+            >
+              {track.artist}
+            </p>
+          ) : (
+            <p className="truncate text-xs text-muted">{track.artist}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <span className="hidden font-mono text-xs tabular-nums text-muted sm:inline-block">
+          {formatDuration(track.duration)}
+        </span>
+        <TrackActionButtons track={track} showClearCache={true} />
+      </div>
     </div>
   );
 }
 
-function PersonalMixCard({
+// ── Clean Nightly Mix Card (Full Description) ──────────────────────────────
+function CleanMixCard({
   mix,
   onPlay,
 }: {
   mix: PersonalMix;
   onPlay: (mix: PersonalMix) => void;
 }) {
-  const preview = mix.tracks.slice(0, 3).map((track) => track.artist).join(', ');
-
   return (
-    <button
-      type="button"
+    <div
       onClick={() => onPlay(mix)}
-      className="surface-panel group min-w-44 overflow-hidden p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-base-700/70 sm:min-w-0"
+      className="group cursor-pointer text-left transition-all duration-200"
     >
-      <div className="relative mb-3 aspect-square overflow-hidden rounded-xl border border-white/[0.06] bg-base-700">
+      <div className="relative mb-2.5 aspect-square w-full overflow-hidden rounded-xl bg-base-800 shadow-lg border border-white/[0.06]">
         {mix.cover ? (
           <img
             src={mix.cover}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
-            onError={(e) => (e.currentTarget.style.display = 'none')}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-accent">
-            <Sparkles size={30} strokeWidth={1.4} />
+            <Sparkles size={32} strokeWidth={1.4} />
           </div>
         )}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-base-950/85 to-transparent p-3">
-          <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-base-950/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent">
-            <Sparkles size={10} />
-            {mix.tracks.length} tracks
-          </span>
-        </div>
       </div>
-      <p className="truncate text-sm font-semibold text-white">{mix.name}</p>
-      <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-4 text-muted">{mix.description}</p>
-      {preview && <p className="mt-3 truncate text-[11px] text-soft">{preview}</p>}
-    </button>
+      <p className="truncate text-sm font-semibold text-white group-hover:text-accent transition-colors">
+        {mix.name}
+      </p>
+      <p className="mt-1 text-xs text-muted leading-relaxed whitespace-normal break-words">
+        {mix.description}
+      </p>
+    </div>
   );
 }
 
+// ── Clean Cover Card (With Clickable Title & Artist) ─────────────────────────
+function CleanCoverCard({
+  title,
+  subtitle,
+  cover,
+  icon: Icon,
+  isLiked,
+  track,
+  onClick,
+}: {
+  title: string;
+  subtitle: string;
+  cover?: string;
+  icon?: LucideIcon;
+  isLiked?: boolean;
+  track?: Track;
+  onClick: () => void;
+}) {
+  const setView = usePlayerStore((s) => s.setView);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isActive = track ? isTrackActive(currentTrack, track) : false;
+
+  const needsSpotifyNavigation = Boolean(track?.spotifyId && (!track?.albumId || !track?.artistId));
+  const { data: spotifyMetadata } = useQuery({
+    queryKey: ['spotify-metadata', track?.spotifyId],
+    queryFn: () => api.spotifyMetadata(track!.spotifyId!),
+    enabled: needsSpotifyNavigation,
+    staleTime: 1000 * 60 * 60,
+  });
+
+  const albumViewId = track?.albumId ?? spotifyMetadata?.album?.id;
+  const artistViewId = track?.artistId ?? spotifyMetadata?.artists[0]?.id;
+
+  const handleTitleClick = (e: React.MouseEvent) => {
+    if (albumViewId) {
+      e.stopPropagation();
+      setView('album', albumViewId);
+    }
+  };
+
+  const handleArtistClick = (e: React.MouseEvent) => {
+    if (artistViewId) {
+      e.stopPropagation();
+      setView('artist', artistViewId);
+    }
+  };
+
+  return (
+    <div className="group text-left transition-all duration-200">
+      <div
+        onClick={onClick}
+        className={clsx(
+          'relative mb-2.5 aspect-square w-full cursor-pointer overflow-hidden rounded-xl bg-base-800 shadow-lg border transition-all duration-300 flex items-center justify-center',
+          isActive
+            ? 'border-accent'
+            : 'border-white/[0.06]'
+        )}
+      >
+        {cover ? (
+          <img
+            src={cover}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : isLiked ? (
+          <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
+        ) : Icon ? (
+          <Icon size={32} strokeWidth={1.4} className="text-accent" />
+        ) : (
+          <ListOrdered size={32} strokeWidth={1.4} className="text-accent" />
+        )}
+      </div>
+
+      <div className="mt-2.5 flex items-center justify-between gap-1.5">
+        <div className="min-w-0 flex-1">
+          <p
+            onClick={albumViewId ? handleTitleClick : onClick}
+            className={clsx(
+              'truncate text-sm font-semibold transition-colors cursor-pointer text-white',
+              albumViewId ? 'hover:text-accent' : 'group-hover:text-accent'
+            )}
+            title={title}
+          >
+            {title}
+          </p>
+
+          {artistViewId ? (
+            <p
+              onClick={handleArtistClick}
+              className="mt-0.5 truncate text-xs text-muted transition-colors hover:text-accent cursor-pointer"
+              title={`Go to artist: ${subtitle}`}
+            >
+              {subtitle}
+            </p>
+          ) : (
+            <p className="mt-0.5 truncate text-xs text-muted">{subtitle}</p>
+          )}
+        </div>
+
+        {isActive && isPlaying && (
+          <div className="flex gap-0.5 items-end h-3 flex-shrink-0 self-center mr-2.5">
+            <div className="w-0.5 h-3 bg-accent rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+            <div className="w-0.5 h-1.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+            <div className="w-0.5 h-2.5 bg-accent rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── GPU-Accelerated Horizontal Carousel ──────────────────────────────────────
+function AutoScrollCarousel({
+  tracks,
+  onPlay,
+}: {
+  tracks: Track[];
+  onPlay: (track: Track) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isHoveredRef = useRef(false);
+  const offsetXRef = useRef(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const track = trackRef.current;
+    if (!container || !track) return;
+
+    let rafId: number;
+    let holdTimeout: ReturnType<typeof setTimeout> | null = null;
+    let isHolding = false;
+    const speed = 0.35;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > 0) {
+        e.preventDefault();
+        const maxScroll = track.scrollWidth - container.clientWidth;
+        if (maxScroll > 0) {
+          offsetXRef.current = Math.min(maxScroll, Math.max(0, offsetXRef.current + e.deltaY));
+          track.style.transform = `translate3d(-${offsetXRef.current}px, 0, 0)`;
+        }
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    const step = () => {
+      if (!isHoveredRef.current && !isHolding) {
+        const maxScroll = track.scrollWidth - container.clientWidth;
+        if (maxScroll > 0) {
+          if (offsetXRef.current >= maxScroll - 1) {
+            isHolding = true;
+            holdTimeout = setTimeout(() => {
+              offsetXRef.current = 0;
+              if (track) track.style.transform = `translate3d(0px, 0, 0)`;
+              isHolding = false;
+            }, 2500);
+          } else {
+            offsetXRef.current += speed;
+            track.style.transform = `translate3d(-${offsetXRef.current}px, 0, 0)`;
+          }
+        }
+      }
+      rafId = requestAnimationFrame(step);
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (holdTimeout) clearTimeout(holdTimeout);
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [tracks]);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseEnter={() => (isHoveredRef.current = true)}
+      onMouseLeave={() => (isHoveredRef.current = false)}
+      className="w-full overflow-hidden pb-2"
+    >
+      <div
+        ref={trackRef}
+        className="flex gap-4 will-change-transform"
+        style={{ transform: 'translate3d(0px, 0, 0)' }}
+      >
+        {tracks.map((track, idx) => (
+          <div key={`${track.spotifyId ?? track.id}-${idx}`} className="w-36 flex-shrink-0 sm:w-44">
+            <CleanCoverCard
+              title={track.title}
+              subtitle={track.artist}
+              cover={track.thumbnail}
+              track={track}
+              onClick={() => onPlay(track)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Manual Horizontal Carousel (No Autoscroll) ─────────────────────────────
+function ManualHorizontalCarousel({ children }: { children: React.ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="scrollbar-hidden flex gap-4 overflow-x-auto pb-2 scroll-smooth"
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Main HomeView Component ─────────────────────────────────────────────────
 export function HomeView() {
-  const { currentTrack, queue, playTrack, setView, openPersonalMix } = usePlayerStore();
+  const { queue, queueIndex, playTrack, setView, openPersonalMix } = usePlayerStore();
   const cachedNightlyMix = useMemo(() => readNightlyMixCache(), []);
   const cachedHomeLocal = useMemo(() => readHomeLocalCache(), []);
   const cachedNewReleases = useMemo(() => readNewReleasesCache(), []);
-  const { data: homeLocalData, dataUpdatedAt: homeLocalUpdatedAt, isLoading: homeLoading } = useQuery({
+
+  const upcomingQueue = useMemo(() => {
+    if (!queue || queue.length === 0) return [];
+    const startIndex = Math.max(0, queueIndex);
+    return queue.slice(startIndex, startIndex + 8);
+  }, [queue, queueIndex]);
+
+  const { data: homeLocalData } = useQuery({
     queryKey: ['home'],
     queryFn: api.home,
     staleTime: HOME_REFRESH_MS,
@@ -211,11 +525,8 @@ export function HomeView() {
     initialData: cachedHomeLocal?.data,
     initialDataUpdatedAt: cachedHomeLocal?.updatedAt,
   });
-  const {
-    data: newReleasesData,
-    dataUpdatedAt: newReleasesUpdatedAt,
-    isLoading: newReleasesLoading,
-  } = useQuery({
+
+  const { data: newReleasesData, isLoading: newReleasesLoading } = useQuery({
     queryKey: ['home-new-releases'],
     queryFn: api.homeNewReleases,
     staleTime: HOME_REFRESH_MS,
@@ -223,9 +534,9 @@ export function HomeView() {
     initialData: cachedNewReleases?.data,
     initialDataUpdatedAt: cachedNewReleases?.updatedAt,
   });
+
   const {
     data: nightlyMixData,
-    dataUpdatedAt: nightlyMixUpdatedAt,
     isLoading: nightlyMixLoading,
     isFetching: nightlyMixFetching,
   } = useQuery({
@@ -244,191 +555,202 @@ export function HomeView() {
   const nightlyMixes = nightlyMixData?.mixes ?? [];
 
   useEffect(() => {
-    if (nightlyMixData?.mixes.length && nightlyMixUpdatedAt) {
-      writeNightlyMixCache(nightlyMixData, nightlyMixUpdatedAt);
+    if (nightlyMixData?.mixes.length && nightlyMixData) {
+      writeNightlyMixCache(nightlyMixData, Date.now());
     }
-  }, [nightlyMixData, nightlyMixUpdatedAt]);
+  }, [nightlyMixData]);
 
   useEffect(() => {
-    if (
-      homeLocalData &&
-      (homeLocalData.recentTracks.length > 0 || homeLocalData.playlists.length > 0) &&
-      homeLocalUpdatedAt
-    ) {
-      writeHomeLocalCache(homeLocalData, homeLocalUpdatedAt);
+    if (homeLocalData && (homeLocalData.recentTracks.length > 0 || homeLocalData.playlists.length > 0)) {
+      writeHomeLocalCache(homeLocalData, Date.now());
     }
-  }, [homeLocalData, homeLocalUpdatedAt]);
+  }, [homeLocalData]);
 
   useEffect(() => {
-    if (newReleasesData?.newReleases.length && newReleasesUpdatedAt) {
-      writeNewReleasesCache(newReleasesData, newReleasesUpdatedAt);
+    if (newReleasesData?.newReleases.length) {
+      writeNewReleasesCache(newReleasesData, Date.now());
     }
-  }, [newReleasesData, newReleasesUpdatedAt]);
+  }, [newReleasesData]);
 
   function handlePlay(track: Track) {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
   }
 
   return (
-    <div className="flex h-full flex-col gap-10 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
-      <section className="flex flex-col gap-8">
-        <div className="relative max-w-3xl animate-rise">
+    <div className="flex h-full flex-col gap-9 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-8">
+      {/* Home Header + Minimalist Shortcut Pills */}
+      <section className="flex flex-col gap-4">
+        <div className="relative animate-rise">
           <div className="ambient-glow -left-10 -top-16 h-40 w-40 bg-accent/15" aria-hidden="true" />
-          <p className="section-label mb-3 text-accent">Home</p>
-          <h1 className="font-display text-4xl font-light leading-[1.05] text-white sm:text-5xl">
-            Your night,<br />
-            <span className="italic text-accent">scored.</span>
+          <p className="text-xs font-semibold tracking-wider text-accent uppercase">Home</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-1">
+            Welcome
           </h1>
-          <p className="mt-4 max-w-xl text-sm leading-relaxed text-soft">
-            Pick up where the music left off, open a playlist, or chase down something new.
+          <p className="text-xs text-muted mt-1.5">
+            Your personal music hub — recommendations, history & playlists.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {currentTrack && (
-            <button
-              onClick={() => setView('player')}
-              className="surface-panel group relative overflow-hidden p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-base-700/70"
-            >
-              <div className="ambient-glow -right-6 -top-6 h-24 w-24 bg-accent/20" aria-hidden="true" />
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <img
-                  src={currentTrack.thumbnail}
-                  alt=""
-                  className="h-10 w-10 rounded-lg border border-white/[0.08] object-cover"
-                  onError={(e) => (e.currentTarget.style.display = 'none')}
-                />
-                <Radio size={16} className="mt-1 animate-pulse text-accent" />
-              </div>
-              <p className="section-label mb-2 text-accent">Now playing</p>
-              <p className="truncate text-sm font-semibold text-white">{currentTrack.title}</p>
-              <p className="mt-1 truncate text-xs text-muted">{currentTrack.artist}</p>
-            </button>
-          )}
-
-          <button
-            onClick={() => setView('search')}
-            className="surface-panel p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-base-700/70"
-          >
-            <HomeCardIcon icon={Search} />
-            <p className="text-sm font-semibold text-white">Search music</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">Find a track, then build a queue from it.</p>
-          </button>
-
-          <button
-            onClick={() => setView('queue')}
-            className="surface-panel p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-base-700/70"
-          >
-            <HomeCardIcon icon={ListOrdered} />
-            <p className="text-sm font-semibold text-white">{queue.length} queued</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">Review what will play next.</p>
-          </button>
-
-          <div className="surface-panel p-5">
-            <HomeCardIcon icon={Disc3} />
-            <p className="text-sm font-semibold text-white">{playlists.length} playlists</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">Local playlists saved on this device.</p>
-          </div>
+        {/* Minimalist Shortcut Pills */}
+        <div className="flex items-center gap-2 flex-wrap pt-1">
+          <ShortcutPill
+            title="Liked Songs"
+            icon={Heart}
+            accentColor="text-rose-400"
+            onClick={() => setView('playlist', 'system-liked-songs')}
+          />
+          <ShortcutPill
+            title="Top Favorites"
+            icon={Zap}
+            accentColor="text-amber-400"
+            onClick={() => setView('playlist', 'smart:most-played')}
+          />
+          <ShortcutPill
+            title="Discover Weekly"
+            icon={Compass}
+            accentColor="text-indigo-400"
+            onClick={() => setView('playlist', 'smart:discover-weekly')}
+          />
+          <ShortcutPill
+            title="Recently Played"
+            icon={Clock}
+            accentColor="text-emerald-400"
+            onClick={() => setView('playlist', 'smart:recently-added')}
+          />
+          <ShortcutPill
+            title="Short Tracks"
+            icon={Disc3}
+            accentColor="text-cyan-400"
+            onClick={() => setView('playlist', 'smart:short-tracks')}
+          />
         </div>
       </section>
 
-      {playlists.length > 0 && (
+      {/* Continue Listening Section (From Queue - Auto-scroll Carousel) */}
+      {upcomingQueue.length > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="section-label">Playlists</h2>
-            <button onClick={() => setView('playlist', playlists[0]?.id)} className="text-xs text-muted transition-colors hover:text-accent">
-              Open latest
+            <div className="flex items-center gap-2">
+              <ListOrdered size={16} className="text-accent" />
+              <h2 className="text-base font-semibold text-white">Continue Listening</h2>
+            </div>
+            <button
+              onClick={() => setView('queue')}
+              className="text-xs text-muted transition-colors hover:text-accent font-medium"
+            >
+              View queue ({queue.length}) →
             </button>
           </div>
-          <div className="scrollbar-hidden -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4 xl:grid-cols-6">
-            {playlists.slice(0, 6).map((playlist) => (
-              <button
-                key={playlist.id}
-                onClick={() => setView('playlist', playlist.id)}
-                className="surface-panel min-w-28 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-base-700/70 sm:min-w-0"
-              >
-                <PlaylistCover playlist={playlist} />
-                <p className="truncate text-sm font-semibold text-white">{playlist.name}</p>
-                <p className="mt-1 text-xs text-muted">{playlist.trackIds.length} tracks</p>
-              </button>
-            ))}
-          </div>
+          <AutoScrollCarousel
+            tracks={upcomingQueue}
+            onPlay={(track) => playTrack(track, queue, { autoQueue: false })}
+          />
         </section>
       )}
 
+      {/* Nightly Mix Section (Full Description) */}
       {(nightlyMixLoading || nightlyMixes.length > 0) && (
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="section-label">Nightly Mix</h2>
-              <p className="mt-1 text-xs text-muted">A fresh drift from your recent plays.</p>
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-accent" />
+              <h2 className="text-base font-semibold text-white">Nightly Mix</h2>
             </div>
             {(nightlyMixLoading || (nightlyMixFetching && nightlyMixes.length === 0)) && (
-              <span className="text-xs text-muted">Tuning</span>
+              <span className="text-xs text-muted">Tuning mixes...</span>
             )}
           </div>
-          <div className="scrollbar-hidden -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {nightlyMixes.map((mix) => (
-              <PersonalMixCard key={mix.id} mix={mix} onPlay={openPersonalMix} />
-            ))}
-            {nightlyMixLoading && nightlyMixes.length === 0 && [0, 1, 2, 3].map((item) => (
-              <div key={item} className="surface-panel min-w-44 animate-pulse p-3 sm:min-w-0">
-                <div className="mb-3 aspect-square rounded-xl bg-base-700/70" />
-                <div className="h-4 w-24 rounded bg-base-700" />
-                <div className="mt-2 h-3 w-full rounded bg-base-700/70" />
-              </div>
+              <CleanMixCard key={mix.id} mix={mix} onPlay={openPersonalMix} />
             ))}
           </div>
         </section>
       )}
 
+      {/* Recently Played Section (Clear Cache Enabled) */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="section-label">Recently played</h2>
-          {homeLoading && recentTracks.length === 0 && <span className="text-xs text-muted">Loading</span>}
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="text-accent" />
+            <h2 className="text-base font-semibold text-white">Recently Played</h2>
+          </div>
+          {recentTracks.length > 0 && (
+            <button
+              onClick={() => setView('playlist', 'smart:recently-added')}
+              className="text-xs text-muted transition-colors hover:text-accent font-medium"
+            >
+              See full history →
+            </button>
+          )}
         </div>
         {recentTracks.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {recentTracks.slice(0, 8).map((track) => (
-              <TrackCard key={track.id} track={track} onPlay={handlePlay} />
+          <div className="flex flex-col gap-0.5">
+            {recentTracks.slice(0, 6).map((track, idx) => (
+              <OpenTrackRow key={track.id} track={track} index={idx} onPlay={handlePlay} />
             ))}
           </div>
         ) : (
-          <div className="surface-panel flex items-center gap-3 p-5 text-muted">
+          <div className="flex items-center gap-3 py-4 text-muted">
             <Music2 size={18} />
             <p className="text-sm">Your played tracks will appear here.</p>
           </div>
         )}
       </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <h2 className="section-label">New releases</h2>
+      {/* Saved Local Playlists (Manual Horizontal Scroll) */}
+      {playlists.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListMusic size={16} className="text-accent" />
+              <h2 className="text-base font-semibold text-white">Your Playlists</h2>
+            </div>
+            <span className="text-xs text-muted font-medium">
+              {playlists.length} {playlists.length === 1 ? 'playlist' : 'playlists'}
+            </span>
           </div>
-          {newReleasesLoading && newReleases.length === 0 && <span className="text-xs text-muted">Loading</span>}
+          <ManualHorizontalCarousel>
+            {playlists.map((playlist) => (
+              <div key={playlist.id} className="w-28 flex-shrink-0 sm:w-32">
+                <CleanCoverCard
+                  title={playlist.name}
+                  subtitle={`${playlist.trackIds.length} tracks`}
+                  cover={playlist.coverDataUrl || undefined}
+                  isLiked={playlist.id === 'system-liked-songs'}
+                  onClick={() => setView('playlist', playlist.id)}
+                />
+              </div>
+            ))}
+          </ManualHorizontalCarousel>
+        </section>
+      )}
+
+      {/* New Releases Section (Horizontal Autoscroll) */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-accent" />
+            <h2 className="text-base font-semibold text-white">New Releases</h2>
+          </div>
+          {newReleasesLoading && newReleases.length === 0 && <span className="text-xs text-muted">Loading...</span>}
         </div>
         {newReleases.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {newReleases.map((track) => (
-              <TrackCard key={track.spotifyId ?? track.id} track={track} onPlay={handlePlay} />
-            ))}
-          </div>
+          <AutoScrollCarousel tracks={newReleases} onPlay={handlePlay} />
         ) : newReleasesLoading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {[0, 1, 2, 3].map((item) => (
-              <div key={item} className="rounded-2xl border border-white/[0.06] bg-base-800/60 p-3">
-                <div className="mb-3 aspect-square rounded-xl bg-base-700/70 animate-pulse" />
-                <div className="h-4 w-24 rounded bg-base-700 animate-pulse" />
-                <div className="mt-2 h-3 w-full rounded bg-base-700/70 animate-pulse" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {[0, 1, 2, 3, 4, 5].map((item) => (
+              <div key={item} className="animate-pulse">
+                <div className="mb-2.5 aspect-square rounded-xl bg-base-800" />
+                <div className="h-3.5 w-24 rounded bg-base-800" />
+                <div className="mt-1 h-3 w-16 rounded bg-base-800/70" />
               </div>
             ))}
           </div>
         ) : (
-          <div className="surface-panel p-5 text-sm text-muted">
+          <p className="py-2 text-sm text-muted">
             Connect Spotify in Settings to show new releases here.
-          </div>
+          </p>
         )}
       </section>
     </div>

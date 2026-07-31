@@ -1,5 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { BarChart3, Clock3, Download, Heart, Home, Search, ListMusic, ListOrdered, Loader2, Plus, Trash2, Settings, FolderOpen, Sparkles, TrendingUp, Zap } from 'lucide-react';
+import {
+  BarChart3,
+  Clock3,
+  Download,
+  FolderOpen,
+  Heart,
+  Home,
+  ListMusic,
+  ListOrdered,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  Zap,
+} from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../utils/api';
@@ -29,7 +48,13 @@ function getGreeting(): string {
 }
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { activeView, activePlaylistId, setView } = usePlayerStore();
+  const {
+    activeView,
+    activePlaylistId,
+    setView,
+    sidebarCompact,
+    toggleSidebarCompact,
+  } = usePlayerStore();
   const qc = useQueryClient();
   const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -123,24 +148,37 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-transparent px-3 py-5">
-      {/* Greeting - FIXED at top, ALWAYS visible, never scrolls */}
-      <div className="px-2 mb-3 flex-shrink-0">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
-          <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
-            {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </span>
-        </div>
-        <p className="mb-1.5 font-mono text-[11px] font-medium tabular-nums text-soft">
-          {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-        </p>
-        <h2 className="font-display text-[22px] leading-tight text-white">
-          {getGreeting()}
-        </h2>
+    <div className={clsx('flex h-full flex-col bg-transparent py-5', sidebarCompact ? 'px-1.5' : 'px-3')}>
+      {/* Top Header with Compact Toggle Button */}
+      <div className={clsx('mb-3 flex flex-shrink-0 items-center', sidebarCompact ? 'justify-center' : 'justify-between px-2')}>
+        {!sidebarCompact && (
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
+                {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+            <p className="mb-1.5 font-mono text-[11px] font-medium tabular-nums text-soft">
+              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </p>
+            <h2 className="font-display text-[22px] leading-tight text-white">
+              {getGreeting()}
+            </h2>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={toggleSidebarCompact}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
+          title={sidebarCompact ? 'Expand sidebar' : 'Compact sidebar'}
+        >
+          {sidebarCompact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={16} />}
+        </button>
       </div>
 
-      {/* Nav - scrollable, fills ALL remaining space between greeting and playlist section */}
+      {/* Nav */}
       <nav className="flex-1 min-h-0 mb-2 flex flex-col gap-1 overflow-y-auto">
         {navItems.map(({ icon: Icon, label, view }) => {
           const active = activeView === view;
@@ -148,8 +186,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <button
               key={view}
               onClick={() => navigate(view)}
+              title={sidebarCompact ? label : undefined}
               className={clsx(
-                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200',
+                sidebarCompact ? 'justify-center px-0 py-2.5 w-full' : 'gap-3 px-3 py-2.5',
                 active
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -161,99 +201,146 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   active ? 'opacity-100 shadow-glow' : 'opacity-0'
                 )}
               />
-              <Icon size={18} className={clsx('transition-colors', active && 'text-accent')} />
-              {label}
+              <Icon size={18} className={clsx('transition-colors flex-shrink-0', active && 'text-accent')} />
+              {!sidebarCompact && <span>{label}</span>}
             </button>
           );
         })}
       </nav>
 
-      {/* Playlists - FIXED 38% from bottom, my monitor is 768p native and this is what it looks right to me*/}
+      {/* Playlists */}
       <div className="flex-shrink-0 flex flex-col" style={{ height: '38%' }}>
-        <div className="relative mb-2 flex items-center justify-between px-3 flex-shrink-0" ref={menuRef}>
-          <span className="section-label">Playlists</span>
-          <button
-            onClick={() => setPlaylistMenuOpen((open) => !open)}
-            className="btn-ghost p-1"
-            title="New playlist"
-          >
-            <Plus size={14} />
-          </button>
+        {!sidebarCompact && (
+          <div className="relative mb-2 flex flex-shrink-0 items-center justify-between px-3" ref={menuRef}>
+            <span className="section-label">Playlists</span>
+            <button
+              onClick={() => setPlaylistMenuOpen((open) => !open)}
+              className="flex h-7 w-7 items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
+              title="New playlist"
+            >
+              <Plus size={14} />
+            </button>
 
-          {playlistMenuOpen && (
-            <div className="surface-panel absolute right-0 top-full z-50 mt-2 w-64 animate-slide-up p-1.5 md:left-[calc(100%+0.75rem)] md:right-auto md:top-0 md:mt-0">
-              <button
-                onClick={() => {
-                  setDeleteError(null);
-                  createMut.mutate();
-                }}
-                disabled={createMut.isPending}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-soft transition-colors hover:bg-white/[0.05] hover:text-white"
-              >
-                {createMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                {createMut.isPending ? 'Creating playlist' : 'Local playlist'}
-              </button>
-              <form onSubmit={handleImportPlaylist} className="mt-1 border-t border-white/[0.06] pt-2">
-                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-soft">
-                  <Download size={13} />
-                  Import from URL
-                </label>
-                <input
-                  value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
-                  disabled={importing}
-                  placeholder="Spotify or YouTube URL"
-                  className="input-base mt-1 py-2 text-xs"
-                />
+            {playlistMenuOpen && (
+              <div className="surface-panel absolute left-full top-0 z-50 ml-2 w-64 animate-slide-up p-1.5">
                 <button
-                  type="submit"
-                  disabled={importing || !importUrl.trim()}
-                  className="btn-accent mt-2 w-full py-1.5 text-xs disabled:opacity-50"
+                  onClick={() => {
+                    setDeleteError(null);
+                    createMut.mutate();
+                  }}
+                  disabled={createMut.isPending}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-soft transition-colors hover:bg-white/[0.05] hover:text-white"
                 >
-                  {importing && <Loader2 size={12} className="animate-spin" />}
-                  {importing ? 'Importing playlist' : 'Import'}
+                  {createMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  {createMut.isPending ? 'Creating playlist' : 'Local playlist'}
                 </button>
-                {importing && (
-                  <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-muted">
-                    Fetching playlist tracks. This can take a moment for larger playlists.
-                  </p>
-                )}
-              </form>
-            </div>
-          )}
-        </div>
+                <form onSubmit={handleImportPlaylist} className="mt-1 border-t border-white/[0.06] pt-2">
+                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-soft">
+                    <Download size={13} />
+                    Import from URL
+                  </label>
+                  <input
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    disabled={importing}
+                    placeholder="Spotify or YouTube URL"
+                    className="input-base mt-1 py-2 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    disabled={importing || !importUrl.trim()}
+                    className="btn-accent mt-2 w-full py-1.5 text-xs disabled:opacity-50"
+                  >
+                    {importing && <Loader2 size={12} className="animate-spin" />}
+                    {importing ? 'Importing playlist' : 'Import'}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
 
-        {deleteError && (
+        {deleteError && !sidebarCompact && (
           <p className="mb-2 px-3 text-[11px] leading-relaxed text-red-400 flex-shrink-0">{deleteError}</p>
         )}
 
-        {/* Smart + user playlists - scrollable within the 38% container */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* Playlists list */}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
+          {sidebarCompact && (
+            <div className="relative flex-shrink-0" ref={menuRef}>
+              <button
+                onClick={() => setPlaylistMenuOpen((open) => !open)}
+                title="New playlist"
+                className="group relative flex w-full items-center justify-center rounded-xl p-2 text-muted transition-all duration-150 hover:bg-white/[0.05] hover:text-white"
+              >
+                <Plus size={18} className="flex-shrink-0" />
+              </button>
+
+              {playlistMenuOpen && (
+                <div className="surface-panel absolute left-full top-0 z-50 ml-2 w-64 animate-slide-up p-1.5">
+                  <button
+                    onClick={() => {
+                      setDeleteError(null);
+                      createMut.mutate();
+                    }}
+                    disabled={createMut.isPending}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-soft transition-colors hover:bg-white/[0.05] hover:text-white"
+                  >
+                    {createMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                    {createMut.isPending ? 'Creating playlist' : 'Local playlist'}
+                  </button>
+                  <form onSubmit={handleImportPlaylist} className="mt-1 border-t border-white/[0.06] pt-2">
+                    <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-soft">
+                      <Download size={13} />
+                      Import from URL
+                    </label>
+                    <input
+                      value={importUrl}
+                      onChange={(e) => setImportUrl(e.target.value)}
+                      disabled={importing}
+                      placeholder="Spotify or YouTube URL"
+                      className="input-base mt-1 py-2 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      disabled={importing || !importUrl.trim()}
+                      className="btn-accent mt-2 w-full py-1.5 text-xs disabled:opacity-50"
+                    >
+                      {importing && <Loader2 size={12} className="animate-spin" />}
+                      {importing ? 'Importing playlist' : 'Import'}
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
           {likedPlaylist && (
             <button
               onClick={() => navigate('playlist', likedPlaylist.id)}
+              title={sidebarCompact ? likedPlaylist.name : undefined}
               className={clsx(
-                'group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
+                sidebarCompact ? 'justify-center p-2' : 'gap-2.5 px-3 py-2',
                 activeView === 'playlist' && activePlaylistId === likedPlaylist.id
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
               )}
             >
               <Heart
-                size={14}
+                size={16}
                 fill="currentColor"
                 className={clsx(
-                  'flex-shrink-0',
+                  'flex-shrink-0 text-rose-400',
                   activeView === 'playlist' && activePlaylistId === likedPlaylist.id && 'text-accent'
                 )}
               />
-              <span className="flex-1 truncate text-left">{likedPlaylist.name}</span>
+              {!sidebarCompact && <span className="flex-1 truncate text-left">{likedPlaylist.name}</span>}
             </button>
           )}
 
-          <div className="flex flex-col flex-shrink-0">
+          <div className="flex flex-col gap-0.5">
             {([
-              { id: 'smart:most-played', label: 'Most Played', icon: TrendingUp },
+              { id: 'smart:most-played', label: 'Top Favorites', icon: TrendingUp },
               { id: 'smart:recently-added', label: 'Recently Played', icon: Clock3 },
               { id: 'smart:short-tracks', label: 'Short Tracks', icon: Zap },
               { id: 'smart:discover-weekly', label: 'Discover Weekly', icon: Sparkles },
@@ -263,47 +350,56 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 <button
                   key={id}
                   onClick={() => navigate('playlist', id)}
+                  title={sidebarCompact ? label : undefined}
                   className={clsx(
-                    'group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                    'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
+                    sidebarCompact ? 'justify-center p-2' : 'gap-2.5 px-3 py-2',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
                   )}
                 >
-                  <Icon size={14} className={clsx('flex-shrink-0', active && 'text-accent')} />
-                  <span className="flex-1 truncate text-left">{label}</span>
+                  <Icon size={16} className={clsx('flex-shrink-0', active && 'text-accent')} />
+                  {!sidebarCompact && <span className="flex-1 truncate text-left">{label}</span>}
                 </button>
               );
             })}
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            {userPlaylists.length === 0 && !likedPlaylist && (
-              <p className="px-3 py-2 text-xs text-muted">No playlists yet</p>
-            )}
+          <div className="flex flex-col gap-1">
             {userPlaylists.map((pl) => {
               const active = activeView === 'playlist' && activePlaylistId === pl.id;
               return (
                 <div
                   key={pl.id}
+                  title={sidebarCompact ? pl.name : undefined}
                   className={clsx(
-                    'group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150',
+                    'group flex cursor-pointer items-center rounded-xl text-sm transition-all duration-150',
+                    sidebarCompact ? 'justify-center p-1.5' : 'gap-2.5 px-3 py-2',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
                   )}
                   onClick={() => navigate('playlist', pl.id)}
                 >
-                  <ListMusic size={14} className={clsx('flex-shrink-0', active && 'text-accent')} />
-                  <span className="flex-1 truncate">{pl.name}</span>
-                  <button
-                    className="btn-ghost p-0.5 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
-                    disabled={deleteMut.isPending}
-                    title="Delete playlist"
-                    onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  {pl.coverDataUrl ? (
+                    <img src={pl.coverDataUrl} alt="" className="h-6 w-6 flex-shrink-0 rounded-md object-cover" />
+                  ) : (
+                    <ListMusic size={16} className={clsx('flex-shrink-0', active && 'text-accent')} />
+                  )}
+                  {!sidebarCompact && (
+                    <>
+                      <span className="flex-1 truncate">{pl.name}</span>
+                      <button
+                        className="btn-ghost p-0.5 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                        disabled={deleteMut.isPending}
+                        title="Delete playlist"
+                        onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}
