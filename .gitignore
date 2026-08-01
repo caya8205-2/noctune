@@ -9,6 +9,7 @@ frontend/dist/
 automations/
 reports/
 docs/
+!docs/CURRENT_STATUS.md
 .kiro/
 *.db
 *.db-shm
