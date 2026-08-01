@@ -34,3 +34,8 @@ Dokumen ini mencatat daftar fitur baru, bug fix, dan patch beserta pendekatan te
   - **Unified Active Track Row Background**: Mengubah background baris lagu aktif di `PlaylistView` dan `QueueView` menjadi warna aksen standar Noctune (`bg-accent/10`).
   - **Sembunyikan Mini Player & Track Details Saat Idle**: Mengondisikan komponen `PlayerBar` dan `TrackDetailsSidebar` pada `Boolean(currentTrack)` agar otomatis disembunyikan saat tidak ada lagu yang dimuat.
   - **Title Bar Logo Alignment**: Logo resmi Noctune (`/app-icon.png`) diposisikan di ujung kanan (`ml-auto`) title bar.
+
+## 2. Environment Variables & Scripts
+
+- [x] **SignPath PowerShell Script (`scripts/noctune-signing.ps1`)**
+  - **Pendekatan Teknis**: Menambahkan pemuatan otomatis variabel dari file `.env` di root direktori proyek (`SIGN_TOKEN`, `ORGANIZATION_ID`, `INPUT_PATH`, `OUTPUT_PATH`), menambahkan pengecekan validasi variabel lingkungan sebelum eksekusi, serta memasukkan variabel tersebut ke dalam parameter `Submit-SigningRequest`.
