@@ -150,7 +150,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className={clsx('flex h-full flex-col bg-transparent py-5', sidebarCompact ? 'px-1.5' : 'px-3')}>
       {/* Top Header with Compact Toggle Button */}
-      <div className={clsx('mb-3 flex flex-shrink-0 items-center', sidebarCompact ? 'justify-center' : 'justify-between px-2')}>
+      <div className={clsx('mb-3 flex flex-shrink-0 items-center', sidebarCompact ? 'justify-center w-full' : 'justify-between px-2')}>
         {!sidebarCompact && (
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2">
@@ -171,7 +171,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <button
           type="button"
           onClick={toggleSidebarCompact}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
+          className={clsx(
+            'flex items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white',
+            sidebarCompact ? 'w-full py-2.5' : 'h-9 w-9'
+          )}
           title={sidebarCompact ? 'Expand sidebar' : 'Compact sidebar'}
         >
           {sidebarCompact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={16} />}
@@ -179,7 +182,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 mb-2 flex flex-col gap-1 overflow-y-auto">
+      <nav className={clsx('flex-1 min-h-0 mb-2 flex flex-col gap-1 overflow-y-auto', sidebarCompact && 'scrollbar-hidden')}>
         {navItems.map(({ icon: Icon, label, view }) => {
           const active = activeView === view;
           return (
@@ -265,13 +268,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         )}
 
         {/* Playlists list */}
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
+        <div className={clsx('flex-1 min-h-0 overflow-y-auto flex flex-col gap-1', sidebarCompact && 'scrollbar-hidden')}>
           {sidebarCompact && (
             <div className="relative flex-shrink-0" ref={menuRef}>
               <button
                 onClick={() => setPlaylistMenuOpen((open) => !open)}
                 title="New playlist"
-                className="group relative flex w-full items-center justify-center rounded-xl p-2 text-muted transition-all duration-150 hover:bg-white/[0.05] hover:text-white"
+                className="group relative flex w-full items-center justify-center rounded-xl py-2.5 text-muted transition-all duration-150 hover:bg-white/[0.05] hover:text-white"
               >
                 <Plus size={18} className="flex-shrink-0" />
               </button>
@@ -320,7 +323,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               title={sidebarCompact ? likedPlaylist.name : undefined}
               className={clsx(
                 'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
-                sidebarCompact ? 'justify-center p-2' : 'gap-2.5 px-3 py-2',
+                sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
                 activeView === 'playlist' && activePlaylistId === likedPlaylist.id
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -353,7 +356,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   title={sidebarCompact ? label : undefined}
                   className={clsx(
                     'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
-                    sidebarCompact ? 'justify-center p-2' : 'gap-2.5 px-3 py-2',
+                    sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -375,7 +378,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   title={sidebarCompact ? pl.name : undefined}
                   className={clsx(
                     'group flex cursor-pointer items-center rounded-xl text-sm transition-all duration-150',
-                    sidebarCompact ? 'justify-center p-1.5' : 'gap-2.5 px-3 py-2',
+                    sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'

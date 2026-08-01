@@ -26,6 +26,7 @@ import { api, apiUrl, type BackendStatus, type UpdateInfo, IS_TAURI } from '../.
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
+import { openChangelogModal } from '../ui/ChangelogModal';
 const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
@@ -621,6 +622,15 @@ export function SettingsView() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => openChangelogModal()}
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-amber-500/40 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all"
+                title="View release notes & what's new"
+              >
+                <Sparkles size={14} />
+                What's New
+              </button>
               <button
                 type="button"
                 onClick={handleCheckForUpdates}

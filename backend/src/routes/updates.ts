@@ -7,35 +7,31 @@ const FALLBACK_CHANGELOG = `# Changelog
 
 All notable Noctune changes are documented here.
 
-## v3.1.0 - 2026-07-25
+## v3.2.0 - 2026-08-01
 
-### Playback Blacklist & Disk Audio Cache Hardening
-- **Disk Audio Cache Deletion Fix**: Normalized Video ID prefixes (\`youtube:\`, \`ytdlp:\`, \`spotify:\`) in \`audioFileCache\` so clearing track cache or blacklisting a video physically deletes cached \`.m4a\`/\`.webm\` files from disk.
-- **Blacklisted Stream Rejection**: Enforced HTTP 404 stream rejection on \`GET /player/stream/:videoId\` for blacklisted video IDs, forcing HTML5 audio elements to load clean alternative streams.
-- **Blacklist Relation Formatting**: Enhanced \`playbackBlacklist.ts\` and Debug Dashboard UI to record and display exact relation mappings: \`<Target Track: Artist — Title> ➔ 🚫 <Blacklisted Bad Match Title / Video ID>\` so users can easily distinguish between the requested track and the blacklisted video ID.
+### Major Home View Redesign
+- **Navigation Shortcut Pills**: Added quick-access filter pills at the top of Home View (*Liked Songs*, *Top Favorites*, *Discover Weekly*, *Recently Played*, *Short Tracks*) for one-tap section navigation.
+- **Continue Listening & New Releases GPU Autoscroll Carousels**: Built GPU hardware-accelerated horizontal autoscroll carousels (\`transform: translate3d(-Xpx, 0, 0)\`) for *Continue Listening* (persisted queue tracks) and *New Releases*, complete with 2.5-second end-card pause, mouse wheel horizontal scroll, and hover pause.
+- **Your Playlists Manual Horizontal Carousel**: Converted \`Your Playlists\` section into a manual horizontal scroll row with mouse wheel direction conversion, keeping all user playlists accessible without vertical page sprawl.
+- **Recently Played Redesign**: Redesigned Recently Played section with clean track rows and layout.
+- **Clean Header**: Replaced redundant taglines with a clean title ("Home") and subtitle to eliminate duplication with sidebar greetings.
 
-### Matcher Keyword Hardening
-- **Keyword Penalty Bypass**: Expanded \`keywordAllowed\` in \`youtubeMatcher.ts\` to inspect title, artist, and search query. Target tracks containing terms like \`sings\`, \`cover\`, \`karaoke\`, \`concert\`, \`live\`, or date formats are no longer penalized by negative keyword filters.
+### Compact Sidebar Mode
+- **Collapsible Icon-Only Sidebar**: Added a compact sidebar mode (\`w-16\` width) toggled via top header toggle button (\`PanelLeftOpen\`/\`PanelLeftClose\`), featuring centered navigation items, hover tooltips, and playlist cover thumbnails.
 
-### History & Track Cache Preservation
-- **Metadata Preservation on Clear Cache**: Updated \`clearTrackCache()\` to strip stream URL properties while keeping track metadata (\`lastPlayed\`, \`playCount\`, \`title\`, \`artist\`) intact so tracks remain visible in History.
-- **History Row Deduplication**: Added deduplication in \`getRecentTracks()\` to group repeated plays of the same track into a single history entry with updated timestamp.
+### Smart Playlists & Nightly Mix Refinements
+- **Discover Weekly 7-Day Caching & Refetch Fix**: Fixed \`Discover Weekly\` to persist cache for 7 days (\`discover_weekly.json\`) in backend and prevented redundant refetching every time its view is mounted.
+- **Smart Playlist Branding & Renaming**: Renamed Smart Playlist labels for consistency (*Most Played* ➔ *Top Favorites*, *Recently Added* ➔ *Recently Played*) to distinguish them clearly from Nightly Mixes such as *Deep Rotation*.
+- **Playlist & Nightly Mix Refresh Action**: Added an interactive **Refresh Playlist / Refresh Mix** button (\`<RefreshCw />\`) across all Smart Playlist views and Nightly Mixes to trigger real-time recommendation updates.
 
-### Direct YouTube Resolution
-- **Direct Video ID Resolution**: Stripped \`ytdlp:\` and \`youtube:\` prefixes before video ID regex validation, ensuring direct YouTube search clicks resolve to exact Video IDs without unnecessary fallback query searches.
+### Custom Audio Download Location
+- **Download Storage Path Selector**: Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.
 
-### Debug Dashboard UI & Workflow Improvements
-- **Native In-App Confirmation Modal**: Replaced suppressed browser native confirmation dialogs in Electron/webview with a native React Noctune-styled \`ConfirmModal\` (\`modal-backdrop\`, \`modal-panel\`, \`btn-danger\`, \`btn-accent\`, \`btn-ghost\`) for all destructive debug actions while excluding instant non-destructive actions (\`Import Telemetry JSON\` & \`Test ML Predictions\`).
-- **Tools Tab Restructure**: Re-organized Debug Dashboard navigation into 4 clean sections: \`Resolver\`, \`Lyrics\`, \`Status\`, and \`Tools\` (incorporating Blacklist Manager, Audio Cache Browser, HTTP Request Log, and ML Recommendation Sandbox).
-- **Trained Dataset Badge**: Renamed \`Base Model\` badge to \`Trained Dataset\` with hover tooltip explaining it reflects both the pre-trained seed model and locally learned tracks from listening history. Track count now uses \`Math.max(seedCount, storeTracksCount)\` to accurately reflect the real dataset size.
-
-### ML Dataset Management & Telemetry
-- **Official Pre-trained Seed Model**: Shipped \`seed-model.json\` (888 baseline tracks & 11,300+ pre-trained transition weights) directly with Noctune \`v3.1.0\`, providing instant local ML recommendations on first launch without cold start.
-- **Auto Disk Sync for Seed Model**: Added \`mtimeMs\` file timestamp tracking in \`loadSeedModel()\` so replacing or restoring \`seed-model.json\` on disk instantly invalidates RAM caches and reloads the dataset without requiring a server restart.
-- **Log Event Deduplication**: Added automatic \`trackId_timestamp\` deduplication in \`importProdDataset()\` so importing production datasets is idempotent and never creates duplicate play events.
-- **Clear ML Dataset Action**: Added \`DELETE /debug/ml/dataset\` endpoint and **Clear Dataset** button in Debug Dashboard ➔ Tools. Now properly unlinks \`data/seed-model.json\` from disk and resets all in-memory caches.
-- **Anonymous Dataset Telemetry Submission**: Added \`POST /debug/ml/submit-telemetry\` endpoint and **Help Improve ML Model** button in Debug Dashboard ➔ Tools to allow users to contribute anonymized listening datasets to Cloudflare Workers for future base model training.
-- **Cloudflare Worker Dataset Dashboard**: Deployed live dashboard at \`noctune-dataset-collector.caya8205.workers.dev\` with submission management (view, download individual/aggregated, delete entries with admin secret), stat cards, and deduplication disclaimer. Aggregation uses \`Math.max\` per transition weight to prevent duplicate inflation across multiple submissions.
+### Now Playing & Dynamic Visibility
+- **Unified 3 Audio Bars Playing Indicator**: Standardized playing indicators across all track list views (*Home Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View*) with 3 animated accent audio bars (\`PlayingBars\`) when playing and accent row numbers when paused.
+- **Unified Active Track Row Background**: Standardized active track row background to Noctune's global \`bg-accent/10\` across \`PlaylistView\` and \`QueueView\`.
+- **Dynamic Mini Player & Track Details Visibility**: Automatically hide Mini Player (\`PlayerBar\`) and Sidebar Track Details (\`TrackDetailsSidebar\`) when no track is playing to maximize screen real estate.
+- **Title Bar Logo Alignment**: Positioned official Noctune \`/app-icon.png\` logo on the far right (\`ml-auto\`) of the title bar with clean borderless styling.
 `;
 
 export async function updateRoutes(app: FastifyInstance) {

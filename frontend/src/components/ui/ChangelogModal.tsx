@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, X, Check, FileText } from 'lucide-react';
+import { Sparkles, X, Check, FileText, Info } from 'lucide-react';
 import { apiUrl } from '../../utils/api';
 
 const APP_VERSION = __APP_VERSION__;
@@ -34,20 +34,25 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
-  { title: 'Official Pre-trained Seed Model', desc: 'Shipped seed-model.json (888 baseline tracks & 11,300+ transition weights) directly out-of-the-box for instant local ML recommendations without cold start.' },
-  { title: 'Playback Blacklist & Disk Cache Hardening', desc: 'Normalized Video ID prefixes so clearing cache or blacklisting a track physically deletes stale audio files from disk, and enforced HTTP 404 stream rejection for blacklisted IDs.' },
-  { title: 'Matcher Keyword Penalty Bypass', desc: 'Expanded matcher inspection to check title, artist, and search query so terms like "sings", "cover", "karaoke", "concert", or date formats are no longer penalized when present in target tracks.' },
-  { title: 'History Preservation & Deduplication', desc: 'Preserved track metadata when clearing track cache so tracks remain in History, and added automatic deduplication for repeated plays.' },
-  { title: 'Direct YouTube Resolution', desc: 'Direct YouTube clicks now resolve to exact Video IDs without unnecessary fallback query searches.' },
-  { title: 'Native Confirmation Modal', desc: 'Replaced browser confirmation dialogs in webview with a React Noctune-styled ConfirmModal for destructive debug actions.' },
-  { title: 'Auto Disk Sync for Seed Model', desc: 'Added mtimeMs file tracking so replacing or restoring seed-model.json on disk instantly invalidates RAM caches and reloads dataset without server restart.' },
-  { title: 'Log Event Deduplication', desc: 'Added automatic trackId_timestamp deduplication in importProdDataset() so importing production datasets is idempotent.' },
-  { title: 'Clear ML Dataset Action', desc: 'Added Clear Dataset button in Debug Tools to unlink user seed model from disk and reset in-memory caches.' },
-  { title: 'Anonymous Dataset Telemetry Submission', desc: 'Added Help Improve ML Model button to allow users to securely contribute anonymized listening datasets to Cloudflare Workers.' },
+  { title: 'Navigation Shortcut Pills', desc: 'Added quick-access filter pills at the top of Home View (Liked Songs, Top Favorites, Discover Weekly, Recently Played, Short Tracks) for one-tap section navigation.' },
+  { title: 'Continue Listening & New Releases GPU Autoscroll Carousels', desc: 'Built GPU hardware-accelerated horizontal autoscroll carousels (transform: translate3d(-Xpx, 0, 0)) for Continue Listening (persisted queue tracks) and New Releases, complete with 2.5s end-card pause, mouse wheel horizontal scroll, and hover pause.' },
+  { title: 'Your Playlists Manual Horizontal Carousel', desc: 'Converted Your Playlists section into a manual horizontal scroll row with mouse wheel direction conversion, keeping all user playlists accessible without vertical page sprawl.' },
+  { title: 'Collapsible Icon-Only Compact Sidebar', desc: 'Added a compact sidebar mode (w-16 width) toggled via top header toggle button (PanelLeftOpen/PanelLeftClose), featuring centered navigation items, hover tooltips, and playlist cover thumbnails.' },
+  { title: '7-Day Persistent Discover Weekly Caching', desc: 'Configured Discover Weekly to persist cache for 7 days (discover_weekly.json) in backend and prevented redundant refetching every time its view is mounted.' },
+  { title: 'Smart Playlist Branding & Renaming', desc: 'Renamed Smart Playlist labels for consistency (Most Played ➔ Top Favorites, Recently Added ➔ Recently Played) to distinguish them clearly from Nightly Mixes such as Deep Rotation.' },
+  { title: 'Playlist & Nightly Mix Refresh Action', desc: 'Added an interactive Refresh Playlist / Refresh Mix button (<RefreshCw />) across all Smart Playlist views and Nightly Mixes to trigger real-time recommendation updates.' },
+  { title: 'Custom Audio Download Location Setting', desc: 'Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.' },
+  { title: 'Unified 3 Audio Bars Playing Indicator', desc: 'Standardized playing indicators across all track list views (Home Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View) with 3 animated accent audio bars when playing and accent row numbers when paused.' },
+  { title: 'Dynamic Mini Player & Track Details Visibility', desc: 'Automatically hide Mini Player (PlayerBar) and Sidebar Track Details (TrackDetailsSidebar) when no track is playing to maximize screen real estate.' },
 ];
+
+export function openChangelogModal() {
+  window.dispatchEvent(new CustomEvent('noctune:open-changelog'));
+}
 
 export function ChangelogModal() {
   const [open, setOpen] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(true);
   const [changelogText, setChangelogText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,6 +61,14 @@ export function ChangelogModal() {
       setOpen(true);
       fetchChangelog();
     }
+
+    function handleOpenEvent() {
+      setOpen(true);
+      fetchChangelog();
+    }
+
+    window.addEventListener('noctune:open-changelog', handleOpenEvent);
+    return () => window.removeEventListener('noctune:open-changelog', handleOpenEvent);
   }, []);
 
   async function fetchChangelog() {
@@ -69,7 +82,11 @@ export function ChangelogModal() {
   }
 
   function handleDismiss() {
-    localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    if (dontShowAgain) {
+      localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    } else {
+      localStorage.removeItem(LAST_SEEN_VERSION_KEY);
+    }
     setOpen(false);
   }
 
@@ -123,6 +140,11 @@ export function ChangelogModal() {
             </ul>
           </div>
 
+          <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200/90">
+            <Info size={15} className="flex-shrink-0 text-amber-400" />
+            <span>You can always review these release notes anytime from <strong>Settings &gt; What's New</strong>.</span>
+          </div>
+
           {changelogText && (
             <details className="group rounded-xl border border-white/10 bg-base-950/30 p-3">
               <summary className="cursor-pointer font-medium text-soft hover:text-white flex items-center justify-between">
@@ -137,7 +159,17 @@ export function ChangelogModal() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end border-t border-white/10 bg-base-950/60 px-6 py-3.5">
+        <div className="flex items-center justify-between border-t border-white/10 bg-base-950/60 px-6 py-3.5">
+          <label className="flex items-center gap-2 text-xs text-muted hover:text-white cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={dontShowAgain}
+              onChange={(e) => setDontShowAgain(e.target.checked)}
+              className="rounded border-white/20 bg-base-800 text-accent focus:ring-accent accent-accent cursor-pointer"
+            />
+            <span>Don't show this again</span>
+          </label>
+
           <button
             type="button"
             onClick={handleDismiss}
