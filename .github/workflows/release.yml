@@ -179,5 +179,5 @@ jobs:
           generate_release_notes: true
           files: |
             dist/windows/*
-            dist/linux/*
+            dist/linux/**/*
 
