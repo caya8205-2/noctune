@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - package.json
   workflow_dispatch:
 
 concurrency:
@@ -173,8 +175,8 @@ jobs:
         with:
           name: linux-packages
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*
+            src-tauri/target/release/bundle/appimage/*
           retention-days: 1
 
   # ─── Create GitHub Release with all artifacts ────────────────────────────────
@@ -203,6 +205,6 @@ jobs:
           name: v${{ needs.preflight.outputs.version }}-stable
           generate_release_notes: true
           files: |
-            dist/windows/*.exe
-            dist/linux/*.deb
-            dist/linux/*.AppImage
+            dist/windows/*
+            dist/linux/*
+
