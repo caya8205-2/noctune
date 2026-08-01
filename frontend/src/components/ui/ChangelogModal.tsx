@@ -34,9 +34,9 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
-  { title: 'Design System .dropdown-panel Token', desc: 'Added .dropdown-panel component token in index.css matching Noctune dropdown design system (border border-base-600 bg-base-900 shadow-2xl) for 100% opaque, consistent popup menus.' },
-  { title: 'Compact Sidebar Header Alignment', desc: 'Aligned right margins for + and compact toggle buttons (px-0.5) to eliminate right margin gaps and ensure 100% flush vertical center axis alignment.' },
-  { title: 'Clean Hidden Sidebar Scrollbars', desc: 'Applied scrollbar-hidden to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.' },
+  { title: 'Linux Audio Stream Capping Fix', desc: 'Fixed YouTube audio stream range capping in backend (player.ts) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.' },
+  { title: 'Linux DevTools Console Cleanup', desc: 'Added 4-attempt retry with 250ms backoff on preferred port 3131 in api.ts, eliminating 10 connection refused console error logs during sidecar cold start.' },
+  { title: 'Global Dark Mode Dropdowns (select/option)', desc: 'Added color-scheme: dark; and custom background/text styling for HTML <select> and <option> elements in index.css @layer base to fix white unreadable dropdown popups on Linux WebKitGTK.' },
 ];
 
 export function openChangelogModal() {

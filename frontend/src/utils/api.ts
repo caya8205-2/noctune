@@ -79,7 +79,15 @@ export async function getApiBase(): Promise<string> {
 
   if (!apiBasePromise) {
     apiBasePromise = (async () => {
-      for (let attempt = 0; attempt < TAURI_BACKEND_PORT_ATTEMPTS; attempt++) {
+      // First try preferred port with retries to give backend sidecar time to bind on startup
+      const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
+      for (let retry = 0; retry < 4; retry++) {
+        if (await canReachBackend(preferredBase)) return preferredBase;
+        if (retry < 3) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+
+      // If preferred port is occupied by another app, scan remaining ports
+      for (let attempt = 1; attempt < TAURI_BACKEND_PORT_ATTEMPTS; attempt++) {
         const base = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT + attempt));
         if (await canReachBackend(base)) return base;
       }

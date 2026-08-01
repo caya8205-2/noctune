@@ -2,6 +2,13 @@
 
 All notable Noctune changes are documented here.
 
+## v3.2.2 - 2026-08-02
+
+### Linux & Multi-Platform Audio Fixes
+- **Linux Audio Stream Capping Fix**: Fixed YouTube audio stream range capping in backend (`player.ts`) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.
+- **Linux DevTools Console Cleanup**: Added 4-attempt retry with 250ms backoff on preferred port 3131 in `api.ts`, eliminating 10 connection refused console error logs during sidecar cold start.
+- **Global Dark Mode Dropdowns (`select`/`option`)**: Added `color-scheme: dark;` and custom background/text styling for HTML `<select>` and `<option>` elements in `index.css` `@layer base` to fix white unreadable dropdown popups on Linux WebKitGTK.
+
 ## v3.2.1 - 2026-08-01
 
 ### Compact Sidebar & UI Refinements

@@ -255,14 +255,16 @@ async function fetchAudioStream(
   audioUrl: string,
   range: string | undefined,
   refreshIfWebm: boolean,
-  boundedRange = true
+  boundedRange = false
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
-  const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : (range ?? normalizeUpstreamRange(undefined));
-  const headers = {
-    Range: upstreamRange,
+  const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
+  const headers: Record<string, string> = {
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   };
+  if (upstreamRange) {
+    headers.Range = upstreamRange;
+  }
   let res = await fetch(audioUrl, { headers });
 
   const shouldRefresh =
