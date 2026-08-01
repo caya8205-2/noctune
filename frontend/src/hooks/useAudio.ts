@@ -227,6 +227,7 @@ export function useAudio() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
+    if (currentTrack.id.startsWith('spotify:') && !currentTrack.youtubeId) return;
 
     let cancelled = false;
     const targetId = (currentTrack.youtubeId || currentTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
