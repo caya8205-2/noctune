@@ -15,10 +15,8 @@ This document tracks all new features, bug fixes, patches, and implementation ap
 
 - [x] **Compact Sidebar Mode**
   - **Collapsible Icon-Only Sidebar**: Implemented a compact sidebar mode (`sidebarCompact` state persisted in `localStorage`) toggled via top header icon button (`PanelLeftOpen`/`PanelLeftClose`).
-  - **In-List Create Playlist (`+`) Button**: Embedded the `+` button directly inside the playlist scrollable list container (`overflow-y-auto flex flex-col gap-1`) for pixel-perfect vertical icon alignment.
-  - **Standardized Rounded Square Buttons**: Unified hover shapes for all sidebar buttons to `rounded-xl` (rounded square).
-  - **Clean Compact Header**: Removed Noctune `/app-icon.png` logo from compact sidebar header.
-  - **Compact Icon Alignment**: Standardized button container width (`w-full`), padding (`py-2.5`), and hidden scrollbars (`scrollbar-hidden`) in compact mode to ensure all icons (including header toggle and `+` create playlist) align to the exact same vertical center axis.
+  - **Design System `.dropdown-panel` Token & Menu Consistency**: Added `.dropdown-panel` component token in `index.css` matching Noctune dropdown design system (`border border-base-600 bg-base-900 shadow-2xl shadow-black/80`). Reduced right padding on header containers (`px-0.5`) to eliminate right margin gaps for `+` and compact toggle buttons.
+  - **Clean Sidebar Scrollbars**: Applied `scrollbar-hidden` to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.
 
 - [x] **Smart Playlists & Nightly Mix Refinements**
   - **Discover Weekly 7-Day Caching & Refetch Fix**: Added `discoverWeekly.ts` backend service with local disk persistence (`discover_weekly.json`) and 7-day TTL (`ONE_WEEK_MS`), preventing redundant recommendation refetches on component mount.
@@ -43,3 +41,8 @@ This document tracks all new features, bug fixes, patches, and implementation ap
 
 - [x] **SignPath PowerShell Script (`scripts/noctune-signing.ps1`)**
   - **Technical Approach**: Added automatic loading of `.env` variables from root directory (`Join-Path $PSScriptRoot "..\.env"`), reading `SIGN_TOKEN`, `ORGANIZATION_ID`, `INPUT_PATH`, and `OUTPUT_PATH` (matching `.env.example`), validating environment variable presence before execution, and passing parameters to `Submit-SigningRequest`.
+
+## 3. Multi-Platform & CI/CD Pipeline
+
+- [x] **Linux Build Pipeline & Binary Target**
+  - **Technical Approach**: Added `build-linux` job to `.github/workflows/release.yml` running on `ubuntu-22.04` with GTK and WebKit system dependencies to compile `.deb` and `.AppImage` packages. Configured `build:binary:linux` script in `backend/package.json` to output `noctune-backend-x86_64-unknown-linux-gnu` sidecar.

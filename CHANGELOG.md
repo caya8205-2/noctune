@@ -2,6 +2,16 @@
 
 All notable Noctune changes are documented here.
 
+## v3.2.1 - 2026-08-01
+
+### Compact Sidebar & UI Refinements
+- **Design System `.dropdown-panel` Token & Menu Consistency**: Added `.dropdown-panel` component token in `index.css` matching Noctune's dropdown design system (`border border-base-600 bg-base-900 shadow-2xl shadow-black/80`). Aligned right margins for `+` and compact toggle buttons and enabled unclipped dropdown menu popups with solid 100% opacity.
+- **Clean Sidebar Scrollbars**: Applied `scrollbar-hidden` to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.
+
+### Multi-Platform Release Preparation (Linux Support)
+- **Linux Multi-Job CI Workflow**: Added `build-linux` runner job (`ubuntu-22.04`) in GitHub Actions `release.yml` for automated `.deb` and `.AppImage` packaging alongside Windows NSIS installers.
+- **Linux Sidecar Binary Target**: Configured `build:binary:linux` script targeting `node24-linux-x64` to generate `noctune-backend-x86_64-unknown-linux-gnu`.
+
 ## v3.2.0 - 2026-08-01
 
 ### Major Home View Redesign
@@ -13,6 +23,8 @@ All notable Noctune changes are documented here.
 
 ### Compact Sidebar Mode
 - **Collapsible Icon-Only Sidebar**: Added a compact sidebar mode (`w-16` width) toggled via top header toggle button (`PanelLeftOpen`/`PanelLeftClose`), featuring centered navigation items, hover tooltips, and playlist cover thumbnails.
+- **Design System `.dropdown-panel` Token & Menu Consistency**: Added `.dropdown-panel` component token in `index.css` matching Noctune's dropdown design system (`border border-base-600 bg-base-900 shadow-2xl shadow-black/80`). Aligned right margins for `+` and compact toggle buttons and enabled unclipped dropdown menu popups.
+- **Clean Sidebar Scrollbars**: Applied `scrollbar-hidden` to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.
 
 ### Smart Playlists & Nightly Mix Refinements
 - **Discover Weekly 7-Day Caching & Refetch Fix**: Fixed `Discover Weekly` to persist cache for 7 days (`discover_weekly.json`) in backend and prevented redundant refetching every time its view is mounted.

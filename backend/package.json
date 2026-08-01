@@ -1,6 +1,6 @@
 {
   "name": "@noctune/backend",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "private": true,
   "main": "dist/index.js",
   "bin": "dist/index.js",
@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "test:matcher": "tsx test/matcherFixture.ts",
     "train-model": "tsx src/scripts/train_seed_model.ts",
-    "build:binary": "pkg . --target node24-win-x64 --fallback-to-source --output ../src-tauri/binaries/noctune-backend-x86_64-pc-windows-msvc.exe"
+    "build:binary": "pkg . --target node24-win-x64 --fallback-to-source --output ../src-tauri/binaries/noctune-backend-x86_64-pc-windows-msvc.exe",
+    "build:binary:linux": "pkg . --target node24-linux-x64 --fallback-to-source --output ../src-tauri/binaries/noctune-backend-x86_64-unknown-linux-gnu"
   },
   "pkg": {
     "scripts": "dist/**/*.js",

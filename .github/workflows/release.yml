@@ -12,7 +12,40 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # ─── Check version & whether release already exists ─────────────────────────
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      exists: ${{ steps.release.outputs.exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Check existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if gh release view "v$version" --json tagName > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release v$version already exists."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release v$version not found."
+          fi
+
+  # ─── Windows build (NSIS installer, signed) ──────────────────────────────────
+  build-windows:
+    needs: preflight
+    if: needs.preflight.outputs.exists == 'false'
     runs-on: windows-latest
 
     steps:
@@ -24,45 +57,13 @@ jobs:
         with:
           node-version: 24
 
-      - name: Read version
-        id: version
-        shell: pwsh
-        run: |
-          $version = node -p "require('./package.json').version"
-          "version=$version" >> $env:GITHUB_OUTPUT
-
-      - name: Check existing release
-        id: release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $version = "${{ steps.version.outputs.version }}"
-
-          gh release view "v$version" --json tagName 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) {
-            "exists=true" >> $env:GITHUB_OUTPUT
-            Write-Host "Release v$version already exists."
-          } else {
-            "exists=false" >> $env:GITHUB_OUTPUT
-            Write-Host "Release v$version not found."
-          }
-          exit 0
-
-      - name: Skip release
-        if: steps.release.outputs.exists == 'true'
-        run: echo "Release already exists. Skipping."
-
       - name: Install Rust
-        if: steps.release.outputs.exists == 'false'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        if: steps.release.outputs.exists == 'false'
         run: npm ci
 
-      - name: Build Tauri
-        if: steps.release.outputs.exists == 'false'
+      - name: Build Tauri (Windows)
         env:
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_RPC_ENABLED: ${{ secrets.DISCORD_RPC_ENABLED }}
@@ -75,19 +76,16 @@ jobs:
         run: npm run tauri:build
 
       - name: Install SignPath PowerShell Module
-        if: steps.release.outputs.exists == 'false'
         shell: pwsh
         run: |
           Install-Module SignPath -Force -Scope CurrentUser
 
       - name: Sign installer
-        if: steps.release.outputs.exists == 'false'
         shell: pwsh
         env:
           SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_TOKEN }}
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-
+          $version = "${{ needs.preflight.outputs.version }}"
           $input = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.exe"
           $output = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.signed.exe"
 
@@ -104,13 +102,93 @@ jobs:
           Remove-Item $input -Force
           Rename-Item $output "Noctune_${version}_x64-setup.exe"
 
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: src-tauri/target/release/bundle/nsis/Noctune_${{ needs.preflight.outputs.version }}_x64-setup.exe
+          retention-days: 1
+
+  # ─── Linux build (.deb + .AppImage) ─────────────────────────────────────────
+  build-linux:
+    needs: preflight
+    if: needs.preflight.outputs.exists == 'false'
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            ffmpeg
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri (Linux)
+        env:
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_RPC_ENABLED: ${{ secrets.DISCORD_RPC_ENABLED }}
+          DISCORD_RPC_LARGE_IMAGE_KEY: ${{ secrets.DISCORD_RPC_LARGE_IMAGE_KEY }}
+          DISCORD_RPC_SMALL_IMAGE_KEY: ${{ secrets.DISCORD_RPC_SMALL_IMAGE_KEY }}
+          LAST_FM_KEY: ${{ secrets.LAST_FM_KEY }}
+          LAST_FM_SECRET: ${{ secrets.LAST_FM_SECRET }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: npm run tauri:build:linux
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 1
+
+  # ─── Create GitHub Release with all artifacts ────────────────────────────────
+  release:
+    needs: [preflight, build-windows, build-linux]
+    if: needs.preflight.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: dist/linux
+
       - name: Create GitHub Release
-        if: steps.release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}-stable
+          tag_name: v${{ needs.preflight.outputs.version }}
+          name: v${{ needs.preflight.outputs.version }}-stable
           generate_release_notes: true
-
           files: |
-            src-tauri/target/release/bundle/nsis/Noctune_${{ steps.version.outputs.version }}_x64-setup.exe
+            dist/windows/*.exe
+            dist/linux/*.deb
+            dist/linux/*.AppImage

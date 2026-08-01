@@ -34,17 +34,9 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
-  { title: 'Navigation Shortcut Pills', desc: 'Added quick-access filter pills at the top of Home View (Liked Songs, Top Favorites, Discover Weekly, Recently Played, Short Tracks) for one-tap section navigation.' },
-  { title: 'Continue Listening & New Releases GPU Autoscroll Carousels', desc: 'Built GPU hardware-accelerated horizontal autoscroll carousels (transform: translate3d(-Xpx, 0, 0)) for Continue Listening (persisted queue tracks) and New Releases, complete with 2.5s end-card pause, mouse wheel horizontal scroll, and hover pause.' },
-  { title: 'Your Playlists Manual Horizontal Carousel', desc: 'Converted Your Playlists section into a manual horizontal scroll row with mouse wheel direction conversion, keeping all user playlists accessible without vertical page sprawl.' },
-  { title: 'Collapsible Icon-Only Compact Sidebar', desc: 'Added a compact sidebar mode (w-16 width) toggled via top header toggle button (PanelLeftOpen/PanelLeftClose), featuring centered navigation items, hover tooltips, and playlist cover thumbnails.' },
-  { title: '7-Day Persistent Discover Weekly Caching', desc: 'Configured Discover Weekly to persist cache for 7 days (discover_weekly.json) in backend and prevented redundant refetching every time its view is mounted.' },
-  { title: 'Smart Playlist Branding & Renaming', desc: 'Renamed Smart Playlist labels for consistency (Most Played ➔ Top Favorites, Recently Added ➔ Recently Played) to distinguish them clearly from Nightly Mixes such as Deep Rotation.' },
-  { title: 'Playlist & Nightly Mix Refresh Action', desc: 'Added an interactive Refresh Playlist / Refresh Mix button (<RefreshCw />) across all Smart Playlist views and Nightly Mixes to trigger real-time recommendation updates.' },
-  { title: 'Custom Audio Download Location Setting', desc: 'Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.' },
-  { title: 'On-Demand Release Notes & Changelog Modal', desc: 'Added a What\'s New button in Settings View allowing users to open and review release notes anytime on demand, accompanied by a clean "Don\'t show this again" preference toggle.' },
-  { title: 'Unified 3 Audio Bars Playing Indicator', desc: 'Standardized playing indicators across all track list views (Home Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View) with 3 animated accent audio bars when playing and accent row numbers when paused.' },
-  { title: 'Dynamic Mini Player & Track Details Visibility', desc: 'Automatically hide Mini Player (PlayerBar) and Sidebar Track Details (TrackDetailsSidebar) when no track is playing to maximize screen real estate.' },
+  { title: 'Design System .dropdown-panel Token', desc: 'Added .dropdown-panel component token in index.css matching Noctune dropdown design system (border border-base-600 bg-base-900 shadow-2xl) for 100% opaque, consistent popup menus.' },
+  { title: 'Compact Sidebar Header Alignment', desc: 'Aligned right margins for + and compact toggle buttons (px-0.5) to eliminate right margin gaps and ensure 100% flush vertical center axis alignment.' },
+  { title: 'Clean Hidden Sidebar Scrollbars', desc: 'Applied scrollbar-hidden to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.' },
 ];
 
 export function openChangelogModal() {

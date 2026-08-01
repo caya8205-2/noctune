@@ -7,6 +7,12 @@ const FALLBACK_CHANGELOG = `# Changelog
 
 All notable Noctune changes are documented here.
 
+## v3.2.1 - 2026-08-01
+
+### Compact Sidebar & UI Refinements
+- **Design System \`.dropdown-panel\` Token & Menu Consistency**: Added \`.dropdown-panel\` component token in \`index.css\` matching Noctune's dropdown design system (\`border border-base-600 bg-base-900 shadow-2xl shadow-black/80\`). Aligned right margins for \`+\` and compact toggle buttons and enabled unclipped dropdown menu popups with solid 100% opacity.
+- **Clean Sidebar Scrollbars**: Applied \`scrollbar-hidden\` to both normal and compact sidebar modes for a clean UI without visible scrollbars while maintaining full mouse wheel scrolling capability.
+
 ## v3.2.0 - 2026-08-01
 
 ### Major Home View Redesign
