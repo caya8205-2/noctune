@@ -42,6 +42,7 @@ const DEFAULT_HIGHLIGHTS = [
   { title: 'Smart Playlist Branding & Renaming', desc: 'Renamed Smart Playlist labels for consistency (Most Played ➔ Top Favorites, Recently Added ➔ Recently Played) to distinguish them clearly from Nightly Mixes such as Deep Rotation.' },
   { title: 'Playlist & Nightly Mix Refresh Action', desc: 'Added an interactive Refresh Playlist / Refresh Mix button (<RefreshCw />) across all Smart Playlist views and Nightly Mixes to trigger real-time recommendation updates.' },
   { title: 'Custom Audio Download Location Setting', desc: 'Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.' },
+  { title: 'On-Demand Release Notes & Changelog Modal', desc: 'Added a What\'s New button in Settings View allowing users to open and review release notes anytime on demand, accompanied by a clean "Don\'t show this again" preference toggle.' },
   { title: 'Unified 3 Audio Bars Playing Indicator', desc: 'Standardized playing indicators across all track list views (Home Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View) with 3 animated accent audio bars when playing and accent row numbers when paused.' },
   { title: 'Dynamic Mini Player & Track Details Visibility', desc: 'Automatically hide Mini Player (PlayerBar) and Sidebar Track Details (TrackDetailsSidebar) when no track is playing to maximize screen real estate.' },
 ];

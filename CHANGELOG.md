@@ -22,6 +22,9 @@ All notable Noctune changes are documented here.
 ### Custom Audio Download Location
 - **Download Storage Path Selector**: Added a setting in Settings View allowing users to select and configure custom audio cache download storage paths on disk with native folder browser dialog support.
 
+### On-Demand Release Notes & Changelog Modal
+- **What's New Settings Button & Modal Trigger**: Added a **What's New** button in Settings View allowing users to open and review release notes anytime on demand, accompanied by a clean "Don't show this again" preference toggle.
+
 ### Now Playing & Dynamic Visibility
 - **Unified 3 Audio Bars Playing Indicator**: Standardized playing indicators across all track list views (*Home Recently Played, Album View, Artist View, Playlist View, Queue View, Search View, History View*) with 3 animated accent audio bars (`PlayingBars`) when playing and accent row numbers when paused.
 - **Unified Active Track Row Background**: Standardized active track row background to Noctune's global `bg-accent/10` across `PlaylistView` and `QueueView`.
