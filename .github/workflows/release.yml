@@ -85,33 +85,6 @@ jobs:
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: npm run tauri:build
 
-      - name: Install SignPath PowerShell Module
-        shell: pwsh
-        run: |
-          Install-Module SignPath -Force -Scope CurrentUser
-
-      - name: Sign installer
-        shell: pwsh
-        env:
-          SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_TOKEN }}
-        run: |
-          $version = "${{ needs.preflight.outputs.version }}"
-          $input = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.exe"
-          $output = "src-tauri\target\release\bundle\nsis\Noctune_${version}_x64-setup.signed.exe"
-
-          Submit-SigningRequest `
-            -ApiToken $env:SIGNPATH_TOKEN `
-            -OrganizationId "14ca15c6-cf68-4099-ae55-0bc58d446acd" `
-            -ProjectSlug "Noctune" `
-            -SigningPolicySlug "Caya8205" `
-            -InputArtifactPath $input `
-            -OutputArtifactPath $output `
-            -WaitForCompletion `
-            -Force
-
-          Remove-Item $input -Force
-          Rename-Item $output "Noctune_${version}_x64-setup.exe"
-
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
