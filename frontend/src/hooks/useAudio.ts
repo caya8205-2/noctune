@@ -239,9 +239,16 @@ export function useAudio() {
           audio.src = src;
           audio.load();
         }
-        if (usePlayerStore.getState().isPlaying) {
-          playAudio(audio).catch(err => console.warn('[audio] play blocked:', err));
-        }
+        waitForAudioReady(audio)
+          .then(() => {
+            if (cancelled) return;
+            if (usePlayerStore.getState().isPlaying) {
+              return playAudio(audio);
+            }
+          })
+          .catch((err) => {
+            console.warn('[audio] play blocked or metadata load failed:', err);
+          });
       })
       .catch(err => console.warn('[audio] stream URL failed:', err));
     return () => {

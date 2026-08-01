@@ -2,6 +2,21 @@
 
 All notable Noctune changes are documented here.
 
+## v3.2.3 - 2026-08-02
+
+### Playback & UI Responsiveness
+- **Instant Optimistic Mini Player & Loading Indicator**: Updated `playTrack` in `player.ts` store to optimistically set `currentTrack` and `isLoading: true` the exact millisecond a track is clicked, instantly displaying the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.
+- **Audio Stream Metadata Readiness & CORS Policy Fix**: Added `Cross-Origin-Resource-Policy: cross-origin` and `Access-Control-Expose-Headers` in `player.ts` stream responses, and updated `useAudio.ts` to await `waitForAudioReady(audio)` before calling `playAudio(audio)` to prevent WebKitGTK / GStreamer media pipeline aborts and premature paused state.
+
+### Linux & Multi-Platform Fixes
+- **Linux Audio Stream Capping Fix**: Fixed YouTube audio stream range capping in backend (`player.ts`) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.
+- **Linux DevTools Console Cleanup**: Added 4-attempt retry with 250ms backoff on preferred port 3131 in `api.ts`, eliminating 10 connection refused console error logs during sidecar cold start.
+- **Global Dark Mode Dropdowns (`select`/`option`)**: Added `color-scheme: dark;` and custom background/text styling for HTML `<select>` and `<option>` elements in `index.css` `@layer base` to fix white unreadable dropdown popups on Linux WebKitGTK.
+
+### Full CHANGELOG History & Assets
+- **Full CHANGELOG History Viewer**: Updated `/changelog` route in `updates.ts` and `FALLBACK_CHANGELOG` to bundle and render 100% of Noctune's release history from v1.0.0.
+- **Tauri Application Icons Update**: Regenerated all Tauri app icons across Windows (.ico), macOS (.icns), Linux (.png), Android, and iOS from the new black background logo `assets/app-icon.png` using `npx tauri icon`.
+
 ## v3.2.2 - 2026-08-02
 
 ### Linux & Multi-Platform Audio Fixes

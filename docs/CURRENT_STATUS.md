@@ -1,4 +1,4 @@
-# Current Status & Release Tracker (v3.2.0)
+# Current Status & Release Tracker (v3.2.3)
 
 This document tracks all new features, bug fixes, patches, and implementation approaches taken for Noctune.
 
@@ -49,3 +49,6 @@ This document tracks all new features, bug fixes, patches, and implementation ap
   - **Linux Audio Stream Capping Fix**: Removed artificial 1MB (`bytes=0-1048575`) range capping in `player.ts` `fetchAudioStream` to allow full continuous streaming without premature audio cutoff / track auto-skip at ~25 seconds.
   - **Linux DevTools Port Discovery Cleanup**: Configured `getApiBase()` in `api.ts` to retry port 3131 4 times during cold start before scanning other ports, eliminating 10 connection refused console error logs.
   - **Global Dark Mode Select & Option Styling**: Added `color-scheme: dark;` and `select, option { background-color: #18181c; color: #ffffff; }` in `index.css` `@layer base` to enforce dark mode options dropdown popups across WebKitGTK (Linux) and Chromium.
+  - **Tauri Application Icons Update**: Regenerated all Tauri app icons across Windows (.ico), macOS (.icns), Linux (.png), Android, and iOS from the new black background logo `assets/app-icon.png` using `npx tauri icon`.
+  - **Audio Stream Metadata Readiness & CORS Policy Fix**: Added `Cross-Origin-Resource-Policy: cross-origin` and `Access-Control-Expose-Headers` in `player.ts` stream responses, and updated `useAudio.ts` to await `waitForAudioReady(audio)` before calling `playAudio(audio)` to prevent WebKitGTK / GStreamer media pipeline aborts and premature paused state.
+  - **Instant Optimistic Mini Player & Loading Indicator**: Updated `playTrack` in `player.ts` store to optimistically set `currentTrack` and `isLoading: true` the exact millisecond a track is clicked, instantly displaying the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.

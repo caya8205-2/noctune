@@ -203,7 +203,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const startedAt = performance.now();
     const queue = newQueue ?? get().queue;
     const idx = queue.findIndex(t => t.id === track.id);
-    set({ isLoading: true });
+    const source = options?.queueSource ?? track.queueSource ?? 'search';
+    const initialTrack = {
+      ...track,
+      queueSource: source,
+      originalSource: track.originalSource ?? (source === 'history' ? undefined : source),
+    };
+
+    // Optimistically show Mini Player immediately with loading animation
+    set({
+      currentTrack: initialTrack as any,
+      isLoading: true,
+      queue: queue.length > 0 ? queue : [initialTrack],
+      queueIndex: idx >= 0 ? idx : 0,
+    });
+
     console.info('[player] playTrack start', {
       id: track.id,
       title: track.title,

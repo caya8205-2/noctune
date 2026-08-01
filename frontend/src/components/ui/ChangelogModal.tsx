@@ -34,6 +34,7 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
+  { title: 'Instant Optimistic Mini Player Loading', desc: 'Clicking any song immediately displays the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.' },
   { title: 'Linux Audio Stream Capping Fix', desc: 'Fixed YouTube audio stream range capping in backend (player.ts) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.' },
   { title: 'Linux DevTools Console Cleanup', desc: 'Added 4-attempt retry with 250ms backoff on preferred port 3131 in api.ts, eliminating 10 connection refused console error logs during sidecar cold start.' },
   { title: 'Global Dark Mode Dropdowns (select/option)', desc: 'Added color-scheme: dark; and custom background/text styling for HTML <select> and <option> elements in index.css @layer base to fix white unreadable dropdown popups on Linux WebKitGTK.' },

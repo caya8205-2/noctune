@@ -441,6 +441,13 @@ function streamLocalAudioFile(filePath: string, range: string | undefined, reply
   const total = stat.size;
   const contentType = filePath.endsWith('.webm') ? 'audio/webm' : 'audio/mp4';
 
+  reply
+    .header('Access-Control-Allow-Origin', '*')
+    .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+    .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+    .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+    .header('Cross-Origin-Resource-Policy', 'cross-origin');
+
   if (range) {
     const match = range.match(/^bytes=(\d+)-(\d*)$/i);
     const start = match ? Number(match[1]) : 0;
@@ -904,6 +911,10 @@ export async function playerRoutes(app: FastifyInstance) {
               .status(retry.res.status === 206 ? 206 : 200)
               .header('Content-Type', retry.res.headers.get('content-type') || 'audio/mp4')
               .header('Access-Control-Allow-Origin', '*')
+              .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+              .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+              .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+              .header('Cross-Origin-Resource-Policy', 'cross-origin')
               .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
               .header('Cache-Control', 'public, max-age=3600');
             const retryLength = retry.res.headers.get('content-length');
@@ -956,6 +967,10 @@ export async function playerRoutes(app: FastifyInstance) {
       reply
         .header('Content-Type', ytRes.headers.get('content-type') || 'audio/webm')
         .header('Access-Control-Allow-Origin', '*')
+        .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+        .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+        .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+        .header('Cross-Origin-Resource-Policy', 'cross-origin')
         .header('Accept-Ranges', acceptRanges)
         .header('Cache-Control', 'public, max-age=3600');
       if (contentLength) reply.header('Content-Length', contentLength);
