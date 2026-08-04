@@ -2,6 +2,7 @@ import { useState, useCallback, createContext, useContext, ReactNode } from 'rea
 import { createPortal } from 'react-dom';
 import { Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { api, type Track } from '../utils/api';
+import { usePlayerStore } from '../store/player';
 
 interface DownloadToastState {
   id: string;
@@ -20,6 +21,7 @@ interface DownloadContextType {
 const DownloadContext = createContext<DownloadContextType | null>(null);
 
 export function DownloadProvider({ children }: { children: ReactNode }) {
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
   const [toast, setToast] = useState<DownloadToastState | null>(null);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
   const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
@@ -57,7 +59,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         title: track.title,
         artist: track.artist,
         status: 'completed',
-        message: `Saved "${track.title}" to Downloads folder!`,
+        message: `Saved "${track.title}" to ${res.downloadDir}`,
       });
 
       // Auto dismiss completed toast after 3.5s
@@ -89,7 +91,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     <DownloadContext.Provider value={{ downloadTrack, downloadingIds, downloadedIds }}>
       {children}
       {toast && createPortal(
-        <div className="fixed bottom-20 right-6 z-[9999] flex w-80 items-center gap-3 rounded-xl border border-white/10 bg-base-900/95 p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 duration-200">
+        <div className={`fixed right-4 z-[9999] flex w-[min(34rem,calc(100vw-2rem))] items-start gap-3 rounded-xl border border-white/10 bg-base-900/95 p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 duration-200 sm:right-6 ${
+          currentTrack ? 'bottom-20' : 'bottom-6'
+        }`}>
           <div className="flex-shrink-0">
             {toast.status === 'downloading' && (
               <Loader2 size={20} className="animate-spin text-accent" />
@@ -114,7 +118,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
                 <X size={14} />
               </button>
             </div>
-            <p className="mt-0.5 truncate text-xs text-soft">{toast.message}</p>
+            <p className="mt-0.5 whitespace-normal break-words text-xs leading-relaxed text-soft">{toast.message}</p>
           </div>
         </div>,
         document.body

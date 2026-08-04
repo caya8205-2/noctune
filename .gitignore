@@ -8,7 +8,7 @@ frontend/dist/
 .codex/
 automations/
 reports/
-docs/
+docs/**
 !docs/CURRENT_STATUS.md
 .kiro/
 *.db
@@ -17,6 +17,8 @@ docs/
 src-tauri/target/
 src-tauri/binaries/*.exe
 src-tauri/binaries/noctune-backend-*
+src-tauri/resources/yt-dlp.exe
+src-tauri/resources/.yt-dlp-platform
 .env
 .env.local
 backend/.env
@@ -28,3 +30,4 @@ frontend/.env.local
 .tmp-sidecar-data-3134/
 signed/
 mobile/**
+!docs/RULES.md

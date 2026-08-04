@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Album, Clock3, Disc3, ExternalLink, Music2, Radio, Sparkles, Tag, UserRound } from 'lucide-react';
+import { Album, Clock3, Disc3, ExternalLink, Maximize2, Music2, Radio, Sparkles, Tag, UserRound } from 'lucide-react';
 import { api, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
+import { ArtworkLightboxModal } from '../ui/ArtworkLightboxModal';
 
 async function openExternalUrl(url: string) {
   if (!IS_TAURI) {
@@ -40,19 +42,36 @@ function compactNumber(value?: number): string | undefined {
   return new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value);
 }
 
-function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: SpotifyTrackMetadata }) {
+function SpotifyDetails({
+  track,
+  metadata,
+  onOpenLightbox,
+}: {
+  track: CachedTrack;
+  metadata: SpotifyTrackMetadata;
+  onOpenLightbox: (url: string, title: string, artist: string, album?: string | null) => void;
+}) {
   const primaryArtist = metadata.artists[0];
   const genres = metadata.artists.flatMap((artist) => artist.genres).slice(0, 5);
+  const imageUrl = metadata.album.image ?? track.thumbnail;
 
   return (
     <>
-      <div className="shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
+      <div
+        className="group relative shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden cursor-pointer"
+        onClick={() => imageUrl && onOpenLightbox(imageUrl, metadata.title, track.artist, metadata.album.name)}
+        title="Click to view full resolution artwork"
+      >
         <img
-          src={metadata.album.image ?? track.thumbnail}
+          src={imageUrl}
           alt=""
-          className="aspect-square w-full object-cover"
+          className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
           onError={(event) => (event.currentTarget.style.display = 'none')}
         />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium">
+          <Maximize2 size={16} />
+          <span>View Art</span>
+        </div>
       </div>
 
       <div>
@@ -143,17 +162,33 @@ function SpotifyDetails({ track, metadata }: { track: CachedTrack; metadata: Spo
   );
 }
 
-function LocalDetails({ track }: { track: CachedTrack }) {
+function LocalDetails({
+  track,
+  onOpenLightbox,
+}: {
+  track: CachedTrack;
+  onOpenLightbox: (url: string, title: string, artist: string, album?: string | null) => void;
+}) {
   return (
     <>
-      <div className="shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden">
+      <div
+        className="group relative shrink-0 rounded-lg border border-base-600/60 bg-base-800 overflow-hidden cursor-pointer"
+        onClick={() => track.thumbnail && onOpenLightbox(track.thumbnail, track.title, track.artist, track.album)}
+        title={track.thumbnail ? 'Click to view full resolution artwork' : undefined}
+      >
         {track.thumbnail ? (
-          <img
-            src={track.thumbnail}
-            alt=""
-            className="aspect-square w-full object-cover"
-            onError={(event) => (event.currentTarget.style.display = 'none')}
-          />
+          <>
+            <img
+              src={track.thumbnail}
+              alt=""
+              className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={(event) => (event.currentTarget.style.display = 'none')}
+            />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium">
+              <Maximize2 size={16} />
+              <span>View Art</span>
+            </div>
+          </>
         ) : (
           <div className="aspect-square w-full flex items-center justify-center text-muted">
             <Music2 size={34} strokeWidth={1.3} />
@@ -162,7 +197,7 @@ function LocalDetails({ track }: { track: CachedTrack }) {
       </div>
 
       <div>
-        <p className="section-label text-accent">Local track</p>
+        <p className="section-label text-accent">Track details</p>
         {track.artistId ? (
           <button
             type="button"
@@ -175,17 +210,21 @@ function LocalDetails({ track }: { track: CachedTrack }) {
         ) : (
           <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{track.title}</h2>
         )}
-        {track.artistId ? (
-          <button
-            type="button"
-            className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
-            onClick={() => usePlayerStore.getState().setView('artist', track.artistId)}
-          >
-            {track.artist}
-          </button>
-        ) : (
-          <p className="text-sm text-muted mt-1 leading-relaxed">{track.artist}</p>
-        )}
+        {(() => {
+          const targetArtistId = track.artistId || (track.artist ? (track.artist.startsWith('ytchannel:') ? track.artist : `ytchannel:${track.artist}`) : undefined);
+          return targetArtistId ? (
+            <button
+              type="button"
+              className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
+              onClick={() => usePlayerStore.getState().setView('artist', targetArtistId)}
+              title={`Go to artist: ${track.artist}`}
+            >
+              {track.artist}
+            </button>
+          ) : (
+            <p className="text-sm text-muted mt-1 leading-relaxed">{track.artist}</p>
+          );
+        })()}
       </div>
 
       <div className="space-y-3 rounded-lg border border-base-600/60 bg-base-800 p-3">
@@ -200,6 +239,7 @@ function LocalDetails({ track }: { track: CachedTrack }) {
 
 export function TrackDetailsContent() {
   const { currentTrack } = usePlayerStore();
+  const [lightboxData, setLightboxData] = useState<{ url: string; title: string; artist: string; album?: string | null } | null>(null);
   const spotifyId = currentTrack?.spotifyId;
   const { data, isLoading, isError } = useQuery({
     queryKey: ['spotify-metadata', spotifyId],
@@ -219,11 +259,27 @@ export function TrackDetailsContent() {
 
   return (
     <>
+      {lightboxData && (
+        <ArtworkLightboxModal
+          imageUrl={lightboxData.url}
+          title={lightboxData.title}
+          artist={lightboxData.artist}
+          album={lightboxData.album}
+          onClose={() => setLightboxData(null)}
+        />
+      )}
       {data ? (
-        <SpotifyDetails track={currentTrack} metadata={data} />
+        <SpotifyDetails
+          track={currentTrack}
+          metadata={data}
+          onOpenLightbox={(url, title, artist, album) => setLightboxData({ url, title, artist, album })}
+        />
       ) : (
         <>
-          <LocalDetails track={currentTrack} />
+          <LocalDetails
+            track={currentTrack}
+            onOpenLightbox={(url, title, artist, album) => setLightboxData({ url, title, artist, album })}
+          />
           {spotifyId && isLoading && (
             <p className="text-xs text-muted">Loading Spotify metadata.</p>
           )}

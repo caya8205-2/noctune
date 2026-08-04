@@ -1,4 +1,4 @@
-# Current Status & Release Tracker (v3.2.3)
+# Current Status & Release Tracker (v3.3.0)
 
 This document tracks all new features, bug fixes, patches, and implementation approaches taken for Noctune.
 
@@ -20,7 +20,7 @@ This document tracks all new features, bug fixes, patches, and implementation ap
 
 - [x] **Smart Playlists & Nightly Mix Refinements**
   - **Discover Weekly 7-Day Caching & Refetch Fix**: Added `discoverWeekly.ts` backend service with local disk persistence (`discover_weekly.json`) and 7-day TTL (`ONE_WEEK_MS`), preventing redundant recommendation refetches on component mount.
-  - **Smart Playlist Branding & Renaming**: Renamed Smart Playlist labels (*Most Played* ➔ *Top Favorites*, *Recently Added* ➔ *Recently Played*) to distinguish them clearly from Nightly Mixes such as *Deep Rotation*.
+  - **Smart Playlist Branding & Renaming**: Renamed Smart Playlist labels (*Most Played* ➔ *Top Favorites*) and replaced the duplicate *Recently Played* smart playlist with *In Rotation*, a recommendation mix distinct from the real History view and Nightly Mixes such as *Deep Rotation*.
   - **Playlist & Nightly Mix Refresh Action**: Added an interactive **Refresh Playlist / Refresh Mix** button (`<RefreshCw />`) across all Smart Playlist views and Nightly Mixes to trigger real-time recommendation updates.
 
 - [x] **Custom Audio Download Location**
@@ -53,3 +53,47 @@ This document tracks all new features, bug fixes, patches, and implementation ap
   - **Audio Stream Metadata Readiness & CORS Policy Fix**: Added `Cross-Origin-Resource-Policy: cross-origin` and `Access-Control-Expose-Headers` in `player.ts` stream responses, and updated `useAudio.ts` to await `waitForAudioReady(audio)` before calling `playAudio(audio)` to prevent WebKitGTK / GStreamer media pipeline aborts and premature paused state.
   - **Instant Optimistic Mini Player & Loading Indicator**: Updated `playTrack` in `player.ts` store to optimistically set `currentTrack` and `isLoading: true` the exact millisecond a track is clicked, instantly displaying the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.
   - **Unmapped Spotify Stream Request Guard**: Added guard in `useAudio.ts` to skip stream request calls (`GET /player/stream/spotify:...`) when a track is an optimistic Spotify track that has not yet been resolved to a YouTube Video ID (`youtubeId`). Prevents 404 stream errors and audio error state during optimistic Mini Player display.
+  - **Pure YouTube Channel View Routing Restored**: Restored `/browse/artist/:id` routing in `browse.ts` so `ytchannel:` requests directly query YouTube Channel uploads without Spotify search intervention, preserving dual-source architecture.
+  - **Artwork Lightbox Modal & Download**: Added `ArtworkLightboxModal.tsx` and clickable artwork hover overlays in `TrackDetailsSidebar.tsx` allowing users to view full-resolution cover art/thumbnails in a viewport modal and download them directly to disk with a **Download Artwork** button.
+  - **Direct Track Stream Download & Timestamp Overhaul**: Updated `POST /player/download-tracks` in `player.ts` to download audio streams directly with `Range: bytes=0-` headers and `writeAudioChunk` buffer flushing, bypassing cache dependencies and setting file `mtime` to current time so downloaded files appear at the top of Downloads folder. Restored YouTube channel Videos/Playlists tab switcher visibility in `ArtistView.tsx` and fixed DevTools `ContinuationItemView` error fallback in `youtubei.ts`.
+
+---
+
+## 4. Comprehensive v3.3.0 Minor Release Audit & System Status
+
+- [x] **Dedicated YouTube Channel View & Multi-Platform Extraction**
+  - **Dedicated YouTube Channel Profiles**: Full-featured channel view for YouTube creators (`browseYouTubeChannel`) with top tracks, avatars, subscriber counts, and channel playlists.
+  - **Cross-Platform yt-dlp Sidecar Bundling (`prepare-ytdlp.mjs`)**: Bundled native platform-specific binaries for Windows (`yt-dlp.exe`) and Linux (`yt-dlp_linux`), removing the need for a manual yt-dlp installation. YouTube extraction still requires an internet connection.
+  - **Dedicated yt-dlp Channel Extraction (`ytdlp.ts`)**: Channel view now uses the bundled cross-platform yt-dlp binary directly for uploads, channel metadata, and public playlists. Innertube is intentionally excluded from this path because its channel tabs are inconsistent across Topic, creator, and handle channels; known channel IDs never use generic search fallback.
+  - **External Playlist Resolution**: Added `ytplaylist:` support through `GET /playlists/:id` and `/browse/youtube-playlist/:id` so channel playlists open inside Noctune.
+  - **Channel Videos & Playlists Tabs (`ArtistView.tsx`)**: Added persistent tabs, a clean empty state for channels without public playlists, and removed the duplicated `VIDEOS` heading beneath the active tab.
+  - **Channel & Playlist Navigation History**: Added history entries for channel tab changes and virtual `ytplaylist:` routes so mouse back restores the correct channel tab. Channel data uses a five-minute frontend cache.
+  - **Topic Channel Extraction Hardening**: Bundled yt-dlp channel extraction now handles channels without `/videos` or `/playlists` tabs, keeps uploads available when playlists are absent, and exposes loading/empty/avatar fallbacks in the UI.
+  - **Home History Routing**: Home's `Recently Played` shortcuts now open the real History view instead of a duplicate history smart playlist.
+  - **In Rotation Recommendations**: Replaced the duplicate history smart playlist with fresh recommendations based on recent listening, with a description and dedicated Orbit sidebar icon.
+  - **Recently Played Label Fix**: Fixed Home track rows where artist names were concatenated directly onto titles.
+
+- [x] **Artwork Lightbox & High-Res Cover Downloads**
+  - **Interactive Artwork Lightbox**: Built high-resolution cover art viewer with zoom controls across Album, Artist, Playlist, and Track Details views.
+  - **Backend Endpoint (`POST /player/download-artwork`)**: Added data URL (Base64) handling and 10s fetch timeout to save original artwork directly into Noctune's configured `downloadDir` with real-time status and destination path feedback (`Saved to ...`).
+
+- [x] **Direct Track Audio Stream Download Engine**
+  - **Direct Stream Download Engine**: Overhauled `POST /player/download-tracks` in `player.ts` to perform direct fetch streaming (`Range: bytes=0-` & `writeAudioChunk` buffer draining) directly to `downloadDir`. Eliminates cache dependencies and fixes stuck 0KB downloads while updating file `mtime` so downloaded tracks appear at the top of File Explorer.
+  - **Dynamic Download Toast Position**: Updated `useDownloadTrack.tsx` to dynamically anchor download completion toasts (`bottom-20` when Mini Player is visible, `bottom-6` when hidden).
+
+- [x] **Playlist Management & Drag-and-Drop Polish**
+  - **Separated Playlist Edit Action Controls**: Redesigned playlist edit mode controls in `PlaylistView.tsx` to display distinct **Done** (accent button with check icon) and **Cancel** (ghost button with X icon) actions, replacing the confusing single red button.
+  - **Playlist Drag-and-Drop Reordering Fix**: DnD starts only from the grip, uses accurate validated indices, shows live row movement/highlight feedback, and avoids misleading draggable cursors outside the grip.
+  - **Transactional Playlist Editing**: Reorders remain local until **Done**; **Cancel** restores the complete pre-edit snapshot, discards pending changes, and keeps playlist/sidebar cache state consistent.
+
+- [x] **UI Layout & Visualizer Polish**
+  - **Clickable Creator & Artist Names Everywhere**: Enabled interactive channel profile navigation across all track lists, player controls, sidebar panels, and playlist views so clicking any creator or artist name instantly opens their dedicated profile.
+  - **Header Margin Standardization**: Aligned top header margins in `LocalFilesView.tsx` and `StatsView.tsx` to match `HomeView.tsx` and `PlaylistView.tsx`.
+  - **Home View Animations Cleanup**: Removed redundant background particle animations in `HomeView.tsx` header to minimize GPU/CPU overhead.
+  - **Visualizer Pulse Refinement**: Calibrated album art bass-pulse intensity in `PlayerView.tsx` visualizer canvas.
+  - **Local Library Folder History**: Opening a local folder creates a browser-history entry so mouse back returns to the folder list; the explicit **Back to folders** button remains supported.
+  - **External Playlist Loading Feedback**: Added centered loading and empty states for channel playlist track resolution.
+
+- [x] **Playback, History & Settings Reliability**
+  - **Immediate History Synchronization**: Playback-start history writes now move repeated tracks to the top with a refreshed timestamp and update Home Recently Played listeners immediately.
+  - **Themed Confirmation Dialogs**: Cache, failed-ID, and match-clearing actions use the global Noctune confirmation modal instead of native dialog commands.

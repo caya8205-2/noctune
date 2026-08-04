@@ -58,16 +58,17 @@ export function useSmartPlaylists() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Recently Played — last 20 tracks from history
-  const recentlyAddedQuery = useQuery({
+  // In Rotation — fresh recommendations seeded from the most recent play.
+  const inRotationQuery = useQuery({
     queryKey: ['smart', 'recently-added'],
     queryFn: async (): Promise<Track[]> => {
       try {
         const hist = await api.history();
-        return hist.tracks
-          .slice()
-          .sort((a, b) => (b.lastPlayed ?? b.cachedAt ?? 0) - (a.lastPlayed ?? a.cachedAt ?? 0))
-          .slice(0, 20);
+        const seed = hist.tracks[0];
+        if (!seed) return [];
+        const excludeIds = hist.tracks.flatMap((track) => [track.id, track.spotifyId ?? '', track.youtubeId ?? '']);
+        const result = await api.recommend(seed, excludeIds, 20);
+        return result.tracks;
       } catch {
         return [];
       }
@@ -117,10 +118,10 @@ export function useSmartPlaylists() {
     },
     {
       id: 'smart:recently-added',
-      name: 'Recently Played',
-      description: 'Latest tracks in your history',
-      cover: getStableCover(recentlyAddedQuery.data ?? []),
-      tracks: recentlyAddedQuery.data ?? [],
+      name: 'In Rotation',
+      description: 'Fresh picks based on your recent listening',
+      cover: getStableCover(inRotationQuery.data ?? []),
+      tracks: inRotationQuery.data ?? [],
     },
     {
       id: 'smart:short-tracks',
@@ -140,7 +141,7 @@ export function useSmartPlaylists() {
 
   const isLoading =
     mostPlayedQuery.isLoading ||
-    recentlyAddedQuery.isLoading ||
+    inRotationQuery.isLoading ||
     shortTracksQuery.isLoading ||
     discoverWeeklyQuery.isLoading;
 

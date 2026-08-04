@@ -103,7 +103,7 @@ export function PlayerBar() {
     staleTime: 1000 * 60 * 60,
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
-  const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
+  const artistViewId = currentTrack?.artistId || (currentTrack?.artist ? (currentTrack.artist.startsWith('ytchannel:') ? currentTrack.artist : `ytchannel:${currentTrack.artist}`) : undefined) || spotifyMetadata?.artists[0]?.id;
 
   function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
     e.preventDefault();

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { spotifyFetch } from '../services/spotify.js';
+import { browseYoutubeChannel } from '../services/ytdlp.js';
+import { getYoutubePlaylistTracks } from '../services/audioResolver.js';
 
 interface SpotifyArtistRaw {
   id: string;
@@ -40,11 +42,39 @@ interface SpotifyAlbumFull extends SpotifyAlbumSimple {
 
 export async function browseRoutes(app: FastifyInstance) {
 
+  // GET /browse/youtube-playlist/:id — external playlist rendered in the app
+  app.get<{ Params: { id: string } }>('/browse/youtube-playlist/:id', async (req, reply) => {
+    const parsed = z.object({ id: z.string().regex(/^[\w-]{8,128}$/) }).safeParse(req.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid YouTube playlist id' });
+
+    try {
+      const playlist = await getYoutubePlaylistTracks(
+        `https://www.youtube.com/playlist?list=${parsed.data.id}`,
+        2000
+      );
+      return reply.send({ id: parsed.data.id, ...playlist });
+    } catch (err) {
+      app.log.warn({ err }, '[browse] youtube playlist fetch failed');
+      return reply.status(502).send({ error: 'Playlist unavailable', message: (err as Error).message });
+    }
+  });
+
   // GET /browse/artist/:id — artist profile + top tracks + discography
   app.get<{ Params: { id: string } }>('/browse/artist/:id', async (req, reply) => {
-    const parsed = z.object({ id: z.string().min(1).max(64) }).safeParse(req.params);
+    const parsed = z.object({ id: z.string().min(1).max(128) }).safeParse(req.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid artist id' });
     const { id } = parsed.data;
+
+    const isYouTubeChannel = id.startsWith('ytchannel:') || id.startsWith('UC') || id.startsWith('@');
+    if (isYouTubeChannel) {
+      try {
+        const channelView = await browseYoutubeChannel(id);
+        return reply.send(channelView);
+      } catch (err) {
+        app.log.warn({ err }, '[browse] youtube channel fetch failed');
+        return reply.status(502).send({ error: 'Channel unavailable', message: (err as Error).message });
+      }
+    }
 
     try {
       const [artist, topTracksRaw, albumsRaw] = await Promise.all([

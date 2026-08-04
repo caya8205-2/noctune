@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { api, type Track } from '../../utils/api';
+import { api, resolveYouTubeChannelId, type Track } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
 
 function TrackTitle({
@@ -21,6 +21,12 @@ function TrackTitle({
   });
   const albumViewId = track.albumId ?? spotifyMetadata?.album.id;
   const artistViewId = track.artistId ?? spotifyMetadata?.artists[0]?.id;
+
+  async function handleArtistClick(event: React.MouseEvent) {
+    event.stopPropagation();
+    const artistId = artistViewId ?? await resolveYouTubeChannelId(track);
+    if (artistId) setView('artist', artistId);
+  }
 
   return (
     <div className="flex min-w-0 flex-1 flex-col items-start">
@@ -51,14 +57,11 @@ function TrackTitle({
       )}
       {track.playbackError ? (
         <p className="max-w-full truncate text-xs text-muted">{track.playbackError}</p>
-      ) : artistViewId ? (
+      ) : track.artist ? (
         <button
           type="button"
-          className="mt-0.5 max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
-          onClick={(event) => {
-            event.stopPropagation();
-            setView('artist', artistViewId);
-          }}
+          className="mt-0.5 max-w-full cursor-pointer truncate text-left text-xs text-muted transition-colors hover:text-accent"
+          onClick={(event) => { void handleArtistClick(event); }}
           title={`Go to artist: ${track.artist}`}
         >
           {track.artist}

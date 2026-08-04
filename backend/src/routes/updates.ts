@@ -7,20 +7,40 @@ const FALLBACK_CHANGELOG = `# Changelog
 
 All notable Noctune changes are documented here.
 
-## v3.2.3 - 2026-08-02
+## v3.3.0 - 2026-08-04
 
-### Playback & UI Responsiveness
-- **Instant Optimistic Mini Player & Loading Indicator**: Updated \`playTrack\` in \`player.ts\` store to optimistically set \`currentTrack\` and \`isLoading: true\` the exact millisecond a track is clicked, instantly displaying the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.
-- **Audio Stream Metadata Readiness & CORS Policy Fix**: Added \`Cross-Origin-Resource-Policy: cross-origin\` and \`Access-Control-Expose-Headers\` in \`player.ts\` stream responses, and updated \`useAudio.ts\` to await \`waitForAudioReady(audio)\` before calling \`playAudio(audio)\` to prevent WebKitGTK / GStreamer media pipeline aborts and premature paused state.
+### Dedicated YouTube Channel View & Multi-Platform Extraction
+- **Dedicated YouTube Channel View**: Introduced a full-featured channel profile view for YouTube creators with top tracks, avatars, subscriber counts, and channel playlists.
+- **Cross-Platform yt-dlp Sidecar Bundling**: Updated build scripts (\`scripts/prepare-ytdlp.mjs\`) to package native platform-specific \`yt-dlp\` binaries for Windows (\`yt-dlp.exe\`) and Linux (\`yt-dlp_linux\`). The bundled binary removes the need for a manual yt-dlp installation; YouTube extraction still requires an internet connection.
+- **Channel Parsing & Fallback Engine**: Built \`browseYouTubeChannel\` in \`youtubei.ts\` with Innertube parser recovery, exact channel identity resolution, controlled search fallbacks, and yt-dlp extraction for creator queries so ordinary channels are not mapped to similarly named Spotify artists.
+- **External YouTube Playlist Resolution**: Supported \`ytplaylist:\` IDs through \`GET /playlists/:id\` and the dedicated \`/browse/youtube-playlist/:id\` route so channel playlists open inside Noctune.
+- **Channel Videos & Playlists Tabs**: Added persistent \`Videos\` and \`Playlists\` tab switchers in \`ArtistView.tsx\`, a clean empty state when no public playlists are available, and removed the duplicated \`VIDEOS\` section heading.
 
-### Linux & Multi-Platform Fixes
-- **Linux Audio Stream Capping Fix**: Fixed YouTube audio stream range capping in backend (\`player.ts\`) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.
-- **Linux DevTools Console Cleanup**: Added 4-attempt retry with 250ms backoff on preferred port 3131 in \`api.ts\`, eliminating 10 connection refused console error logs during sidecar cold start.
-- **Global Dark Mode Dropdowns (\`select\`/\`option\`)**: Added \`color-scheme: dark;\` and custom background/text styling for HTML \`<select>\` and \`<option>\` elements in \`index.css\` \`@layer base\` to fix white unreadable dropdown popups on Linux WebKitGTK.
+### Interactive Artwork Lightbox & Cover Downloads
+- **Artwork Lightbox Modal**: Introduced \`ArtworkLightboxModal.tsx\` allowing users to view full-resolution cover art/thumbnails in a viewport modal with zoom controls and download them directly to disk with a **Download Artwork** button.
+- **Multi-View Viewport Access**: Added click triggers on artwork/thumbnails across \`AlbumView\`, \`ArtistView\` (avatar/pfp), \`PlaylistView\`, and \`TrackDetailsSidebar\`.
+- **Backend Artwork Storage Endpoint**: Added data URL (Base64) handling and 10-second fetch timeout to \`POST /player/download-artwork\` to save original high-quality cover images directly into Noctune's configured download folder with real-time status and destination path feedback (\`Saved to ...\`).
 
-### Full CHANGELOG History & Assets
-- **Full CHANGELOG History Viewer**: Updated \`/changelog\` route in \`updates.ts\` and \`FALLBACK_CHANGELOG\` to bundle and render 100% of Noctune's release history from v1.0.0.
-- **Tauri Application Icons Update**: Regenerated all Tauri app icons across Windows (.ico), macOS (.icns), Linux (.png), Android, and iOS from the new black background logo \`assets/app-icon.png\` using \`npx tauri icon\`.
+### Direct Track Download Engine
+- **Direct Stream Download Engine**: Overhauled \`POST /player/download-tracks\` to perform direct fetch streaming (\`Range: bytes=0-\` & \`writeAudioChunk\` buffer draining) straight to the user's download directory (\`downloadDir\`). Eliminates cache dependencies and fixes stuck 0KB downloads while updating file \`mtime\` so downloaded tracks appear at the top of File Explorer when sorted by *Date Modified*.
+- **Dynamic Download Toast Positioning**: Updated \`useDownloadTrack.tsx\` to dynamically anchor download completion toasts (\`bottom-20\` when Mini Player is visible, \`bottom-6\` when hidden) to prevent floating overlay overlap.
+
+### Home History & Smart Playlist Corrections
+- **Recently Played History Routing**: Home's \`Recently Played\` shortcuts and section links now open the real History view instead of a duplicate history smart playlist.
+- **In Rotation Recommendation Logic**: Replaced the duplicate history-based smart playlist with fresh recommendations based on recent listening, with an explanatory description and dedicated Orbit sidebar icon.
+- **Recently Played Track Label Layout**: Fixed Home track rows so artist names no longer concatenate directly onto titles.
+
+### Playlist Management & Drag-and-Drop Polish
+- **Separated Playlist Edit Action Controls**: Redesigned playlist edit mode controls to display distinct **Done** and **Cancel** actions.
+- **Grip-Only Live DnD Reordering**: Custom playlist DnD now starts only from the grip, shows live row movement/highlight feedback, avoids misleading draggable cursors outside the grip, and submits validated indices.
+- **Transactional Playlist Editing**: Reorders remain local until **Done**; **Cancel** restores the complete pre-edit snapshot and keeps playlist/sidebar cache state consistent.
+
+### UI Layout & Visualizer Polish
+- **Clickable Channel Names Across All Views**: Added \`ytchannel:\` navigation fallback across \`PlayerBar\` (Mini Player), \`PlayerView\` (Full Player), \`TrackDetailsSidebar\` (Sidebar), and \`PlaylistView\` (Track Rows) so clicking creator names opens their channel profile.
+- **Header Margin Standardization**: Aligned top header margins in \`LocalFilesView\` and \`StatsView\` with \`HomeView\` and \`PlaylistView\` for consistent layout spacing across all application pages.
+- **Home Header Particle Animations Cleanup**: Removed redundant background particle animations in \`HomeView\` header to minimize unnecessary GPU/CPU overhead.
+- **Visualizer Rhythm Refinement**: Calibrated album art bass-pulse intensity in \`PlayerView\` visualizer canvas to match audio visualizer canvas rhythm.
+- **Channel Navigation Fallbacks**: Made creator/channel names clickable across track surfaces while preserving direct \`ytchannel:\` routing.
 
 ## v3.2.2 - 2026-08-02
 

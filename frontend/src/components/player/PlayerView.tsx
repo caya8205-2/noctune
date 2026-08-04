@@ -277,7 +277,7 @@ export function PlayerView() {
     staleTime: 1000 * 60 * 60,
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
-  const artistViewId = currentTrack?.artistId ?? spotifyMetadata?.artists[0]?.id;
+  const artistViewId = currentTrack?.artistId || (currentTrack?.artist ? (currentTrack.artist.startsWith('ytchannel:') ? currentTrack.artist : `ytchannel:${currentTrack.artist}`) : undefined) || spotifyMetadata?.artists[0]?.id;
 
   return (
     <div className="h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8">
@@ -309,7 +309,7 @@ export function PlayerView() {
               {/* Spinning CD Artwork with Bass Scale */}
               <div
                 className="absolute inset-[10%] rounded-full flex items-center justify-center transition-transform duration-75 ease-out"
-                style={{ transform: `scale(${1 + (isPlaying ? bassEnergy * 0.032 : 0)})` }}
+                style={{ transform: `scale(${1 + (isPlaying ? bassEnergy * 0.085 : 0)})` }}
               >
                 <img
                   src={currentTrack.thumbnail}

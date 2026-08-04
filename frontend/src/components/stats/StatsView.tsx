@@ -143,11 +143,11 @@ function TopArtistRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        {entry.artistId ? (
+        {entry.artist ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setView('artist', entry.artistId!); }}
-            className="block max-w-full truncate text-left text-sm font-medium transition-colors hover:text-accent text-white"
+            onClick={(e) => { e.stopPropagation(); if (entry.artistId) setView('artist', entry.artistId); }}
+            className="block max-w-full truncate text-left text-sm font-medium transition-colors hover:text-accent text-white cursor-pointer"
             title={`Go to artist: ${entry.artist}`}
           >
             {entry.artist}
@@ -347,7 +347,7 @@ export function StatsView() {
   const hoursLabel = hours < 1 ? formatMinutes(overview?.totalMinutes ?? 0) : `${hours.toFixed(1)}h`;
 
   return (
-    <div className="flex h-full flex-col gap-8 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+    <div className="flex h-full flex-col gap-8 overflow-y-auto px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="section-label text-accent">Stats</p>

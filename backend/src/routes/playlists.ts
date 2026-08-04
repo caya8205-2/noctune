@@ -118,6 +118,21 @@ export async function playlistRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>('/playlists/:id', async (req, reply) => {
+    if (req.params.id.startsWith('ytplaylist:')) {
+      try {
+        const ytId = req.params.id.replace(/^ytplaylist:/, '');
+        const data = await getYoutubePlaylistTracks(`https://www.youtube.com/playlist?list=${ytId}`, 2000);
+        return reply.send({
+          id: req.params.id,
+          name: data.name,
+          tracks: data.tracks,
+          itemCount: data.tracks.length,
+          coverUrl: (data as any).image ?? null,
+        });
+      } catch (err) {
+        return reply.status(404).send({ error: 'YouTube playlist not found', message: (err as Error).message });
+      }
+    }
     const playlist = getPlaylist(req.params.id);
     if (!playlist) return reply.status(404).send({ error: 'Playlist not found' });
     return reply.send(playlist);

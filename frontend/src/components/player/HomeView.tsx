@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import {
   Clock,
@@ -13,7 +13,7 @@ import {
   Zap,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { api, isTrackActive, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
+import { api, isTrackActive, resolveYouTubeChannelId, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -159,11 +159,11 @@ function OpenTrackRow({
     }
   };
 
-  const handleArtistClick = (e: React.MouseEvent) => {
-    if (artistViewId) {
-      e.stopPropagation();
-      setView('artist', artistViewId);
-    }
+  const handleArtistClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let resolvedArtistId = artistViewId;
+    if (!resolvedArtistId && track) resolvedArtistId = await resolveYouTubeChannelId(track);
+    if (resolvedArtistId) setView('artist', resolvedArtistId);
   };
 
   return (
@@ -203,18 +203,18 @@ function OpenTrackRow({
           <p
             onClick={albumViewId ? handleTitleClick : undefined}
             className={clsx(
-              'truncate text-sm font-medium transition-colors',
+              'block max-w-full truncate text-sm font-medium transition-colors',
               active ? 'text-accent font-semibold' : 'text-white',
               albumViewId && 'hover:text-accent cursor-pointer'
             )}
-            title={track.title}
+            title={albumViewId ? `Go to album: ${track.album}` : undefined}
           >
             {track.title}
           </p>
-          {artistViewId ? (
+          {track.artist ? (
             <p
               onClick={handleArtistClick}
-              className="truncate text-xs text-muted transition-colors hover:text-accent cursor-pointer"
+              className="block max-w-full truncate text-xs text-muted transition-colors hover:text-accent cursor-pointer"
               title={`Go to artist: ${track.artist}`}
             >
               {track.artist}
@@ -312,11 +312,11 @@ function CleanCoverCard({
     }
   };
 
-  const handleArtistClick = (e: React.MouseEvent) => {
-    if (artistViewId) {
-      e.stopPropagation();
-      setView('artist', artistViewId);
-    }
+  const handleArtistClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let resolvedArtistId = artistViewId;
+    if (!resolvedArtistId && track) resolvedArtistId = await resolveYouTubeChannelId(track);
+    if (resolvedArtistId) setView('artist', resolvedArtistId);
   };
 
   return (
@@ -358,7 +358,7 @@ function CleanCoverCard({
             {title}
           </p>
 
-          {artistViewId ? (
+          {track?.artist ? (
             <p
               onClick={handleArtistClick}
               className="mt-0.5 truncate text-xs text-muted transition-colors hover:text-accent cursor-pointer"
@@ -507,6 +507,7 @@ function ManualHorizontalCarousel({ children }: { children: React.ReactNode }) {
 // ── Main HomeView Component ─────────────────────────────────────────────────
 export function HomeView() {
   const { queue, queueIndex, playTrack, setView, openPersonalMix } = usePlayerStore();
+  const queryClient = useQueryClient();
   const cachedNightlyMix = useMemo(() => readNightlyMixCache(), []);
   const cachedHomeLocal = useMemo(() => readHomeLocalCache(), []);
   const cachedNewReleases = useMemo(() => readNewReleasesCache(), []);
@@ -572,16 +573,34 @@ export function HomeView() {
     }
   }, [newReleasesData]);
 
+  useEffect(() => {
+    const refreshHomeHistory = (event: Event) => {
+      const detail = (event as CustomEvent<{ track?: CachedTrack; optimistic?: boolean }>).detail;
+      if (detail?.optimistic && detail.track) {
+        queryClient.setQueryData<{ playlists: Playlist[]; recentTracks: CachedTrack[] }>(['home'], (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            recentTracks: [detail.track!, ...current.recentTracks.filter((item) => item.id !== detail.track!.id)].slice(0, 20),
+          };
+        });
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['home'] });
+    };
+    window.addEventListener('noctune:history-updated', refreshHomeHistory);
+    return () => window.removeEventListener('noctune:history-updated', refreshHomeHistory);
+  }, [queryClient]);
+
   function handlePlay(track: Track) {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
   }
 
   return (
-    <div className="flex h-full flex-col gap-9 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-8">
+    <div className="flex h-full flex-col gap-9 overflow-y-auto px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
       {/* Home Header + Minimalist Shortcut Pills */}
       <section className="flex flex-col gap-4">
-        <div className="relative animate-rise">
-          <div className="ambient-glow -left-10 -top-16 h-40 w-40 bg-accent/15" aria-hidden="true" />
+        <div>
           <p className="text-xs font-semibold tracking-wider text-accent uppercase">Home</p>
           <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-1">
             Welcome
@@ -615,7 +634,7 @@ export function HomeView() {
             title="Recently Played"
             icon={Clock}
             accentColor="text-emerald-400"
-            onClick={() => setView('playlist', 'smart:recently-added')}
+            onClick={() => setView('history')}
           />
           <ShortcutPill
             title="Short Tracks"
@@ -677,7 +696,7 @@ export function HomeView() {
           </div>
           {recentTracks.length > 0 && (
             <button
-              onClick={() => setView('playlist', 'smart:recently-added')}
+              onClick={() => setView('history')}
               className="text-xs text-muted transition-colors hover:text-accent font-medium"
             >
               See full history →

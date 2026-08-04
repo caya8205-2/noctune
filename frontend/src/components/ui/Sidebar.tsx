@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BarChart3,
   Clock3,
+  Orbit,
   Download,
   FolderOpen,
   Heart,
@@ -355,7 +356,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex flex-col gap-0.5">
             {([
               { id: 'smart:most-played', label: 'Top Favorites', icon: TrendingUp },
-              { id: 'smart:recently-added', label: 'Recently Played', icon: Clock3 },
+              { id: 'smart:recently-added', label: 'In Rotation', icon: Orbit },
               { id: 'smart:short-tracks', label: 'Short Tracks', icon: Zap },
               { id: 'smart:discover-weekly', label: 'Discover Weekly', icon: Sparkles },
             ] as const).map(({ id, label, icon: Icon }) => {

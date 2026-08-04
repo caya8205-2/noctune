@@ -133,11 +133,14 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlO
 }
 
 export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promise<PlaylistImportResult> {
-  return withYtdlpFallback(
-    'getYoutubePlaylistTracks',
-    () => getAudioResolver().getYoutubePlaylistTracks(url, limit),
-    async () => (await getYtdlpResolver()).getYoutubePlaylistTracks(url, limit)
-  );
+  try {
+    const primary = await getAudioResolver().getYoutubePlaylistTracks(url, limit);
+    if (primary.tracks.length > 0) return primary;
+    console.warn('[audio-resolver] youtubei playlist returned no tracks, falling back to yt-dlp');
+  } catch (err) {
+    console.warn(`[audio-resolver] youtubei getYoutubePlaylistTracks failed, falling back to yt-dlp: ${(err as Error).message}`);
+  }
+  return (await getYtdlpResolver()).getYoutubePlaylistTracks(url, limit);
 }
 
 export async function resolveAudioUrl(

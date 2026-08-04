@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Disc3, ExternalLink, Music2 } from 'lucide-react';
+import { ArrowLeft, Disc3, ExternalLink, Maximize2, Music2 } from 'lucide-react';
 import { api, isTrackActive, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { ArtworkLightboxModal } from '../ui/ArtworkLightboxModal';
 
 function AlbumTrackText({
   track,
@@ -63,6 +65,7 @@ function AlbumTrackText({
 }
 
 export function AlbumView({ albumId }: { albumId: string }) {
+  const [showLightbox, setShowLightbox] = useState(false);
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
   const { data, isLoading, isError } = useQuery({
@@ -105,6 +108,15 @@ export function AlbumView({ albumId }: { albumId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {showLightbox && data.image && (
+        <ArtworkLightboxModal
+          imageUrl={data.image}
+          title={data.name}
+          artist={data.artists.map(a => a.name).join(', ')}
+          album={data.name}
+          onClose={() => setShowLightbox(false)}
+        />
+      )}
       {/* Header */}
       <div className="relative flex-shrink-0 overflow-hidden">
         {data.image && (
@@ -126,11 +138,22 @@ export function AlbumView({ albumId }: { albumId: string }) {
 
           {/* Album art */}
           {data.image ? (
-            <img
-              src={data.image}
-              alt={data.name}
-              className="h-28 w-28 flex-shrink-0 rounded-lg object-cover shadow-2xl ring-1 ring-white/10"
-            />
+            <button
+              type="button"
+              onClick={() => setShowLightbox(true)}
+              className="group relative h-28 w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+              title="Click to view artwork"
+            >
+              <img
+                src={data.image}
+                alt={data.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 text-xs font-medium">
+                <Maximize2 size={16} />
+                <span>View Art</span>
+              </div>
+            </button>
           ) : (
             <div className="flex h-28 w-28 flex-shrink-0 items-center justify-center rounded-lg bg-base-800 ring-1 ring-white/10">
               <Music2 size={36} className="text-muted" />

@@ -35,10 +35,14 @@ export function getExistingAudioCachePath(
 ): string | null {
   ensureAudioCacheDir();
   const clean = (videoId || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
-  const base = `${safeName(clean)}${qualitySuffix(preference)}`;
-  for (const ext of ['m4a', 'webm']) {
-    const candidate = path.join(AUDIO_CACHE_DIR, `${base}.${ext}`);
-    if (fs.existsSync(candidate)) return candidate;
+  const base = safeName(clean);
+  const suffixed = `${base}${qualitySuffix(preference)}`;
+
+  for (const name of [suffixed, base]) {
+    for (const ext of ['m4a', 'webm']) {
+      const candidate = path.join(AUDIO_CACHE_DIR, `${name}.${ext}`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
   }
   return null;
 }

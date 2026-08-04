@@ -68,6 +68,24 @@ export function LocalFilesView() {
   const qc = useQueryClient();
   const { playTrack } = usePlayerStore();
 
+  useEffect(() => {
+    function handleFolderPopState(event: PopStateEvent) {
+      if (event.state?.noctuneView !== 'local-files') return;
+      setOpenFolderPath(typeof event.state?.noctuneLocalFolder === 'string' ? event.state.noctuneLocalFolder : null);
+    }
+    window.addEventListener('popstate', handleFolderPopState);
+    return () => window.removeEventListener('popstate', handleFolderPopState);
+  }, []);
+
+  function openLocalFolder(path: string) {
+    window.history.pushState(
+      { ...window.history.state, noctuneView: 'local-files', noctuneLocalFolder: path },
+      '',
+      window.location.href
+    );
+    setOpenFolderPath(path);
+  }
+
   const foldersQuery = useQuery({
     queryKey: ['local-files', 'folders'],
     queryFn: () => api.getLocalFolders(),
@@ -383,7 +401,7 @@ export function LocalFilesView() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-white/[0.06] bg-base-950/40 px-page-x py-page-y">
+      <div className="flex-shrink-0 border-b border-white/[0.06] bg-base-950/40 px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             {isRoot ? (
@@ -402,7 +420,11 @@ export function LocalFilesView() {
                 <button
                   type="button"
                   onClick={() => {
-                    setOpenFolderPath(null);
+                    if (window.history.state?.noctuneLocalFolder !== undefined) {
+                      window.history.back();
+                    } else {
+                      setOpenFolderPath(null);
+                    }
                     setSearchQuery('');
                   }}
                   className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-white transition-colors mb-2"
@@ -604,7 +626,7 @@ export function LocalFilesView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-page-x py-4">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 py-4 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-muted">Loading library...</div>
@@ -633,7 +655,7 @@ export function LocalFilesView() {
                   onClick={() => {
                     setSearchQuery('');
                     setSortMode(folder.isUngrouped ? 'recent' : 'track');
-                    setOpenFolderPath(folder.path);
+                    openLocalFolder(folder.path);
                   }}
                   onDoubleClick={() => handlePlayFolder(folder)}
                 >
@@ -688,7 +710,7 @@ export function LocalFilesView() {
                   onClick={() => {
                     setSearchQuery('');
                     setSortMode(folder.isUngrouped ? 'recent' : 'track');
-                    setOpenFolderPath(folder.path);
+                    openLocalFolder(folder.path);
                   }}
                   onDoubleClick={() => handlePlayFolder(folder)}
                 >

@@ -2,6 +2,50 @@
 
 All notable Noctune changes are documented here.
 
+## v3.3.0 - 2026-08-04
+
+### Dedicated YouTube Channel View & Multi-Platform Extraction
+- **Dedicated YouTube Channel Profiles**: Introduced a full-featured channel profile view for YouTube creators with top tracks, avatars, subscriber counts, and channel playlists.
+- **Cross-Platform yt-dlp Sidecar Bundling**: Updated build scripts (`scripts/prepare-ytdlp.mjs`) to package native platform-specific `yt-dlp` binaries for Windows (`yt-dlp.exe`) and Linux (`yt-dlp_linux`). The bundled binary removes the need for a manual yt-dlp installation; YouTube channel and playlist extraction still requires an internet connection.
+- **Dedicated yt-dlp Channel Extraction**: Channel view now uses the bundled cross-platform yt-dlp binary directly for uploads, channel metadata, and public playlists. Innertube is intentionally excluded from this path because its channel tabs are inconsistent across Topic, creator, and handle channels, and known channel IDs never use generic search fallback.
+- **External YouTube Playlist Resolution**: Supported `ytplaylist:` IDs through `GET /playlists/:id` and the dedicated `/browse/youtube-playlist/:id` route so channel playlists open inside Noctune instead of launching an external browser.
+- **Channel Videos & Playlists Tabs**: Added persistent `Videos` and `Playlists` tabs in `ArtistView.tsx`, including a clean empty state when a channel has no public playlists, and removed the duplicated `VIDEOS` section heading beneath the active tab.
+- **Channel & Playlist Navigation History**: Added browser-history entries for channel tab changes and virtual `ytplaylist:` routes so mouse back returns to the correct channel tab instead of resetting to `Videos`.
+- **Channel Extraction Reliability**: Hardened bundled yt-dlp channel extraction for Topic channels without `/videos` or `/playlists` tabs, treating unavailable tabs as empty while preserving available uploads and channel metadata. Added loading states, centered empty states, avatar fallbacks, and a five-minute channel query cache.
+
+### Interactive Artwork Lightbox & Cover Downloads
+- **Interactive Artwork Lightbox**: View full-resolution cover art and thumbnails in an interactive viewport modal with zoom controls across Album, Artist, Playlist, and Track Details views.
+- **Direct Cover Downloads**: Added data URL (Base64) handling and 10-second fetch timeout to `POST /player/download-artwork` to save original high-quality cover images directly into Noctune's configured download folder with real-time status and destination path feedback (`Saved to ...`).
+
+### Direct Track Download Engine
+- **Direct Audio Stream Download Engine**: Overhauled `POST /player/download-tracks` to perform direct fetch streaming (`Range: bytes=0-` & `writeAudioChunk` buffer draining) straight to the user's download directory (`downloadDir`). Eliminates cache dependencies and fixes stuck 0KB downloads while updating file `mtime` so downloaded tracks appear at the top of File Explorer when sorted by *Date Modified*.
+- **Dynamic Download Toast Positioning**: Updated `useDownloadTrack.tsx` to dynamically anchor download completion toasts (`bottom-20` when Mini Player is visible, `bottom-6` when hidden) to prevent floating overlay overlap.
+
+### Home History & Smart Playlist Corrections
+- **Recently Played History Routing**: Updated Home's `Recently Played` shortcuts and section links to open the real History view instead of a second smart playlist containing the same history entries.
+- **In Rotation Recommendation Logic**: Replaced the duplicate history-based smart playlist with `In Rotation`, a recommendation mix seeded from recent listening and filtered to avoid simply replaying the history list. Added an explanatory description and dedicated Orbit icon in the sidebar.
+- **Recently Played Track Label Layout**: Fixed Home track rows so artist names no longer concatenate directly onto titles (for example, `NIGHT DANCERimase`).
+
+### Playlist Management & Drag-and-Drop Polish
+- **Separated Playlist Edit Action Controls**: Redesigned playlist edit mode controls in `PlaylistView.tsx` to display distinct **Done** (accent button with check icon) and **Cancel** (ghost button with X icon) actions, replacing the confusing single red button.
+- **Playlist Drag-and-Drop Reordering Fix**: Reworked custom-playlist DnD to start only from the grip, avoid misleading draggable cursors outside the grip, show live row movement/highlight feedback while dragging, and submit validated reorder indices.
+- **Transactional Playlist Editing**: Reordering now updates a local editing draft and is persisted only after pressing **Done**. **Cancel** restores the complete pre-edit playlist snapshot, discards pending reorders, and prevents stale ordering from leaking into the sidebar or cache.
+- **Playlist View Controls**: Added short descriptions beneath smart playlist names, a Grid/List view toggle for playlist track browsing, and a sticky filter toolbar that remains available while scrolling.
+- **Bidirectional Playlist Sorting**: Expanded playlist filters with explicit ascending and descending options for title, artist, and duration (`Duration (Shortest-Longest)` / `Duration (Longest-Shortest)`).
+
+### UI Layout & Visualizer Polish
+- **Clickable Creator & Artist Names Everywhere**: Enabled interactive channel profile navigation across all track lists, player controls, sidebar panels, and playlist views so clicking any creator or artist name instantly opens their dedicated profile.
+- **Header Margin Standardization**: Aligned top header margins in `LocalFilesView` and `StatsView` with `HomeView` and `PlaylistView` for consistent layout spacing across all application pages.
+- **Home Header Particle Animations Cleanup**: Removed redundant background particle animations in `HomeView` header to minimize unnecessary GPU/CPU overhead.
+- **Visualizer Rhythm Refinement**: Calibrated album art bass-pulse intensity in `PlayerView` visualizer canvas to match audio visualizer canvas rhythm.
+- **Channel Navigation Fallbacks**: Made creator/channel names clickable across Home, search, queue, player, sidebar, album, artist, and playlist track surfaces while preserving direct `ytchannel:` routing.
+- **Local Library Folder Navigation History**: Opening a local folder now creates a navigation entry, allowing mouse back to return to the folder list; the in-view **Back to folders** action remains available as an explicit alternative.
+
+### Playback, History & Settings Reliability
+- **Immediate History Recording**: History entries now update when playback begins, move an existing entry to the top with a refreshed timestamp, and broadcast updates to Home's Recently Played section.
+- **Custom Confirmation Modals**: Cache, failed-ID, and match-clearing actions use Noctune's themed confirmation modal instead of unsupported native dialog commands.
+- **External Playlist Loading Feedback**: YouTube channel playlists show a centered loading indicator and a distinct empty state while yt-dlp resolves their tracks.
+
 ## v3.2.3 - 2026-08-02
 
 ### Playback & UI Responsiveness

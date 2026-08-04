@@ -27,6 +27,7 @@ import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
 import { openChangelogModal } from '../ui/ChangelogModal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
@@ -153,6 +154,11 @@ export function SettingsView() {
     window.dispatchEvent(new Event('noctune:visualizer-mode-updated'));
   };
   const [cacheMessage, setCacheMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [cacheConfirmation, setCacheConfirmation] = useState<{
+    title: string;
+    description: string;
+    action: () => Promise<void>;
+  } | null>(null);
   const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState<'start' | 'stop' | 'open' | null>(null);
@@ -378,7 +384,6 @@ export function SettingsView() {
   }
 
   async function handleClearCache() {
-    if (!window.confirm('Clear all cache data?')) return;
     setCacheBusy(true);
     setCacheMessage(null);
 
@@ -395,7 +400,6 @@ export function SettingsView() {
   }
 
   async function handleClearTrackCache() {
-    if (!window.confirm('Clear cached track metadata?')) return;
     setCacheBusy(true);
     setCacheMessage(null);
 
@@ -412,7 +416,6 @@ export function SettingsView() {
   }
 
   async function handleClearLyricsCache() {
-    if (!window.confirm('Clear cached lyrics?')) return;
     setCacheBusy(true);
     setCacheMessage(null);
 
@@ -429,7 +432,6 @@ export function SettingsView() {
   }
 
   async function handleClearAudioCache() {
-    if (!window.confirm('Clear downloaded audio cache?')) return;
     setCacheBusy(true);
     setCacheMessage(null);
 
@@ -443,6 +445,10 @@ export function SettingsView() {
     } finally {
       setCacheBusy(false);
     }
+  }
+
+  function requestCacheClear(title: string, description: string, action: () => Promise<void>) {
+    setCacheConfirmation({ title, description, action });
   }
 
   async function handleSaveAudioCacheLimit() {
@@ -1052,7 +1058,7 @@ export function SettingsView() {
           </button>
           <button
             type="button"
-            onClick={handleClearResolverBlacklist}
+            onClick={() => requestCacheClear('Clear failed resolver IDs?', 'Failed resolver IDs will be removed so Noctune can try resolving those tracks again.', handleClearResolverBlacklist)}
             disabled={diagnosticsBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
           >
@@ -1061,7 +1067,7 @@ export function SettingsView() {
           </button>
           <button
             type="button"
-            onClick={handleClearResolverMatchCache}
+            onClick={() => requestCacheClear('Clear resolver matches?', 'Cached Spotify-to-YouTube match results will be removed and rebuilt when needed.', handleClearResolverMatchCache)}
             disabled={diagnosticsBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
           >
@@ -1199,7 +1205,7 @@ export function SettingsView() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <button
-            onClick={handleClearTrackCache}
+            onClick={() => requestCacheClear('Clear track cache?', 'Cached track metadata will be removed from this device.', handleClearTrackCache)}
             disabled={cacheBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
           >
@@ -1208,7 +1214,7 @@ export function SettingsView() {
           </button>
 
           <button
-            onClick={handleClearLyricsCache}
+            onClick={() => requestCacheClear('Clear lyrics cache?', 'Cached lyrics will be removed and fetched again when needed.', handleClearLyricsCache)}
             disabled={cacheBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
           >
@@ -1217,7 +1223,7 @@ export function SettingsView() {
           </button>
 
           <button
-            onClick={handleClearAudioCache}
+            onClick={() => requestCacheClear('Clear audio cache?', 'Downloaded audio files will be removed from the local cache.', handleClearAudioCache)}
             disabled={cacheBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
           >
@@ -1226,7 +1232,7 @@ export function SettingsView() {
           </button>
 
           <button
-            onClick={handleClearCache}
+            onClick={() => requestCacheClear('Clear all cache?', 'All cached tracks, lyrics, audio, and resolver data will be removed.', handleClearCache)}
             disabled={cacheBusy}
             className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
           >
@@ -1344,6 +1350,23 @@ export function SettingsView() {
         <span>Noctune</span>
         <span className="font-mono">{APP_VERSION}-Stable</span>
       </section>
+
+      <ConfirmDialog
+        open={Boolean(cacheConfirmation)}
+        eyebrow="Local data"
+        title={cacheConfirmation?.title ?? ''}
+        description={cacheConfirmation?.description ?? ''}
+        confirmLabel="Clear"
+        loading={cacheBusy || diagnosticsBusy}
+        onConfirm={() => {
+          if (!cacheConfirmation) return;
+          void (async () => {
+            await cacheConfirmation.action();
+            setCacheConfirmation(null);
+          })();
+        }}
+        onCancel={() => !(cacheBusy || diagnosticsBusy) && setCacheConfirmation(null)}
+      />
     </div>
   );
 }

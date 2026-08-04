@@ -73,6 +73,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache bundled yt-dlp (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/resources/yt-dlp.exe
+            src-tauri/resources/.yt-dlp-platform
+          key: ${{ runner.os }}-yt-dlp-${{ hashFiles('scripts/prepare-ytdlp.mjs') }}
+
       - name: Build Tauri (Windows)
         env:
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
@@ -130,6 +138,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache bundled yt-dlp (Linux)
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/resources/yt-dlp.exe
+            src-tauri/resources/.yt-dlp-platform
+          key: ${{ runner.os }}-yt-dlp-${{ hashFiles('scripts/prepare-ytdlp.mjs') }}
 
       - name: Build Tauri (Linux)
         env:

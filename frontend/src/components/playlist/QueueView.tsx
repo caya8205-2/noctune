@@ -4,7 +4,7 @@ import { AlertTriangle, Clock, EyeOff, GripVertical, House, ListMusic, ListOrder
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
-import { api, type Track } from '../../utils/api';
+import { api, resolveYouTubeChannelId, type Track } from '../../utils/api';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackTitle } from '../ui/TrackTitle';
 
@@ -276,7 +276,21 @@ export function QueueView() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm text-soft">{entry.track.title}</p>
-                      <p className="truncate text-xs text-muted">{entry.track.artist}</p>
+                      {entry.track.artist ? (
+                        <button
+                          type="button"
+                          className="block max-w-full truncate text-left text-xs text-muted transition-colors hover:text-accent"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void resolveYouTubeChannelId(entry.track).then((artistId) => {
+                              if (artistId) setView('artist', artistId);
+                            });
+                          }}
+                          title={`Go to artist: ${entry.track.artist}`}
+                        >
+                          {entry.track.artist}
+                        </button>
+                      ) : null}
                     </div>
                     <span className="text-[10px] text-muted flex-shrink-0 ml-2">
                       {formatTimeAgo(entry.playedAt)}

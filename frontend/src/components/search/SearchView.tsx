@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Download, Loader2, Music, Search, X, XCircle, Zap } from 'lucide-react';
-import { api, apiUrl, isTrackActive, type Track } from '../../utils/api';
+import { api, apiUrl, isTrackActive, resolveYouTubeChannelId, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
@@ -89,6 +89,11 @@ export function SearchView() {
     } finally {
       setSavingEngine(false);
     }
+  }
+
+  async function handleArtistNavigation(track: Track) {
+    const artistId = await resolveYouTubeChannelId(track);
+    if (artistId) setView('artist', artistId);
   }
 
   const runMiniSearch = useCallback(async (q: string) => {
@@ -265,10 +270,14 @@ export function SearchView() {
                       currentTrack?.id === track.id ||
                       Boolean(currentTrack?.spotifyId && track.spotifyId && currentTrack.spotifyId === track.spotifyId);
                     return (
-                      <button
+                      <div
                         key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
-                        type="button"
                         onClick={() => handleMiniPick(track)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') handleMiniPick(track);
+                        }}
+                        role="button"
+                        tabIndex={0}
                         className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-base-800 ${
                           isActive ? 'bg-base-800' : ''
                         }`}
@@ -283,12 +292,24 @@ export function SearchView() {
                           <p className={`text-xs truncate ${isActive ? 'text-accent font-medium' : 'text-white'}`}>
                             {track.title}
                           </p>
-                          <p className="text-[11px] text-muted truncate">{track.artist}</p>
+                          {track.artist ? (
+                            <button
+                              type="button"
+                              className="block max-w-full truncate text-left text-[11px] text-muted transition-colors hover:text-accent"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleArtistNavigation(track);
+                              }}
+                              title={`Go to artist: ${track.artist}`}
+                            >
+                              {track.artist}
+                            </button>
+                          ) : null}
                         </div>
                         <span className="text-[11px] font-mono tabular-nums text-muted flex-shrink-0">
                           {formatDuration(track.duration)}
                         </span>
-                      </button>
+                      </div>
                     );
                   })}
                   <div className="border-t border-base-700/60 px-3 py-2 text-[11px] text-muted">
@@ -442,13 +463,13 @@ export function SearchView() {
                   {track.title}
                 </p>
                 <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted">
-                  {track.artistId ? (
+                  {track.artist ? (
                     <button
                       type="button"
-                      className="truncate text-left transition-colors hover:text-accent"
+                      className="truncate text-left transition-colors hover:text-accent cursor-pointer"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setView('artist', track.artistId);
+                        void handleArtistNavigation(track);
                       }}
                       title={`Go to artist: ${track.artist}`}
                     >

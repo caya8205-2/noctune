@@ -45,7 +45,16 @@ export function HistoryView() {
   const tracks = data?.tracks ?? [];
 
   useEffect(() => {
-    const refreshHistory = () => qc.invalidateQueries({ queryKey: ['history'] });
+    const refreshHistory = (event: Event) => {
+      const detail = (event as CustomEvent<{ track?: CachedTrack; optimistic?: boolean }>).detail;
+      if (detail?.optimistic && detail.track) {
+        qc.setQueryData<{ tracks: CachedTrack[] }>(['history'], (current) => ({
+          tracks: [detail.track!, ...(current?.tracks ?? []).filter((item) => item.id !== detail.track!.id)].slice(0, 100),
+        }));
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ['history'] });
+    };
     window.addEventListener('noctune:history-updated', refreshHistory);
     return () => window.removeEventListener('noctune:history-updated', refreshHistory);
   }, [qc]);

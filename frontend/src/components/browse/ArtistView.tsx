@@ -1,15 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Music2, Users } from 'lucide-react';
+import { ArrowLeft, ExternalLink, ListMusic, Maximize2, Music2, Users } from 'lucide-react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { api, isTrackActive, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
+import { ArtworkLightboxModal } from '../ui/ArtworkLightboxModal';
 
 function compactNumber(n: number | null | undefined): string {
   if (n == null) return '—';
   return new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n);
 }
+
+let pendingChannelReturnTab: 'videos' | 'playlists' | null = null;
+const channelTabByArtist = new Map<string, 'videos' | 'playlists'>();
 
 function ArtistTrackText({
   track,
@@ -71,13 +76,74 @@ function ArtistTrackText({
 }
 
 export function ArtistView({ artistId }: { artistId: string }) {
+  const [showLightbox, setShowLightbox] = useState(false);
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
+  const [channelTab, setChannelTab] = useState<'videos' | 'playlists'>(() => channelTabByArtist.get(artistId) ?? 'videos');
+  const isYouTubeChannelId = artistId.startsWith('ytchannel:') || artistId.startsWith('UC') || artistId.startsWith('@');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.browseArtist(artistId),
-    staleTime: 1000 * 60 * 10,
+    staleTime: isYouTubeChannelId ? 1000 * 60 * 5 : 1000 * 60 * 10,
+    refetchOnMount: true,
   });
+
+  useLayoutEffect(() => {
+    setChannelTab(channelTabByArtist.get(artistId) ?? 'videos');
+  }, [artistId]);
+
+  useEffect(() => {
+    try {
+      const rawReturn = sessionStorage.getItem('noctune:channel-return-tab');
+      if (rawReturn) {
+        const returnState = JSON.parse(rawReturn) as { artistId?: string; tab?: 'videos' | 'playlists' };
+      if (returnState.tab === 'playlists' && isYouTubeChannelId) {
+          channelTabByArtist.set(artistId, 'playlists');
+          setChannelTab('playlists');
+          sessionStorage.removeItem('noctune:channel-return-tab');
+        }
+      }
+      if (pendingChannelReturnTab === 'playlists' && isYouTubeChannelId) {
+        channelTabByArtist.set(artistId, 'playlists');
+        setChannelTab('playlists');
+        pendingChannelReturnTab = null;
+      }
+    } catch {
+      // Ignore unavailable session storage in restricted webviews.
+    }
+    if (pendingChannelReturnTab === 'playlists' && isYouTubeChannelId) {
+      setChannelTab('playlists');
+      pendingChannelReturnTab = null;
+    }
+  }, [artistId, isYouTubeChannelId]);
+
+  useEffect(() => {
+    function handleChannelTabPopState(event: PopStateEvent) {
+      if (event.state?.noctuneView !== 'artist' || event.state?.noctuneId !== artistId) return;
+      const nextTab = event.state?.noctuneChannelTab;
+      if (nextTab === 'playlists' || pendingChannelReturnTab === 'playlists') {
+        channelTabByArtist.set(artistId, 'playlists');
+        setChannelTab('playlists');
+        pendingChannelReturnTab = null;
+      } else {
+        channelTabByArtist.set(artistId, 'videos');
+        setChannelTab('videos');
+      }
+    }
+    window.addEventListener('popstate', handleChannelTabPopState);
+    return () => window.removeEventListener('popstate', handleChannelTabPopState);
+  }, [artistId]);
+
+  function changeChannelTab(tab: 'videos' | 'playlists') {
+    if (!isYouTubeChannelId || tab === channelTab) return;
+    channelTabByArtist.set(artistId, tab);
+    setChannelTab(tab);
+    window.history.pushState(
+      { noctuneView: 'artist', noctuneId: artistId, noctuneChannelTab: tab },
+      '',
+      window.location.href
+    );
+  }
 
   function handlePlay(track: Track) {
     playTrack(track, data?.topTracks);
@@ -103,8 +169,18 @@ export function ArtistView({ artistId }: { artistId: string }) {
     );
   }
 
+  const isYouTubeChannel = data.id.startsWith('ytchannel:');
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {showLightbox && data.image && (
+        <ArtworkLightboxModal
+          imageUrl={data.image}
+          title={data.name}
+          artist={isYouTubeChannel ? 'Channel Avatar' : 'Artist Profile'}
+          onClose={() => setShowLightbox(false)}
+        />
+      )}
       {/* Header */}
       <div className="relative flex-shrink-0 overflow-hidden">
         {/* Background blur */}
@@ -127,11 +203,21 @@ export function ArtistView({ artistId }: { artistId: string }) {
 
           {/* Artist image */}
           {data.image ? (
-            <img
-              src={data.image}
-              alt={data.name}
-              className="h-28 w-28 flex-shrink-0 rounded-full object-cover shadow-2xl ring-2 ring-white/10"
-            />
+            <button
+              type="button"
+              onClick={() => setShowLightbox(true)}
+              className="group relative h-28 w-28 flex-shrink-0 rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+              title="Click to view artwork"
+            >
+              <img
+                src={data.image}
+                alt={data.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 text-xs font-medium">
+                <Maximize2 size={16} />
+              </div>
+            </button>
           ) : (
             <div className="flex h-28 w-28 flex-shrink-0 items-center justify-center rounded-full bg-base-800 ring-2 ring-white/10">
               <Users size={36} className="text-muted" />
@@ -139,7 +225,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
           )}
 
           <div className="min-w-0 pb-1">
-            <p className="section-label mb-1">ARTIST</p>
+            <p className="section-label mb-1">{isYouTubeChannel ? 'CHANNEL' : 'ARTIST'}</p>
             <h1 className="font-display text-3xl font-semibold text-white leading-tight truncate">
               {data.name}
             </h1>
@@ -147,7 +233,9 @@ export function ArtistView({ artistId }: { artistId: string }) {
               {data.followers != null && (
                 <span className="flex items-center gap-1">
                   <Users size={11} />
-                  {compactNumber(data.followers)} followers
+                  {typeof data.followers === 'string'
+                    ? data.followers
+                    : `${compactNumber(data.followers as number)} followers`}
                 </span>
               )}
               {data.genres.slice(0, 3).map(g => (
@@ -165,7 +253,8 @@ export function ArtistView({ artistId }: { artistId: string }) {
               rel="noreferrer"
               className="btn-ghost ml-auto flex-shrink-0 gap-1.5 text-xs text-muted"
             >
-              <ExternalLink size={12} /> Spotify
+              <ExternalLink size={12} />
+              {data.spotifyUrl.includes('youtube.com') ? 'YouTube' : 'Spotify'}
             </a>
           )}
         </div>
@@ -173,9 +262,44 @@ export function ArtistView({ artistId }: { artistId: string }) {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {isYouTubeChannel && (
+          <div className="mb-7 flex items-center gap-5 border-b border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() => changeChannelTab('videos')}
+              className={clsx(
+                '-mb-px inline-flex items-center gap-2 border-b-2 px-0.5 py-2.5 text-xs font-semibold uppercase tracking-[0.13em] transition-colors',
+                channelTab === 'videos'
+                  ? 'border-accent text-white'
+                  : 'border-transparent text-muted hover:border-white/20 hover:text-soft'
+              )}
+            >
+              Videos
+              <span className={clsx('font-mono text-[10px] tabular-nums', channelTab === 'videos' ? 'text-accent' : 'text-base-500')}>
+                {data.topTracks.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => changeChannelTab('playlists')}
+              className={clsx(
+                '-mb-px inline-flex items-center gap-2 border-b-2 px-0.5 py-2.5 text-xs font-semibold uppercase tracking-[0.13em] transition-colors',
+                channelTab === 'playlists'
+                  ? 'border-accent text-white'
+                  : 'border-transparent text-muted hover:border-white/20 hover:text-soft'
+              )}
+            >
+              Playlists
+              <span className={clsx('font-mono text-[10px] tabular-nums', channelTab === 'playlists' ? 'text-accent' : 'text-base-500')}>
+                {data.channelPlaylists?.length ?? 0}
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Top tracks */}
-        <section className="mb-8">
-          <h2 className="section-label mb-3">TOP TRACKS</h2>
+        {(!isYouTubeChannel || channelTab === 'videos') && <section className="mb-8">
+          {!isYouTubeChannel && <h2 className="section-label mb-3">TOP TRACKS</h2>}
           <div className="space-y-0.5">
             {data.topTracks.map((track, i) => {
               const isActive = isTrackActive(currentTrack, track);
@@ -218,7 +342,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
               );
             })}
           </div>
-        </section>
+        </section>}
 
         {/* Discography */}
         {data.albums.length > 0 && (
@@ -254,6 +378,65 @@ export function ArtistView({ artistId }: { artistId: string }) {
               ))}
             </div>
           </section>
+        )}
+
+        {isYouTubeChannel && channelTab === 'playlists' && (
+          data.channelPlaylists && data.channelPlaylists.length > 0 ? (
+            <section>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {data.channelPlaylists.map((playlist) => (
+                  <button
+                    type="button"
+                    key={playlist.id}
+                    className="group text-left"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('noctune:channel-return-tab', JSON.stringify({ artistId, tab: 'playlists' }));
+                      } catch {
+                        // Ignore unavailable session storage in restricted webviews.
+                      }
+                      pendingChannelReturnTab = 'playlists';
+                      channelTabByArtist.set(artistId, 'playlists');
+                      window.history.replaceState(
+                        { ...window.history.state, noctuneChannelTab: 'playlists' },
+                        '',
+                        window.location.href
+                      );
+                      window.history.pushState(
+                        {
+                          noctuneView: 'playlist',
+                          noctuneId: `ytplaylist:${playlist.id}`,
+                          noctuneReturnView: 'artist',
+                          noctuneReturnId: artistId,
+                          noctuneChannelTab: 'playlists',
+                        },
+                        '',
+                        window.location.href
+                      );
+                      setView('playlist', `ytplaylist:${playlist.id}`);
+                    }}
+                  >
+                    <div className="overflow-hidden rounded-lg bg-base-800 aspect-square">
+                      {playlist.image ? (
+                        <img src={playlist.image} alt={playlist.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center"><Music2 size={28} className="text-muted" /></div>
+                      )}
+                    </div>
+                    <p className="mt-2 truncate font-display text-sm font-medium text-white group-hover:text-accent transition-colors">{playlist.name}</p>
+                    <p className="truncate text-xs text-muted">YouTube playlist</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="flex min-h-[18rem] flex-col items-center justify-center gap-3 text-muted">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-base-600/30 bg-base-800">
+                <ListMusic size={27} strokeWidth={1.3} />
+              </div>
+              <p className="text-center text-sm">No public playlists found on this YouTube channel.</p>
+            </div>
+          )
         )}
       </div>
     </div>

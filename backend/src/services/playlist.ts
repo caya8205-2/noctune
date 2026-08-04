@@ -264,17 +264,17 @@ export function importPlaylist(name: string, tracks: Track[]): { playlist: Playl
 
 export function reorderPlaylistTracks(playlistId: string, fromIndex: number, toIndex: number): void {
   const db = getDb();
-  const rows = db.prepare('SELECT track_id, position FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC').all(playlistId) as { track_id: string; position: number }[];
+  const rows = db.prepare('SELECT rowid, track_id, position FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC').all(playlistId) as { rowid: number; track_id: string; position: number }[];
   if (fromIndex < 0 || fromIndex >= rows.length || toIndex < 0 || toIndex >= rows.length) {
     db.close();
     return;
   }
   const [moved] = rows.splice(fromIndex, 1);
   rows.splice(toIndex, 0, moved);
-  const update = db.prepare('UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?');
+  const update = db.prepare('UPDATE playlist_tracks SET position = ? WHERE rowid = ?');
   const tx = db.transaction(() => {
     for (let i = 0; i < rows.length; i++) {
-      update.run(i, playlistId, rows[i].track_id);
+      update.run(i, rows[i].rowid);
     }
     db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').run(Date.now(), playlistId);
   });

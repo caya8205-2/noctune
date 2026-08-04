@@ -199,6 +199,9 @@ function AppInner() {
       skipHistoryPushRef.current = false;
       return;
     }
+    if (window.history.state?.noctuneView === activeView && window.history.state?.noctuneId === routeId) {
+      return;
+    }
     window.history.pushState({ noctuneView: activeView, noctuneId: routeId }, '', window.location.href);
   }, [activeView, activePlaylistId, activeArtistId, activeAlbumId]);
 

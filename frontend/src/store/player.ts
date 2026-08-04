@@ -8,8 +8,20 @@ const AUTOQUEUE_TOP_UP_THRESHOLD = 5;
 const AUTOQUEUE_TOP_UP_LIMIT = 10;
 
 function recordPlaybackHistory(track: Track): void {
+  const now = Date.now();
+  const optimisticTrack = {
+    ...track,
+    cachedAt: (track as CachedTrack).cachedAt ?? now,
+    playCount: ((track as CachedTrack).playCount ?? 0) + 1,
+    lastPlayed: now,
+  } as CachedTrack;
+  window.dispatchEvent(new CustomEvent('noctune:history-updated', {
+    detail: { track: optimisticTrack, optimistic: true },
+  }));
   void api.recordPlayed(track)
-    .then(() => window.dispatchEvent(new Event('noctune:history-updated')))
+    .then(() => window.dispatchEvent(new CustomEvent('noctune:history-updated', {
+      detail: { optimistic: false },
+    })))
     .catch((err) => console.warn('[player] record history failed:', err));
 }
 
@@ -217,6 +229,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       queue: queue.length > 0 ? queue : [initialTrack],
       queueIndex: idx >= 0 ? idx : 0,
     });
+    // Record the click immediately; playback resolution must not gate history.
+    recordPlaybackHistory(initialTrack);
 
     console.info('[player] playTrack start', {
       id: track.id,
@@ -266,7 +280,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Persist and push history without waiting for backend resolve
         get().saveQueueState();
         get().pushQueueHistory(playableTrack);
-        recordPlaybackHistory(playableTrack);
 
         // Fetch missing metadata (thumbnail) for local track in background
         (async () => {
@@ -318,7 +331,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         query: track.query,
         spotifyId: track.spotifyId,
         spotifyUrl: track.spotifyUrl,
-        artistId: track.artistId,
+        artistId: track.artistId ?? resolved.artistId,
         albumId: track.albumId,
         youtubeId: track.youtubeId ?? resolved.id,
         youtubeTitle: track.youtubeTitle,
@@ -380,7 +393,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       // Persist queue state and track history
       get().saveQueueState();
       get().pushQueueHistory(playableTrack);
-      recordPlaybackHistory(playableTrack);
 
       // Trigger prefetch for next 5 tracks
       if (playbackQueue.length > 0 && playbackIndex >= 0) {

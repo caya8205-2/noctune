@@ -1,6 +1,6 @@
 {
   "name": "noctune",
-  "version": "3.2.3",
+  "version": "3.3.0",
   "private": true,
   "workspaces": [
     "frontend",
@@ -14,9 +14,10 @@
     "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "build:sidecar:linux": "npm run build --workspace=backend && npm run build:binary:linux --workspace=backend",
+    "prepare:ytdlp": "node scripts/prepare-ytdlp.mjs",
     "tauri": "node scripts/tauri-dev.mjs",
-    "tauri:build": "npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
-    "tauri:build:linux": "npm run build:sidecar:linux && npm run build --workspace=frontend && tauri build --bundles deb,appimage",
+    "tauri:build": "npm run prepare:ytdlp && npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
+    "tauri:build:linux": "npm run prepare:ytdlp && npm run build:sidecar:linux && npm run build --workspace=frontend && tauri build --bundles deb,appimage",
     "version:sync": "node scripts/sync-version.js",
     "sign": "powershell -ExecutionPolicy Bypass -File ./scripts/noctune-signing.ps1"
   },

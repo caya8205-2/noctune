@@ -34,11 +34,123 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
-  { title: 'Instant Optimistic Mini Player Loading', desc: 'Clicking any song immediately displays the Mini Player bar with spinning artwork and button loaders while backend resolving proceeds in background.' },
-  { title: 'Linux Audio Stream Capping Fix', desc: 'Fixed YouTube audio stream range capping in backend (player.ts) that caused playback to stop prematurely at ~25 seconds (1MB buffer limit) and automatically skip to the next track.' },
-  { title: 'Linux DevTools Console Cleanup', desc: 'Added 4-attempt retry with 250ms backoff on preferred port 3131 in api.ts, eliminating 10 connection refused console error logs during sidecar cold start.' },
-  { title: 'Global Dark Mode Dropdowns (select/option)', desc: 'Added color-scheme: dark; and custom background/text styling for HTML <select> and <option> elements in index.css @layer base to fix white unreadable dropdown popups on Linux WebKitGTK.' },
+  { title: 'Dedicated YouTube Channel', desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.' },
+  { title: 'Bundled yt-dlp for Channel View', desc: 'Channel view currently uses bundled yt-dlp as a temporary compatibility approach because Innertube cannot expose channel uploads and playlists reliably enough. This keeps channel browsing available on Windows and Linux, but makes loading slower and increases the app size. Playback and search still use the faster Innertube resolver; we will keep looking for a lighter, faster long-term solution.' },
+  { title: 'Playlist Browsing Polish', desc: 'Refined playlist browsing with Grid/List views, a filter toolbar that stays available while scrolling, and two-way sorting for title, artist, and duration.' },
+  { title: 'Interactive Artwork Viewer', desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.' },
+  { title: 'Direct Cover Downloads', desc: 'Added data URL (Base64) handling and 10-second fetch timeout to POST /player/download-artwork to save original high-quality cover images directly into Noctune\'s configured download folder with real-time status and destination path feedback (Saved to ...).' },
+  { title: 'Clearer Download Feedback', desc: 'Track download confirmations now clearly show where the saved file was placed.' },
+  { title: 'Playlist Track Reordering', desc: 'Fixed playlist edit reordering so tracks can be dragged from the handle, move visibly while dragging, and save in the intended order.' },
+  { title: 'Navigation & Player Polish', desc: 'Open creator names from track lists, enjoy cleaner page spacing, and see more consistent playback indicators.' },
 ];
+
+const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | null> = {
+  'Dedicated YouTube Channel Profiles': {
+    title: 'Dedicated YouTube Channel',
+    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
+  },
+  'Dedicated YouTube Channel View & Multi-Platform Extraction': {
+    title: 'Dedicated YouTube Channel',
+    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
+  },
+  'Cross-Platform yt-dlp Sidecar Bundling': {
+    title: 'Bundled yt-dlp for Channel View',
+    desc: 'Channel view currently uses bundled yt-dlp as a temporary compatibility approach because Innertube cannot expose channel uploads and playlists reliably enough. This keeps channel browsing available on Windows and Linux, but makes loading slower and increases the app size. Playback and search still use the faster Innertube resolver; we will keep looking for a lighter, faster long-term solution.',
+  },
+  'Dedicated yt-dlp Channel Extraction': null,
+  'External YouTube Playlist Resolution': null,
+  'Channel Videos & Playlists Tabs': null,
+  'Interactive Artwork Lightbox & Cover Downloads': {
+    title: 'Interactive Artwork Viewer',
+    desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.',
+  },
+  'Interactive Artwork Lightbox': {
+    title: 'Interactive Artwork Viewer',
+    desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.',
+  },
+  'Direct Cover Downloads': {
+    title: 'Direct Cover Downloads',
+    desc: 'Added data URL (Base64) handling and 10-second fetch timeout to POST /player/download-artwork to save original high-quality cover images directly into Noctune\'s configured download folder with real-time status and destination path feedback (Saved to ...).',
+  },
+  'Playlist View Controls': {
+    title: 'Playlist Browsing Polish',
+    desc: 'Refined playlist browsing with Grid/List views, a filter toolbar that stays available while scrolling, and two-way sorting for title, artist, and duration.',
+  },
+  'Bidirectional Playlist Sorting': null,
+  'Direct Audio Stream Download Engine': {
+    title: 'Clearer Download Feedback',
+    desc: 'Track download confirmations now clearly show where the saved file was placed.',
+  },
+  'Playlist Management & Drag-and-Drop Polish': {
+    title: 'Playlist Editing',
+    desc: 'Edit playlists with clearer Done and Cancel actions, and reorder tracks with responsive drag-and-drop feedback.',
+  },
+  'Playlist Drag-and-Drop Reordering Fix': {
+    title: 'Playlist Track Reordering',
+    desc: 'Fixed playlist edit reordering/DnD so it is now actually functional and tracks can now be dragged from the handle, move visibly while dragging, and save in the intended order.',
+  },
+  'UI Layout & Visualizer Polish': {
+    title: 'Navigation & Player Polish',
+    desc: 'Open creator names from track lists, enjoy cleaner page spacing, and see more consistent playback indicators.',
+  },
+  'Clickable Creator & Artist Names Everywhere': {
+    title: 'Dedicated YouTube Channel',
+    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
+  },
+  'Channel Navigation Fallbacks': null,
+  'Channel & Playlist Navigation History': null,
+  'Channel Extraction Reliability': null,
+  'Local Library Folder Navigation History': {
+    title: 'Local Library Mouse Back',
+    desc: 'Mouse back from an open local folder now returns to the folder list instead of leaving Local Library.',
+  },
+  'Immediate History Recording': {
+    title: 'Recently Played on Home',
+    desc: 'View Full History now opens the real History view, and Home Recently Played updates immediately when a track is clicked.',
+  },
+  'Recently Played History Routing': {
+    title: 'Recently Played on Home',
+    desc: 'View Full History now opens the real History view, and Home Recently Played updates immediately when a track is clicked.',
+  },
+  'In Rotation Recommendation Logic': {
+    title: 'In Rotation Smart Playlist',
+    desc: 'Renamed Smart Playlist Recently Played to In Rotation so it no longer conflicts with Home’s Recently Played section, and replaced the duplicate History contents with a distinct recommendation mix.',
+  },
+  'External Playlist Loading Feedback': null,
+  'Dynamic Download Toast Positioning': null,
+  'Custom Confirmation Modals': {
+    title: 'Confirmation Dialogs',
+    desc: 'Settings actions that need confirmation now use Noctune’s existing themed modal instead of an unavailable native dialog.',
+  },
+  'Visualizer Rhythm Refinement': {
+    title: 'Visualizer Pulse Refinement',
+    desc: 'Increased the existing bass-pulse intensity so the visualizer response is easier to see.',
+  },
+};
+
+function toPresentationHighlights(items: Array<{ title: string; desc: string }>) {
+  const seen = new Set<string>();
+  const highlights = items.reduce<Array<{ title: string; desc: string }>>((result, item) => {
+    const mapped = Object.prototype.hasOwnProperty.call(PRESENTATION_HIGHLIGHTS, item.title)
+      ? PRESENTATION_HIGHLIGHTS[item.title]
+      : item;
+    if (!mapped || seen.has(mapped.title)) return result;
+    seen.add(mapped.title);
+    result.push(mapped);
+    return result;
+  }, []);
+
+  const artworkDownloadIndex = highlights.findIndex((item) => item.title === 'Direct Cover Downloads');
+  const artworkIndex = artworkDownloadIndex >= 0
+    ? artworkDownloadIndex
+    : highlights.findIndex((item) => item.title === 'Interactive Artwork Viewer');
+  const playlistIndex = highlights.findIndex((item) => item.title === 'Playlist Browsing Controls');
+  if (artworkIndex >= 0 && playlistIndex > artworkIndex + 1) {
+    const [playlistHighlight] = highlights.splice(playlistIndex, 1);
+    highlights.splice(artworkIndex + 1, 0, playlistHighlight);
+  }
+  return highlights;
+}
 
 export function openChangelogModal() {
   window.dispatchEvent(new CustomEvent('noctune:open-changelog'));
@@ -86,8 +198,12 @@ export function ChangelogModal() {
 
   if (!open) return null;
 
-  const dynamicHighlights = parseLatestHighlights(changelogText);
-  const highlights = dynamicHighlights.length > 0 ? dynamicHighlights : DEFAULT_HIGHLIGHTS;
+  const dynamicHighlights = toPresentationHighlights(parseLatestHighlights(changelogText));
+  const pinnedHighlights = DEFAULT_HIGHLIGHTS.slice(0, 5);
+  const pinnedTitles = new Set(pinnedHighlights.map((item) => item.title));
+  const highlights = dynamicHighlights.length > 0
+    ? [...pinnedHighlights, ...dynamicHighlights.filter((item) => !pinnedTitles.has(item.title))]
+    : DEFAULT_HIGHLIGHTS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

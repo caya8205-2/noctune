@@ -168,6 +168,8 @@ export const api = {
     request<{ ok: boolean }>('/rpc/activity', { method: 'DELETE' }),
   spotifyMetadata: (spotifyId: string) =>
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
+  youtubeMetadata: (videoId: string) =>
+    request<Track>(`/metadata/youtube/${encodeURIComponent(videoId.replace(/^(youtube|ytdlp):/, ''))}`),
 
   resolve: (videoId: string, query?: string, youtubeId?: string) => {
     const params = new URLSearchParams();
@@ -202,6 +204,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tracks }),
     }),
+  downloadArtwork: (imageUrl: string, title: string, artist: string) =>
+    request<{ ok: boolean; file: string; downloadDir: string }>('/player/download-artwork', {
+      method: 'POST',
+      body: JSON.stringify({ imageUrl, title, artist }),
+    }),
   getDiscoverWeekly: () =>
     request<{ generatedAt: number; tracks: Track[] }>('/player/discover-weekly'),
   refreshDiscoverWeekly: () =>
@@ -230,6 +237,8 @@ export const api = {
     request<ArtistView>(`/browse/artist/${encodeURIComponent(artistId)}`),
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
+  browseYoutubePlaylist: (playlistId: string) =>
+    request<YouTubePlaylistView>(`/browse/youtube-playlist/${encodeURIComponent(playlistId)}`),
 
   recommend: (seed: Track, excludeIds: string[] = [], limit = 12) =>
     request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
@@ -329,6 +338,24 @@ export const api = {
   },
 
 };
+
+export async function resolveYouTubeChannelId(track: Track): Promise<string | undefined> {
+  if (track.artistId) return track.artistId;
+  if (track.spotifyId) {
+    try {
+      return (await api.spotifyMetadata(track.spotifyId)).artists[0]?.id;
+    } catch (error) {
+      console.warn('Spotify artist metadata unavailable:', error);
+      return undefined;
+    }
+  }
+  try {
+    return (await api.youtubeMetadata(track.youtubeId ?? track.id)).artistId;
+  } catch (error) {
+    console.warn('YouTube channel metadata unavailable:', error);
+    return undefined;
+  }
+}
 
 // ── Types (shared with backend, redeclared here to avoid cross-workspace imports) ──
 
@@ -498,11 +525,12 @@ export interface ArtistView {
   name: string;
   genres: string[];
   popularity: number | null;
-  followers: number | null;
+  followers: number | string | null;
   image: string | null;
   spotifyUrl: string | null;
   topTracks: Track[];
   albums: ArtistAlbum[];
+  channelPlaylists?: Array<{ id: string; name: string; totalTracks: number; image: string | null; url: string }>;
 }
 
 export interface AlbumTrack extends Track {
@@ -522,6 +550,13 @@ export interface AlbumView {
   spotifyUrl: string | null;
   artists: Array<{ id: string; name: string }>;
   tracks: AlbumTrack[];
+}
+
+export interface YouTubePlaylistView {
+  id: string;
+  name: string;
+  image: string | null;
+  tracks: Track[];
 }
 
 // ── Stats types ─────────────────────────────────────────────────────────────

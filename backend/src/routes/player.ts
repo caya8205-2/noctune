@@ -363,7 +363,8 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
   let completed = false;
 
   try {
-    for await (const chunk of Readable.fromWeb(res.body as any)) {
+    const stream1 = (res.body as any)[Symbol.asyncIterator] ? (res.body as any) : Readable.fromWeb(res.body as any);
+    for await (const chunk of stream1) {
       await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
     }
 
@@ -390,7 +391,8 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
           });
         }
         if (!chunkRes.ok || !chunkRes.body) return false;
-        for await (const chunk of Readable.fromWeb(chunkRes.body as any)) {
+        const stream2 = (chunkRes.body as any)[Symbol.asyncIterator] ? (chunkRes.body as any) : Readable.fromWeb(chunkRes.body as any);
+        for await (const chunk of stream2) {
           await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
         }
       }
@@ -1123,61 +1125,95 @@ export async function playerRoutes(app: FastifyInstance) {
   });
 
   app.post('/player/download-tracks', async (req, reply) => {
-    const parsed = DownloadTracksBody.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
-    }
-
-    const tracks: Track[] = parsed.data.tracks;
-    const envConfig = getEnvConfig();
-    const downloadDir = envConfig.downloadDir;
-
-    if (!fs.existsSync(downloadDir)) {
-      fs.mkdirSync(downloadDir, { recursive: true });
-    }
-
-    const preference = envConfig.audioQualityPreference;
-    const downloaded: Array<{ id: string; title: string; file: string }> = [];
-    const failed: Array<{ id: string; title: string; reason: string }> = [];
-
-    for (const track of tracks) {
-      try {
-        let existing = getExistingAudioCachePath(track.id, preference);
-        if (!existing) {
-          const videoId = track.id;
-          const cached = getCachedById(videoId);
-          const audioUrl = cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)
-            ? cached.audioUrl
-            : (await resolveAudioUrl(videoId)).url;
-          await cacheAudioFile(videoId, audioUrl);
-          existing = getExistingAudioCachePath(videoId, preference);
-        }
-
-        if (!existing || !fs.existsSync(existing)) {
-          failed.push({ id: track.id, title: track.title, reason: 'Failed to obtain audio file' });
-          continue;
-        }
-
-        const ext = path.extname(existing) || '.m4a';
-        const cleanArtist = (track.artist || 'Unknown Artist').replace(/[/\\?%*:|"<>]/g, '_').trim();
-        const cleanTitle = (track.title || 'Untitled').replace(/[/\\?%*:|"<>]/g, '_').trim();
-        const filename = `${cleanArtist} - ${cleanTitle}${ext}`;
-        const targetPath = path.join(downloadDir, filename);
-
-        fs.copyFileSync(existing, targetPath);
-        downloaded.push({ id: track.id, title: track.title, file: targetPath });
-      } catch (err) {
-        failed.push({ id: track.id, title: track.title, reason: (err as Error).message });
+    try {
+      const parsed = DownloadTracksBody.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
       }
-    }
 
-    return reply.send({
-      ok: true,
-      downloadDir,
-      downloaded,
-      failed,
-      message: `Downloaded ${downloaded.length} track(s) to ${downloadDir}`,
-    });
+      const tracks: Track[] = parsed.data.tracks;
+      const envConfig = getEnvConfig();
+      const downloadDir = envConfig.downloadDir;
+
+      if (!fs.existsSync(downloadDir)) {
+        fs.mkdirSync(downloadDir, { recursive: true });
+      }
+
+      const preference = envConfig.audioQualityPreference;
+      const downloaded: Array<{ id: string; title: string; file: string }> = [];
+      const failed: Array<{ id: string; title: string; reason: string }> = [];
+
+      for (const track of tracks) {
+        try {
+          const query = (track.artist && track.title) ? `${track.artist} - ${track.title}` : track.title;
+          const videoId = await resolvePlayableVideoId(track.id, query, track.youtubeId);
+          if (!videoId) {
+            failed.push({ id: track.id, title: track.title, reason: 'Could not resolve playable YouTube video ID' });
+            continue;
+          }
+
+          const cleanArtist = (track.artist || 'Unknown Artist').replace(/[/\\?%*:|"<>]/g, '_').trim();
+          const cleanTitle = (track.title || 'Untitled').replace(/[/\\?%*:|"<>]/g, '_').trim();
+          const existing = getExistingAudioCachePath(videoId, preference) || getExistingAudioCachePath(track.id, preference);
+
+          const ext = existing ? (path.extname(existing) || '.m4a') : '.m4a';
+          const filename = `${cleanArtist} - ${cleanTitle}${ext}`;
+          const targetPath = path.join(downloadDir, filename);
+
+          if (existing && fs.existsSync(existing)) {
+            fs.copyFileSync(existing, targetPath);
+          } else {
+            const cached = getCachedById(videoId) || (track.spotifyId ? getCachedBySpotifyId(track.spotifyId) : null);
+            const audioUrl = cached && isUrlFresh(cached)
+              ? cached.audioUrl
+              : (await resolveAudioUrl(videoId, preference)).url;
+
+            const res = await fetch(audioUrl, {
+              headers: {
+                Range: 'bytes=0-',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            });
+
+            if (!res.ok || !res.body) {
+              throw new Error(`Direct download stream failed with status ${res.status}`);
+            }
+
+            const writer = fs.createWriteStream(targetPath);
+            try {
+              const stream = (res.body as any)[Symbol.asyncIterator] ? (res.body as any) : Readable.fromWeb(res.body as any);
+              for await (const chunk of stream) {
+                await writeAudioChunk(writer, chunk as Buffer | Uint8Array);
+              }
+              await finishWriter(writer);
+            } catch (streamErr) {
+              try { writer.destroy(); } catch {}
+              try { if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath); } catch {}
+              throw streamErr;
+            }
+          }
+
+          const now = new Date();
+          try {
+            fs.utimesSync(targetPath, now, now);
+          } catch {}
+          downloaded.push({ id: track.id, title: track.title, file: targetPath });
+        } catch (err) {
+          failed.push({ id: track.id, title: track.title, reason: (err as Error).message });
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        downloadDir,
+        downloaded,
+        failed,
+        message: `Downloaded ${downloaded.length} track(s) to ${downloadDir}`,
+      });
+    } catch (err) {
+      console.error('Unhandled error in /player/download-tracks route:', err);
+      return reply.status(500).send({ error: 'Download tracks failed', message: (err as Error).message });
+    }
   });
 
   app.get('/player/discover-weekly', async (_req, reply) => {
@@ -1188,5 +1224,48 @@ export async function playerRoutes(app: FastifyInstance) {
   app.post('/player/discover-weekly/refresh', async (_req, reply) => {
     const data = await getDiscoverWeekly(true);
     return reply.send(data);
+  });
+
+  const DownloadArtworkBody = z.object({
+    imageUrl: z.string().min(1),
+    title: z.string().min(1),
+    artist: z.string().min(1),
+  });
+
+  app.post('/player/download-artwork', async (req, reply) => {
+    const parsed = DownloadArtworkBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    }
+
+    const { imageUrl, title, artist } = parsed.data;
+    const envConfig = getEnvConfig();
+    const downloadDir = envConfig.downloadDir;
+
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true });
+    }
+
+    const cleanArtist = artist.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'Artist';
+    const cleanTitle = title.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'Artwork';
+    const filename = `${cleanArtist} - ${cleanTitle} (Artwork).jpg`;
+    const targetPath = path.join(downloadDir, filename);
+
+    try {
+      let buffer: Buffer;
+      if (imageUrl.startsWith('data:')) {
+        const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '');
+        buffer = Buffer.from(base64Data, 'base64');
+      } else {
+        const response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+      }
+      fs.writeFileSync(targetPath, buffer);
+      return reply.send({ ok: true, file: targetPath, downloadDir });
+    } catch (err) {
+      return reply.status(500).send({ error: 'Failed to download artwork image', message: (err as Error).message });
+    }
   });
 }

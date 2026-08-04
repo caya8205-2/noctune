@@ -83,7 +83,9 @@ interface YTInfo {
   id: string;
   title: string;
   uploader?: string;
+  uploader_id?: string;
   channel?: string;
+  channel_id?: string;
   duration: number;
   thumbnail?: string;
   thumbnails?: Array<{ url: string; width?: number }>;
@@ -102,6 +104,8 @@ interface YTInfo {
 interface YTPlaylistInfo {
   id: string;
   title?: string;
+  thumbnail?: string;
+  thumbnails?: Array<{ url: string; width?: number }>;
   entries?: YTInfo[];
 }
 
@@ -136,7 +140,7 @@ function pickBestAudioFormat(
   };
 }
 
-function pickThumbnail(info: YTInfo): string {
+function pickThumbnail(info: Pick<YTInfo, 'thumbnail' | 'thumbnails'>): string {
   if (info.thumbnails?.length) {
     // Prefer medium quality thumbnail (mqdefault ~320px)
     const sorted = [...info.thumbnails].sort(
@@ -146,6 +150,21 @@ function pickThumbnail(info: YTInfo): string {
     return medium?.url ?? sorted[0]?.url ?? info.thumbnail ?? '';
   }
   return info.thumbnail ?? '';
+}
+
+export interface YouTubePlaylistSummary {
+  id: string;
+  name: string;
+  totalTracks: number;
+  image: string | null;
+  url: string;
+}
+
+function youtubeChannelReference(info: YTInfo): string | undefined {
+  const candidate = info.channel_id ?? info.uploader_id;
+  return candidate && (candidate.startsWith('UC') || candidate.startsWith('@'))
+    ? `ytchannel:${candidate}`
+    : undefined;
 }
 
 /** Sanitize query to remove characters that can break yt-dlp argument parsing. */
@@ -191,6 +210,7 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
         id: info.id,
         title: info.title,
         artist: info.uploader ?? info.channel ?? 'Unknown',
+        artistId: youtubeChannelReference(info),
         duration: info.duration ?? 0,
         thumbnail: pickThumbnail(info),
         query,
@@ -221,6 +241,7 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlO
     id: info.id,
     title: info.title,
     artist: info.uploader ?? info.channel ?? 'Unknown',
+    artistId: youtubeChannelReference(info),
     duration: info.duration ?? 0,
     thumbnail: pickThumbnail(info),
     query: originalQuery,
@@ -229,18 +250,22 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlO
 
 export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promise<{
   name: string;
+  image: string | null;
   tracks: Track[];
 }> {
-  const raw = await ytDlp.execPromise([
+  const args = [
     url,
     '--dump-single-json',
     '--flat-playlist',
     '--no-warnings',
-  ]);
+  ];
+  if (Number.isFinite(limit) && limit < 10_000) args.push('--playlist-end', String(limit));
+  const raw = await ytDlp.execPromise(args);
   const playlist = JSON.parse(raw) as YTPlaylistInfo;
   const entries = playlist.entries ?? [];
   return {
     name: playlist.title ?? 'YouTube Playlist',
+    image: pickThumbnail(playlist) || null,
     tracks: entries
       .filter((entry) => entry.id)
       .map((entry) => ({
@@ -250,7 +275,91 @@ export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promi
         duration: entry.duration ?? 0,
         thumbnail: pickThumbnail(entry),
         query: entry.title ?? entry.id,
-      })),
+      }))
+      .slice(0, limit),
+  };
+}
+
+export async function getYoutubeChannelPlaylists(channelId: string, limit = 20): Promise<YouTubePlaylistSummary[]> {
+  const channelUrl = channelId.startsWith('@')
+    ? `https://www.youtube.com/${channelId}/playlists`
+    : `https://www.youtube.com/channel/${channelId}/playlists`;
+  try {
+    const raw = await ytDlp.execPromise([
+      channelUrl,
+      '--dump-single-json',
+      '--flat-playlist',
+      '--no-warnings',
+      '--playlist-end', String(limit),
+    ]);
+    const playlist = JSON.parse(raw) as YTPlaylistInfo;
+    return (playlist.entries ?? [])
+      .filter((entry) => entry.id)
+      .map((entry) => ({
+        id: entry.id,
+        name: entry.title ?? entry.id,
+        totalTracks: 0,
+        image: pickThumbnail(entry) || null,
+        url: `https://www.youtube.com/playlist?list=${entry.id}`,
+      }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/does not have a playlists tab|no playlists tab/i.test(message)) return [];
+    throw error;
+  }
+}
+
+/**
+ * Dedicated channel browse path. Channel pages are intentionally handled by
+ * yt-dlp rather than Innertube: yt-dlp consistently exposes uploads,
+ * playlists, and channel metadata across Topic, creator, and handle pages.
+ */
+export async function browseYoutubeChannel(channelRef: string, videoLimit = 100) {
+  const channelId = channelRef.replace(/^(ytchannel|youtube|channel):/, '').trim();
+  const baseUrl = channelId.startsWith('@')
+    ? `https://www.youtube.com/${channelId}`
+    : `https://www.youtube.com/channel/${channelId}`;
+  const videosRaw = await ytDlp.execPromise([
+    // Some Topic channels do not expose a `/videos` tab to yt-dlp. Their
+    // root channel URL still resolves to the uploads playlist (`UU...`).
+    baseUrl,
+    '--dump-single-json',
+    '--flat-playlist',
+    '--no-warnings',
+    '--playlist-end', String(videoLimit),
+  ]);
+  const videosPage = JSON.parse(videosRaw) as YTPlaylistInfo & {
+    channel?: string;
+    channel_id?: string;
+    uploader?: string;
+    thumbnail?: string;
+    thumbnails?: Array<{ url: string; width?: number }>;
+  };
+  const tracks = (videosPage.entries ?? [])
+    .filter((entry) => entry.id)
+    .map((entry) => ({
+      id: `youtube:${entry.id}`,
+      youtubeId: entry.id,
+      title: entry.title ?? entry.id,
+      artist: entry.uploader ?? entry.channel ?? videosPage.uploader ?? videosPage.channel ?? 'YouTube',
+      artistId: `ytchannel:${videosPage.channel_id ?? channelId}`,
+      album: 'YouTube',
+      duration: entry.duration ?? 0,
+      thumbnail: pickThumbnail(entry) || `https://i.ytimg.com/vi/${entry.id}/hqdefault.jpg`,
+      query: entry.title ?? entry.id,
+      queueSource: 'search',
+    } satisfies Track));
+  const playlists = await getYoutubeChannelPlaylists(videosPage.channel_id ?? channelId, 20);
+  return {
+    id: `ytchannel:${videosPage.channel_id ?? channelId}`,
+    name: videosPage.channel ?? videosPage.uploader ?? channelId,
+    genres: ['YouTube Channel'],
+    followers: null,
+    image: pickThumbnail(videosPage) || tracks[0]?.thumbnail || null,
+    spotifyUrl: baseUrl,
+    topTracks: tracks,
+    albums: [],
+    channelPlaylists: playlists,
   };
 }
 
