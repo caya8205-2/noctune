@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { seekAudio } from '../../hooks/useAudio';
 import { formatDuration, clamp } from '../../utils/format';
-import { api } from '../../utils/api';
+import { api, resolveYouTubeChannelId } from '../../utils/api';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
@@ -103,7 +103,9 @@ export function PlayerBar() {
     staleTime: 1000 * 60 * 60,
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
-  const artistViewId = currentTrack?.artistId || (currentTrack?.artist ? (currentTrack.artist.startsWith('ytchannel:') ? currentTrack.artist : `ytchannel:${currentTrack.artist}`) : undefined) || spotifyMetadata?.artists[0]?.id;
+  const artistViewId = currentTrack?.spotifyId
+    ? currentTrack.artistId || spotifyMetadata?.artists[0]?.id
+    : undefined;
 
   function handleSeekDown(e: React.MouseEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -173,7 +175,7 @@ export function PlayerBar() {
         />
       </div>
 
-      <div className="flex flex-1 items-center gap-2 px-3 sm:gap-4 sm:px-6">
+      <div className="relative flex flex-1 items-center gap-2 px-3 sm:gap-4 sm:px-6">
         {/* Track info */}
         <div
           role={currentTrack ? 'button' : undefined}
@@ -227,16 +229,18 @@ export function PlayerBar() {
                 </button>
                 <button
                   type="button"
-                  aria-disabled={!artistViewId}
                   className={clsx(
                     'mt-0.5 inline-block max-w-full truncate text-left text-xs text-muted transition-colors',
-                    artistViewId ? 'hover:text-accent' : 'cursor-default'
+                    currentTrack ? 'hover:text-accent cursor-pointer' : 'cursor-default'
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (artistViewId) setView('artist', artistViewId);
+                    if (currentTrack) {
+                      void (artistViewId ? Promise.resolve(artistViewId) : resolveYouTubeChannelId(currentTrack))
+                        .then((resolvedId) => { if (resolvedId) setView('artist', resolvedId); });
+                    }
                   }}
-                  title={artistViewId ? `Go to artist: ${currentTrack.artist}` : undefined}
+                  title={currentTrack ? `Go to artist: ${currentTrack.artist}` : undefined}
                 >
                   {currentTrack.artist}
                 </button>
@@ -251,7 +255,7 @@ export function PlayerBar() {
         </div>
 
         {/* Controls */}
-        <div className="hidden flex-1 items-center justify-center gap-2 sm:flex">
+        <div className="absolute left-1/2 hidden -translate-x-1/2 items-center justify-center gap-2 sm:flex">
           <button
             onClick={toggleShuffle}
             className={clsx('btn-ghost', shuffle && 'text-accent')}
@@ -306,7 +310,7 @@ export function PlayerBar() {
         </div>
 
         {/* Time + Volume */}
-        <div className="hidden w-80 items-center justify-end gap-2 sm:flex">
+        <div className="absolute right-6 hidden w-80 flex-none items-center justify-end gap-2 sm:flex">
           <span className="w-28 whitespace-nowrap text-right font-mono text-xs tabular-nums text-muted">
             {formatDuration(progress)} / {formatDuration(seekDuration)}
           </span>

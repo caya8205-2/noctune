@@ -340,7 +340,14 @@ export const api = {
 };
 
 export async function resolveYouTubeChannelId(track: Track): Promise<string | undefined> {
-  if (track.artistId) return track.artistId;
+  const isYouTubeTrack = Boolean(track.youtubeId || track.id.startsWith('youtube:') || track.id.startsWith('ytdlp:'));
+  if (track.artistId && !track.artistId.startsWith('ytchannel:') && !isYouTubeTrack) return track.artistId;
+  if (track.artistId?.startsWith('ytchannel:')) {
+    const channelRef = track.artistId.replace(/^ytchannel:/, '').trim();
+    if (/^UC[A-Za-z0-9_-]{22}$/.test(channelRef) || /^@[A-Za-z0-9._-]+$/.test(channelRef)) {
+      return track.artistId;
+    }
+  }
   if (track.spotifyId) {
     try {
       return (await api.spotifyMetadata(track.spotifyId)).artists[0]?.id;
@@ -350,11 +357,18 @@ export async function resolveYouTubeChannelId(track: Track): Promise<string | un
     }
   }
   try {
-    return (await api.youtubeMetadata(track.youtubeId ?? track.id)).artistId;
+    const youtubeId = track.youtubeId ?? track.id.replace(/^(youtube|ytdlp):/, '');
+    return (await api.youtubeMetadata(youtubeId)).artistId;
   } catch (error) {
     console.warn('YouTube channel metadata unavailable:', error);
     return undefined;
   }
+}
+
+export function isValidYouTubeChannelId(value?: string): boolean {
+  if (!value) return false;
+  const channelRef = value.replace(/^ytchannel:/, '').trim();
+  return /^UC[A-Za-z0-9_-]{22}$/.test(channelRef) || /^@[A-Za-z0-9._-]+$/.test(channelRef);
 }
 
 // ── Types (shared with backend, redeclared here to avoid cross-workspace imports) ──

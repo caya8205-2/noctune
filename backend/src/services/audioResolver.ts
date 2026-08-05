@@ -125,11 +125,22 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
 }
 
 export async function getYoutubeTrack(urlOrVideoId: string, originalQuery = urlOrVideoId): Promise<Track> {
-  return withYtdlpFallback(
+  const primary = await withYtdlpFallback(
     'getYoutubeTrack',
     () => getAudioResolver().getYoutubeTrack(urlOrVideoId, originalQuery),
     async () => (await getYtdlpResolver()).getYoutubeTrack(urlOrVideoId, originalQuery)
   );
+  // Innertube can return valid playback metadata without exposing the channel
+  // browse ID (especially for Topic channels). Ask yt-dlp for the canonical
+  // channel reference before the frontend attempts channel navigation.
+  if (primary.artistId) return primary;
+  try {
+    const enriched = await (await getYtdlpResolver()).getYoutubeTrack(urlOrVideoId, originalQuery);
+    return { ...primary, artistId: enriched.artistId ?? primary.artistId, artist: enriched.artist || primary.artist };
+  } catch (err) {
+    console.warn('[audio-resolver] unable to enrich YouTube metadata with channel id:', (err as Error).message);
+    return primary;
+  }
 }
 
 export async function getYoutubePlaylistTracks(url: string, limit = 2000): Promise<PlaylistImportResult> {

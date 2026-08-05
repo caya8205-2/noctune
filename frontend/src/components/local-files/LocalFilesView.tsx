@@ -401,7 +401,7 @@ export function LocalFilesView() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-white/[0.06] bg-base-950/40 px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
+      <div className="flex-shrink-0 px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             {isRoot ? (

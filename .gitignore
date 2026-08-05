@@ -10,6 +10,7 @@ automations/
 reports/
 docs/**
 !docs/CURRENT_STATUS.md
+!docs/next-plan.md
 .kiro/
 *.db
 *.db-shm

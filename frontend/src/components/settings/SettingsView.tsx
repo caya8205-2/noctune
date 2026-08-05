@@ -7,6 +7,7 @@ import {
   HardDrive,
   Eye,
   EyeOff,
+  FileText,
   FileUp,
   FolderOpen,
   Info,
@@ -446,7 +447,6 @@ export function SettingsView() {
       setCacheBusy(false);
     }
   }
-
   function requestCacheClear(title: string, description: string, action: () => Promise<void>) {
     setCacheConfirmation({ title, description, action });
   }
@@ -599,8 +599,6 @@ export function SettingsView() {
         </h1>
       </div>
 
-      {/* Theme section removed - too complex, not worth it */}
-
       {/* Updates */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
@@ -631,11 +629,11 @@ export function SettingsView() {
               <button
                 type="button"
                 onClick={() => openChangelogModal()}
-                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-amber-500/40 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all"
-                title="View release notes & what's new"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all"
+                title="View release notes & changelog"
               >
-                <Sparkles size={14} />
-                What's New
+                <FileText size={14} />
+                Changelog
               </button>
               <button
                 type="button"

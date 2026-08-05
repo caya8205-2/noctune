@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Album, Clock3, Disc3, ExternalLink, Maximize2, Music2, Radio, Sparkles, Tag, UserRound } from 'lucide-react';
-import { api, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
+import { api, isValidYouTubeChannelId, resolveYouTubeChannelId, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { ArtworkLightboxModal } from '../ui/ArtworkLightboxModal';
@@ -198,7 +198,7 @@ function LocalDetails({
 
       <div>
         <p className="section-label text-accent">Track details</p>
-        {track.artistId ? (
+        {track.artistId && (!track.artistId.startsWith('ytchannel:') || isValidYouTubeChannelId(track.artistId)) ? (
           <button
             type="button"
             className="mt-2 block text-left text-lg font-semibold leading-tight text-white transition-colors hover:text-accent"
@@ -211,19 +211,19 @@ function LocalDetails({
           <h2 className="text-lg font-semibold text-white mt-2 leading-tight">{track.title}</h2>
         )}
         {(() => {
-          const targetArtistId = track.artistId || (track.artist ? (track.artist.startsWith('ytchannel:') ? track.artist : `ytchannel:${track.artist}`) : undefined);
-          return targetArtistId ? (
+          const targetArtistId = track.artistId && (!track.artistId.startsWith('ytchannel:') || isValidYouTubeChannelId(track.artistId)) ? track.artistId : undefined;
+          return track.artist ? (
             <button
               type="button"
               className="mt-1 text-left text-sm leading-relaxed text-muted transition-colors hover:text-accent"
-              onClick={() => usePlayerStore.getState().setView('artist', targetArtistId)}
+              onClick={() => void (targetArtistId ? Promise.resolve(targetArtistId) : resolveYouTubeChannelId(track)).then((resolvedId) => {
+                if (resolvedId) usePlayerStore.getState().setView('artist', resolvedId);
+              })}
               title={`Go to artist: ${track.artist}`}
             >
               {track.artist}
             </button>
-          ) : (
-            <p className="text-sm text-muted mt-1 leading-relaxed">{track.artist}</p>
-          );
+          ) : null;
         })()}
       </div>
 

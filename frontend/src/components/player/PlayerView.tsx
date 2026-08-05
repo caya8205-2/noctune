@@ -22,7 +22,7 @@ import { seekAudio } from '../../hooks/useAudio';
 import { Visualizer, type VisualizerMode } from './Visualizer';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
-import { api, type LyricsResult, type Track } from '../../utils/api';
+import { api, resolveYouTubeChannelId, type LyricsResult, type Track } from '../../utils/api';
 import { lyricsQueryOptions } from '../../hooks/useLyrics';
 
 import { extractDominantColor } from '../../utils/colorExtractor';
@@ -277,7 +277,14 @@ export function PlayerView() {
     staleTime: 1000 * 60 * 60,
   });
   const albumViewId = currentTrack?.albumId ?? spotifyMetadata?.album.id;
-  const artistViewId = currentTrack?.artistId || (currentTrack?.artist ? (currentTrack.artist.startsWith('ytchannel:') ? currentTrack.artist : `ytchannel:${currentTrack.artist}`) : undefined) || spotifyMetadata?.artists[0]?.id;
+  const artistViewId = currentTrack?.spotifyId
+    ? currentTrack.artistId || spotifyMetadata?.artists[0]?.id
+    : undefined;
+  async function handleArtistNavigation() {
+    if (!currentTrack) return;
+    const resolvedId = artistViewId ?? await resolveYouTubeChannelId(currentTrack);
+    if (resolvedId) setView('artist', resolvedId);
+  }
 
   return (
     <div className="h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8">
@@ -348,11 +355,11 @@ export function PlayerView() {
                 {currentTrack.title}
               </h1>
             )}
-            {artistViewId ? (
+            {currentTrack.artist ? (
               <button
                 type="button"
                 className="mt-2 max-w-xl text-center text-sm text-soft transition-colors hover:text-accent sm:text-base px-4"
-                onClick={() => setView('artist', artistViewId)}
+                onClick={() => void handleArtistNavigation()}
                 title={`Go to artist: ${currentTrack.artist}`}
               >
                 {currentTrack.artist}

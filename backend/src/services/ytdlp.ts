@@ -81,6 +81,7 @@ export function getYtdlpStatus() {
 // yt-dlp raw info shape (partial — only what we need)
 interface YTInfo {
   id: string;
+  _type?: string;
   title: string;
   uploader?: string;
   uploader_id?: string;
@@ -316,6 +317,9 @@ export async function getYoutubeChannelPlaylists(channelId: string, limit = 20):
  */
 export async function browseYoutubeChannel(channelRef: string, videoLimit = 100) {
   const channelId = channelRef.replace(/^(ytchannel|youtube|channel):/, '').trim();
+  if (!/^UC[A-Za-z0-9_-]{22}$/.test(channelId) && !/^@[A-Za-z0-9._-]+$/.test(channelId)) {
+    throw new Error('Invalid YouTube channel id');
+  }
   const baseUrl = channelId.startsWith('@')
     ? `https://www.youtube.com/${channelId}`
     : `https://www.youtube.com/channel/${channelId}`;
@@ -335,8 +339,11 @@ export async function browseYoutubeChannel(channelRef: string, videoLimit = 100)
     thumbnail?: string;
     thumbnails?: Array<{ url: string; width?: number }>;
   };
-  const tracks = (videosPage.entries ?? [])
-    .filter((entry) => entry.id)
+  let tracks = (videosPage.entries ?? [])
+    // The root channel page can expose tab links as playlist-like entries
+    // (for example "Videos", "Live", and "Shorts"). They are navigation
+    // placeholders, not playable videos, so keep only real 11-character IDs.
+    .filter((entry) => entry.id && entry._type !== 'playlist' && /^[A-Za-z0-9_-]{11}$/.test(entry.id))
     .map((entry) => ({
       id: `youtube:${entry.id}`,
       youtubeId: entry.id,
@@ -349,6 +356,30 @@ export async function browseYoutubeChannel(channelRef: string, videoLimit = 100)
       query: entry.title ?? entry.id,
       queueSource: 'search',
     } satisfies Track));
+
+  // Topic channels often expose playlists but return no entries from their
+  // root page. Their uploads playlist follows YouTube's UU + channel suffix
+  // convention, so retry that canonical feed before reporting an empty tab.
+  if (tracks.length === 0 && /^UC[A-Za-z0-9_-]{22}$/.test(videosPage.channel_id ?? channelId)) {
+    const uploadsId = `UU${(videosPage.channel_id ?? channelId).slice(2)}`;
+    try {
+      const uploads = await getYoutubePlaylistTracks(
+        `https://www.youtube.com/playlist?list=${uploadsId}`,
+        videoLimit
+      );
+      tracks = uploads.tracks.map((track) => ({
+        ...track,
+        id: `youtube:${track.id}`,
+        youtubeId: track.id,
+        artist: videosPage.channel ?? videosPage.uploader ?? track.artist,
+        artistId: `ytchannel:${videosPage.channel_id ?? channelId}`,
+        album: 'YouTube',
+        queueSource: 'search',
+      } satisfies Track));
+    } catch (error) {
+      console.warn('[ytdlp] channel uploads playlist fallback failed:', (error as Error).message);
+    }
+  }
   const playlists = await getYoutubeChannelPlaylists(videosPage.channel_id ?? channelId, 20);
   return {
     id: `ytchannel:${videosPage.channel_id ?? channelId}`,

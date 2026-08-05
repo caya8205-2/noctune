@@ -596,6 +596,39 @@ export function HomeView() {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
   }
 
+  function handleRecentlyPlayedPlay(track: Track) {
+    const cachedQueue = usePlayerStore.getState().queue;
+    const cachedIndex = cachedQueue.findIndex((queuedTrack) => queuedTrack.id === track.id);
+    if (cachedIndex >= 0 && cachedQueue.length > 1) {
+      playTrack(cachedQueue[cachedIndex], cachedQueue, {
+        autoQueue: false,
+        queueSource: cachedQueue[cachedIndex].queueSource ?? track.queueSource,
+      });
+      return;
+    }
+
+    const source = track.originalSource ?? track.queueSource;
+    if (source === 'playlist') {
+      playTrack(track, [track], { autoQueue: false, queueSource: 'playlist' });
+      return;
+    }
+
+    playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
+  }
+
+  function handleContinueListeningPlay(track: Track) {
+    const cachedQueue = usePlayerStore.getState().queue;
+    const cachedIndex = cachedQueue.findIndex((queuedTrack) => queuedTrack.id === track.id);
+    if (cachedIndex >= 0) {
+      playTrack(cachedQueue[cachedIndex], cachedQueue, {
+        autoQueue: false,
+        queueSource: cachedQueue[cachedIndex].queueSource ?? track.queueSource,
+      });
+      return;
+    }
+    playTrack(track, [track], { autoQueue: false, queueSource: track.queueSource });
+  }
+
   return (
     <div className="flex h-full flex-col gap-9 overflow-y-auto px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
       {/* Home Header + Minimalist Shortcut Pills */}
@@ -662,7 +695,7 @@ export function HomeView() {
           </div>
           <AutoScrollCarousel
             tracks={upcomingQueue}
-            onPlay={(track) => playTrack(track, queue, { autoQueue: false })}
+            onPlay={handleContinueListeningPlay}
           />
         </section>
       )}
@@ -706,7 +739,7 @@ export function HomeView() {
         {recentTracks.length > 0 ? (
           <div className="flex flex-col gap-0.5">
             {recentTracks.slice(0, 6).map((track, idx) => (
-              <OpenTrackRow key={track.id} track={track} index={idx} onPlay={handlePlay} />
+              <OpenTrackRow key={track.id} track={track} index={idx} onPlay={handleRecentlyPlayedPlay} />
             ))}
           </div>
         ) : (

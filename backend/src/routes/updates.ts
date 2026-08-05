@@ -7,6 +7,20 @@ const FALLBACK_CHANGELOG = `# Changelog
 
 All notable Noctune changes are documented here.
 
+## v3.3.1 - 2026-08-05
+
+### Playback Context & Artwork Fixes
+- **Home Queue Context Preservation**: Fixed Recently Played and Continue Listening playback so cached queues keep their original playlist/source context instead of being replaced by Home autoqueue recommendations after the app has been idle or reopened.
+- **Queue Metadata Persistence**: Persisted original source and playlist metadata with the local queue so playlist context survives reloads.
+- **YouTube Channel Entry Filtering**: Removed non-playable channel navigation entries such as \`Videos\`, \`Live\`, and \`Shorts\` from channel results.
+- **Fullscreen Artwork Viewport**: Expanded the artwork lightbox into a full-window viewer with fit-to-viewport display, click-to-zoom, immediate drag/pan while zoomed, and zoom reset returning the image to its fitted position.
+- **Artwork Viewport Sizing**: Kept the high-resolution artwork source for zooming and downloads while constraining its initial render to a readable viewport size instead of stretching it across the entire screen.
+- **Centered Player & Viewport Controls**: Centered Mini Player transport controls independently from track actions and separated artwork title and zoom controls with responsive spacing around the Mini Player.
+- **Version-Aware Changelog Modal Subtitle**: Replaced the static \`Major Release Notes & Updates\` subtitle in \`ChangelogModal.tsx\` with dynamic release-aware wording derived from SemVer comparison (\`Major Release Notes & Updates\`, \`Minor Feature Release & Updates\`, \`Patch & Fix Release Notes\`).
+- **Changelog Settings Button Polish**: Renamed the "What's New" button in Settings to "Changelog", replaced the glowing amber sparkles icon with a clean \`FileText\` document icon, and updated button styling to match standard settings controls without confusing browser-link styling.
+- **Local Library Header Gradient Consistency**: Removed the dark \`bg-base-950/40\` overlay and bottom border line from \`LocalFilesView.tsx\` header so Noctune's ambient top gold background radial gradient shines through consistently across all views (History, Queue, Settings, and Local Library).
+- **Artwork Lightbox 50% Zoom Out & Draggable Support**: Expanded \`ArtworkLightboxModal.tsx\` zoom range down to a minimum of 50% (\`0.5x\`) from the default 100% (\`1.0x\`), enabled drag/pan capabilities on all non-100% zoom levels (both zoomed-in and zoomed-out), and updated cursor state (\`cursor-grab\`) for all zoomed states.
+
 ## v3.3.0 - 2026-08-04
 
 ### Dedicated YouTube Channel View & Multi-Platform Extraction

@@ -728,6 +728,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         youtubeTitle: t.youtubeTitle,
         youtubeArtist: t.youtubeArtist,
         queueSource: t.queueSource,
+        originalSource: t.originalSource,
+        originalPlaylistId: t.originalPlaylistId,
+        originalPlaylistName: t.originalPlaylistName,
         playbackError: t.playbackError,
       }));
       localStorage.setItem('noctune:queue', JSON.stringify({ queue: serializable, queueIndex }));

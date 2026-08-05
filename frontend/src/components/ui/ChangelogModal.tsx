@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, X, Check, FileText, Info } from 'lucide-react';
+import { X, Check, FileText, Info } from 'lucide-react';
 import { apiUrl } from '../../utils/api';
 
 const APP_VERSION = __APP_VERSION__;
@@ -34,14 +34,14 @@ function parseLatestHighlights(fullText: string | null): Array<{ title: string; 
 }
 
 const DEFAULT_HIGHLIGHTS = [
-  { title: 'Dedicated YouTube Channel', desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.' },
-  { title: 'Bundled yt-dlp for Channel View', desc: 'Channel view currently uses bundled yt-dlp as a temporary compatibility approach because Innertube cannot expose channel uploads and playlists reliably enough. This keeps channel browsing available on Windows and Linux, but makes loading slower and increases the app size. Playback and search still use the faster Innertube resolver; we will keep looking for a lighter, faster long-term solution.' },
-  { title: 'Playlist Browsing Polish', desc: 'Refined playlist browsing with Grid/List views, a filter toolbar that stays available while scrolling, and two-way sorting for title, artist, and duration.' },
-  { title: 'Interactive Artwork Viewer', desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.' },
-  { title: 'Direct Cover Downloads', desc: 'Added data URL (Base64) handling and 10-second fetch timeout to POST /player/download-artwork to save original high-quality cover images directly into Noctune\'s configured download folder with real-time status and destination path feedback (Saved to ...).' },
-  { title: 'Clearer Download Feedback', desc: 'Track download confirmations now clearly show where the saved file was placed.' },
-  { title: 'Playlist Track Reordering', desc: 'Fixed playlist edit reordering so tracks can be dragged from the handle, move visibly while dragging, and save in the intended order.' },
-  { title: 'Navigation & Player Polish', desc: 'Open creator names from track lists, enjoy cleaner page spacing, and see more consistent playback indicators.' },
+  { title: 'Queue Context Preservation', desc: 'Recently Played and Continue Listening cached queues now preserve their original playlist and source context instead of being overwritten by Home recommendations.' },
+  { title: 'Fullscreen Artwork Viewer', desc: 'Expanded cover artwork lightbox into an interactive full-window viewer with click-to-zoom, immediate drag panning while zoomed, and fitted initial viewport sizing.' },
+  { title: 'Centered Player Controls', desc: 'Centered Mini Player transport controls independently from track actions and neatly spaced artwork title and zoom controls around the player.' },
+  { title: 'Clean Channel Navigation', desc: 'Filtered out non-playable channel navigation entries such as Videos, Live, and Shorts from YouTube channel results.' },
+  { title: 'Version-Aware Release Subtitles', desc: 'Changelog modal title dynamically reflects whether the update is a Major, Minor Feature, or Patch release.' },
+  { title: 'Settings Changelog Button', desc: 'Renamed the "What\'s New" button in Settings to "Changelog" with a clean document icon and standard button styling.' },
+  { title: 'Local Library Header Glow', desc: 'Aligned Local Library header styling with other views so Noctune’s ambient gold top radial gradient shines through consistently.' },
+  { title: 'Artwork 50% Zoom & Pan', desc: 'Expanded cover artwork lightbox controls down to 50% (0.5x) and enabled dragging/panning on all zoomed levels.' },
 ];
 
 const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | null> = {
@@ -62,11 +62,11 @@ const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | 
   'Channel Videos & Playlists Tabs': null,
   'Interactive Artwork Lightbox & Cover Downloads': {
     title: 'Interactive Artwork Viewer',
-    desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.',
+    desc: 'View high-resolution artwork in a full-screen viewer that starts at a comfortable fitted size, then zoom and pan when you need a closer look.',
   },
   'Interactive Artwork Lightbox': {
     title: 'Interactive Artwork Viewer',
-    desc: 'View full-resolution artwork and thumbnails in an interactive viewer with zoom controls across your music views.',
+    desc: 'View high-resolution artwork in a full-screen viewer that starts at a comfortable fitted size, then zoom and pan when you need a closer look.',
   },
   'Direct Cover Downloads': {
     title: 'Direct Cover Downloads',
@@ -126,6 +126,26 @@ const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | 
     title: 'Visualizer Pulse Refinement',
     desc: 'Increased the existing bass-pulse intensity so the visualizer response is easier to see.',
   },
+  'Version-Aware Changelog Modal Subtitle': {
+    title: 'Version-Aware Changelog Modal',
+    desc: 'Derived the release subtitle dynamically based on SemVer changes (Major, Minor Feature, Patch/Fix).',
+  },
+  'Changelog Settings Button Polish': {
+    title: 'Settings Changelog Button',
+    desc: 'Renamed the "What\'s New" button in Settings to "Changelog" with a clean document icon and standard button styling.',
+  },
+  'Local Library Header Gradient Consistency': {
+    title: 'Local Library Header Glow',
+    desc: 'Aligned Local Library header styling with other views so Noctune’s ambient gold top radial gradient shines through consistently.',
+  },
+  'Artwork Lightbox 50% Zoom Out & Draggable Support': {
+    title: 'Artwork 50% Zoom & Pan',
+    desc: 'Expanded cover artwork lightbox controls down to 50% (0.5x) and enabled dragging/panning on all zoomed levels.',
+  },
+  'Artwork Lightbox 50% Zoom Out Support': {
+    title: 'Artwork 50% Zoom & Pan',
+    desc: 'Expanded cover artwork lightbox controls down to 50% (0.5x) and enabled dragging/panning on all zoomed levels.',
+  },
 };
 
 function toPresentationHighlights(items: Array<{ title: string; desc: string }>) {
@@ -152,6 +172,27 @@ function toPresentationHighlights(items: Array<{ title: string; desc: string }>)
   return highlights;
 }
 
+function parseSemVer(v: string) {
+  const clean = v.replace(/^v/, '').trim();
+  const parts = clean.split('.').map((p) => parseInt(p, 10) || 0);
+  return { major: parts[0] ?? 0, minor: parts[1] ?? 0, patch: parts[2] ?? 0 };
+}
+
+function getReleaseSubtitle(version: string, previousVersion?: string | null): string {
+  if (previousVersion && previousVersion !== version) {
+    const prev = parseSemVer(previousVersion);
+    const curr = parseSemVer(version);
+    if (curr.major > prev.major) return 'Major Release Notes & Updates';
+    if (curr.minor > prev.minor) return 'Minor Feature Release & Updates';
+    if (curr.patch > prev.patch) return 'Patch & Fix Release Notes';
+  }
+
+  const { minor, patch } = parseSemVer(version);
+  if (patch > 0) return 'Patch & Fix Release Notes';
+  if (minor > 0) return 'Minor Feature Release & Updates';
+  return 'Major Release Notes & Updates';
+}
+
 export function openChangelogModal() {
   window.dispatchEvent(new CustomEvent('noctune:open-changelog'));
 }
@@ -160,9 +201,13 @@ export function ChangelogModal() {
   const [open, setOpen] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(true);
   const [changelogText, setChangelogText] = useState<string | null>(null);
+  const [previousVersion, setPreviousVersion] = useState<string | null>(null);
 
   useEffect(() => {
     const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
+    if (lastSeen && lastSeen !== APP_VERSION) {
+      setPreviousVersion(lastSeen);
+    }
     if (lastSeen !== APP_VERSION) {
       setOpen(true);
       fetchChangelog();
@@ -199,11 +244,7 @@ export function ChangelogModal() {
   if (!open) return null;
 
   const dynamicHighlights = toPresentationHighlights(parseLatestHighlights(changelogText));
-  const pinnedHighlights = DEFAULT_HIGHLIGHTS.slice(0, 5);
-  const pinnedTitles = new Set(pinnedHighlights.map((item) => item.title));
-  const highlights = dynamicHighlights.length > 0
-    ? [...pinnedHighlights, ...dynamicHighlights.filter((item) => !pinnedTitles.has(item.title))]
-    : DEFAULT_HIGHLIGHTS;
+  const highlights = dynamicHighlights.length > 0 ? dynamicHighlights : DEFAULT_HIGHLIGHTS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -217,12 +258,10 @@ export function ChangelogModal() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 bg-base-950/60 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-500/40 bg-amber-500/20 text-amber-400">
-              <Sparkles size={18} />
-            </div>
+            <FileText size={20} className="text-amber-400 flex-shrink-0" />
             <div>
               <h2 className="text-base font-bold text-white">What's New in Noctune v{APP_VERSION}!</h2>
-              <p className="text-xs text-soft">Major Release Notes & Updates</p>
+              <p className="text-xs text-soft">{getReleaseSubtitle(APP_VERSION, previousVersion)}</p>
             </div>
           </div>
           <button
@@ -237,8 +276,8 @@ export function ChangelogModal() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs leading-relaxed text-soft">
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-3">
-            <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-              <FileText size={15} className="text-accent" /> Highlights of this release:
+            <h3 className="font-semibold text-white text-sm">
+              Highlights of this release:
             </h3>
             <ul className="space-y-2 text-muted">
               {highlights.map((item, idx) => (
@@ -252,7 +291,7 @@ export function ChangelogModal() {
 
           <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200/90">
             <Info size={15} className="flex-shrink-0 text-amber-400" />
-            <span>You can always review these release notes anytime from <strong>Settings &gt; What's New</strong>.</span>
+            <span>You can always review these release notes anytime from <strong>Settings &gt; Changelog</strong>.</span>
           </div>
 
           {changelogText && (

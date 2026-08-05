@@ -67,6 +67,10 @@ export async function browseRoutes(app: FastifyInstance) {
 
     const isYouTubeChannel = id.startsWith('ytchannel:') || id.startsWith('UC') || id.startsWith('@');
     if (isYouTubeChannel) {
+      const channelRef = id.replace(/^(ytchannel|youtube|channel):/, '').trim();
+      if (!/^UC[A-Za-z0-9_-]{22}$/.test(channelRef) && !/^@[A-Za-z0-9._-]+$/.test(channelRef)) {
+        return reply.status(400).send({ error: 'Invalid YouTube channel id' });
+      }
       try {
         const channelView = await browseYoutubeChannel(id);
         return reply.send(channelView);
