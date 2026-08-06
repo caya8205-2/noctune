@@ -367,6 +367,9 @@ export function predictMlRecommendations(
 export function importProdDataset(): { ok: boolean; importedTracks: number; totalPlays: number; pathUsed: string } {
   const appData = process.env.APPDATA || (process.platform === 'darwin' ? process.env.HOME + '/Library/Application Support' : '');
   const candidatePaths = [
+    path.join(getDataDir(), 'songs.json'),
+    path.join(process.cwd(), 'data', 'songs.json'),
+    path.join(process.cwd(), 'backend', 'data', 'songs.json'),
     path.join(appData, 'dev.noctune.desktop', 'songs.json'),
     path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming', 'dev.noctune.desktop', 'songs.json'),
     'C:\\Users\\Caya\\AppData\\Roaming\\dev.noctune.desktop\\songs.json',
@@ -381,7 +384,7 @@ export function importProdDataset(): { ok: boolean; importedTracks: number; tota
   }
 
   if (!prodSongsFile) {
-    throw new Error('Production songs.json not found in AppData Roaming dev.noctune.desktop');
+    throw new Error('Dataset songs.json not found in local data directory or AppData Roaming');
   }
 
   const raw = fs.readFileSync(prodSongsFile, 'utf-8');
@@ -465,18 +468,35 @@ export function generateMlNightlyMixes(limit = 12): Track[] {
     nightTrackCounts.set(e.trackId, (nightTrackCounts.get(e.trackId) ?? 0) + 1);
   }
 
-  // Rank tracks by night frequency & play count
+  const now = Date.now();
+
+  // Rank tracks by night frequency & play count, with recency decay
   const ranked = allTracks
     .map((track) => {
       const nightCount = nightTrackCounts.get(track.id) ?? 0;
       const totalPlayCount = track.playCount ?? 0;
-      const score = nightCount * 3 + totalPlayCount;
+      // Apply recency decay — tracks not played recently lose score
+      const daysSinceLastPlayed = track.lastPlayed
+        ? (now - track.lastPlayed) / (1000 * 60 * 60 * 24)
+        : 60;
+      const recencyMultiplier = Math.max(0.2, Math.exp(-daysSinceLastPlayed / 21)); // 21-day half-life
+      const baseScore = nightCount * 3 + totalPlayCount;
+      const score = baseScore * recencyMultiplier;
       return { track, score };
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score);
 
-  return ranked.slice(0, limit).map((item) => item.track as Track);
+  // Take top candidates (wider pool), then shuffle to add variety
+  const poolSize = Math.min(ranked.length, limit * 3);
+  const pool = ranked.slice(0, poolSize);
+  // Fisher-Yates weighted shuffle — top items stay near top but with variance
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  return pool.slice(0, limit).map((item) => item.track as Track);
 }
 
 // ── Debug Status Exporter ────────────────────────────────────────────────────
@@ -528,15 +548,28 @@ export async function submitMlTelemetry(customUrl?: string): Promise<{ ok: boole
   const log = loadPlayLog();
   const matrix = buildTransitionMatrix();
 
+  const activeTrackIds = new Set<string>();
+  for (const event of log) {
+    if (event.trackId) activeTrackIds.add(event.trackId);
+  }
+  for (const [fromId, targetMap] of matrix.entries()) {
+    activeTrackIds.add(fromId);
+    for (const toId of targetMap.keys()) {
+      activeTrackIds.add(toId);
+    }
+  }
+
   const tracks: Record<string, { id: string; title: string; artist: string; playCount?: number }> = {};
   for (const [id, t] of Object.entries(store.tracks)) {
     if (!id || !t) continue;
-    tracks[id] = {
-      id,
-      title: t.title || '',
-      artist: t.artist || '',
-      playCount: t.playCount || 0,
-    };
+    if ((t.playCount ?? 0) > 0 || activeTrackIds.has(id)) {
+      tracks[id] = {
+        id,
+        title: t.title || '',
+        artist: t.artist || '',
+        playCount: t.playCount || 0,
+      };
+    }
   }
 
   const transitions: Record<string, Record<string, number>> = {};

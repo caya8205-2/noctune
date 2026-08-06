@@ -143,24 +143,73 @@ function searchForSeed(seed: Track, query: string, limit: number): Promise<Track
     : searchTracks(query, limit);
 }
 
+function parseTitleMetadata(title: string): { artistOrFranchise: string; songTitle: string } | null {
+  if (!title) return null;
+  const cleanStr = title
+    .replace(/\{.*?\}/g, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(feat\..*?\)/gi, '')
+    .replace(/\(w\/.*?\)/gi, '')
+    .trim();
+
+  // Pattern: "Song Title || Franchise/Artist" or "Franchise/Artist || Song Title"
+  if (cleanStr.includes('||')) {
+    const parts = cleanStr.split('||').map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return { artistOrFranchise: parts[1], songTitle: parts[0] };
+    }
+  }
+
+  // Pattern: "Song Title (From "Franchise")"
+  const fromMatch = cleanStr.match(/(.*?)\s*\((?:From|OST)\s+["']?(.*?)["']?\)/i);
+  if (fromMatch && fromMatch[1] && fromMatch[2]) {
+    return { artistOrFranchise: fromMatch[2].trim(), songTitle: fromMatch[1].trim() };
+  }
+
+  // Pattern: "Artist / Franchise - Song Title"
+  if (cleanStr.includes(' - ')) {
+    const parts = cleanStr.split(' - ').map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return { artistOrFranchise: parts[0], songTitle: parts[1] };
+    }
+  }
+
+  return null;
+}
+
 function buildFallbackQueries(seed: Track): string[] {
-  const artist = primaryArtist(seed.artist);
-  const compactArtist = normalize(artist);
-  const queries = [
-    `${seed.title} ${artist}`,
-    seed.query,
-    `artist:"${artist}"`,
-    artist,
-    `${artist} songs`,
-    `${artist} official`,
-    `${artist} topic`,
-  ];
+  const rawArtist = primaryArtist(seed.artist);
+  const compactArtist = normalize(rawArtist);
+  const titleMeta = parseTitleMetadata(seed.title);
+  const queries: string[] = [];
+
+  if (titleMeta && titleMeta.artistOrFranchise.length > 2) {
+    queries.push(`${titleMeta.artistOrFranchise} ${titleMeta.songTitle}`);
+    queries.push(`${titleMeta.artistOrFranchise} OST`);
+    queries.push(`${titleMeta.artistOrFranchise} songs`);
+    queries.push(titleMeta.artistOrFranchise);
+  }
+
+  const cleanSeedTitle = seed.title
+    .replace(/\{.*?\}/g, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(w\/.*?\)/gi, '')
+    .trim();
+
+  const cleanArtistName = rawArtist.replace(/- topic$/gi, '').trim();
+  if (cleanArtistName) {
+    queries.push(`${cleanSeedTitle} ${cleanArtistName}`);
+    queries.push(`${cleanArtistName} songs`);
+    queries.push(cleanArtistName);
+  } else {
+    queries.push(cleanSeedTitle);
+  }
 
   if (compactArtist.includes('hakos') || compactArtist.includes('hakoz')) {
     queries.push('Hakos Baelz', 'Hakos Baelz original songs', 'hololive english songs');
   }
 
-  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
+  return [...new Set(queries.map((q) => q.trim()).filter((q) => q.length > 2))];
 }
 
 function uniqueTracks(tracks: Track[]): Track[] {
@@ -219,6 +268,15 @@ function buildPersonalMixSeeds(): Array<{ id: string; name: string; description:
     seeds.push({ id: mixId(name), name, description, seed });
   };
 
+  // Pick a random seed from a candidate pool to add variety
+  const pickRandom = (candidates: Track[]): Track | undefined => {
+    const available = candidates.filter((t) => !usedSeedIds.has(uniqueKey(t)));
+    if (available.length === 0) return undefined;
+    // Weighted random — favor top items but allow variance
+    const poolSize = Math.min(available.length, 8);
+    return available[Math.floor(Math.random() * poolSize)];
+  };
+
   const artistSeed = pickArtistSeed(pool, usedSeedIds);
   if (artistSeed) {
     addSeed(
@@ -228,10 +286,10 @@ function buildPersonalMixSeeds(): Array<{ id: string; name: string; description:
     );
   }
 
-  addSeed('Recent Drift', 'A fresh drift from what has been looping lately.', recent[0]);
-  addSeed('Deep Rotation', 'Built from tracks that keep coming back.', top[0]);
+  addSeed('Recent Drift', 'A fresh drift from what has been looping lately.', pickRandom(recent));
+  addSeed('Deep Rotation', 'Built from tracks that keep coming back.', pickRandom(top));
 
-  const alternateSeed = pool.find((track) => !usedSeedIds.has(uniqueKey(track)));
+  const alternateSeed = pickRandom(pool);
   addSeed('Nightly Drift', 'A wider mix from your local listening pattern.', alternateSeed);
 
   return seeds.slice(0, 4);
@@ -304,6 +362,14 @@ function scoreRecommendation(seed: Track, item: RecommendationCandidate, order: 
   if (artist.includes('topic')) score += 50;
   if (artist.includes('vevo')) score += 45;
 
+  if (seed.genres && seed.genres.length > 0 && candidate.genres && candidate.genres.length > 0) {
+    const seedGenres = new Set(seed.genres.map((g) => normalize(g)));
+    const matchingGenres = candidate.genres.filter((g) => seedGenres.has(normalize(g)));
+    if (matchingGenres.length > 0) {
+      score += 40 + matchingGenres.length * 20;
+    }
+  }
+
   if (title === seedTitle || title.includes(seedTitle)) score -= 120;
 
   for (const keyword of badKeywords) {
@@ -342,36 +408,35 @@ function selectRecommendations(
   preferDiversity: boolean
 ): Track[] {
   const sorted = ranked.sort((a, b) => b.score - a.score);
-  if (!preferDiversity) {
-    return sorted.slice(0, limit).map(({ item }) => item.track);
-  }
 
-  const seedArtist = normalize(primaryArtist(seed.artist));
-  const maxSeedArtist = Math.max(2, Math.floor(limit * 0.35));
-  const maxOtherArtist = Math.max(2, Math.floor(limit * 0.25));
+  // Enforce a strict cap of max 3 tracks per artist to balance variety and creator collabs
+  const maxPerArtist = 3;
   const artistCounts = new Map<string, number>();
-  const selected: Array<{ item: RecommendationCandidate; score: number }> = [];
-  const deferred: Array<{ item: RecommendationCandidate; score: number }> = [];
+  const selected: Track[] = [];
+  const deferred: Track[] = [];
 
   for (const entry of sorted) {
-    const key = artistKey(entry.item.track);
+    const track = entry.item.track;
+    const key = artistKey(track);
     const current = artistCounts.get(key) ?? 0;
-    const maxForArtist = key === seedArtist ? maxSeedArtist : maxOtherArtist;
 
-    if (current < maxForArtist) {
-      selected.push(entry);
+    if (current < maxPerArtist) {
+      selected.push(track);
       artistCounts.set(key, current + 1);
       if (selected.length >= limit) break;
     } else {
-      deferred.push(entry);
+      deferred.push(track);
     }
   }
 
   if (selected.length < limit) {
-    selected.push(...deferred.slice(0, limit - selected.length));
+    for (const track of deferred) {
+      if (selected.length >= limit) break;
+      selected.push(track);
+    }
   }
 
-  return selected.slice(0, limit).map(({ item }) => item.track);
+  return selected.slice(0, limit);
 }
 
 function diversifyPersonalMixTracks(tracks: Track[], limit: number): Track[] {
@@ -417,7 +482,7 @@ function diversifyPersonalMixTracks(tracks: Track[], limit: number): Track[] {
 }
 
 // Resolve Last.fm similar tracks → search each as targeted query
-async function getCandidatesFromLastFm(seed: Track, limit: number): Promise<RecommendationCandidate[]> {
+async function getCandidatesFromLastFm(seed: Track, limit: number, isSpotifyDominant = false): Promise<RecommendationCandidate[]> {
   const similar = await getSimilarTracks(seed.title, primaryArtist(seed.artist), limit);
 
   if (similar.length === 0) return [];
@@ -428,11 +493,24 @@ async function getCandidatesFromLastFm(seed: Track, limit: number): Promise<Reco
 
   // Search top matches — higher match score = search first
   const sorted = [...similar].sort((a, b) => b.match - a.match).slice(0, limit);
+  const preferSpotify = Boolean(seed.spotifyId) || seed.id.startsWith('spotify:') || isSpotifyDominant;
 
   const results = await Promise.allSettled(
     sorted.map(async ({ title, artist, match }) => {
       const query = `${title} ${artist}`;
-      const tracks = await searchForSeed(seed, query, 3);
+      let tracks: Track[] = [];
+
+      if (preferSpotify) {
+        try {
+          tracks = await searchSpotify(query, 3);
+        } catch {
+          tracks = [];
+        }
+      }
+
+      if (tracks.length === 0) {
+        tracks = await searchTracks(query, 3);
+      }
 
       return tracks.map((track): RecommendationCandidate => ({
         track,
@@ -449,14 +527,31 @@ async function getCandidatesFromLastFm(seed: Track, limit: number): Promise<Reco
     .flatMap((r) => r.value);
 }
 
-// Fallback: search by artist name queries (original behaviour)
-async function getCandidatesFromSearch(seed: Track, limit: number): Promise<RecommendationCandidate[]> {
+async function getCandidatesFromSearch(
+  seed: Track,
+  limit: number,
+  isSpotifyDominant = false
+): Promise<RecommendationCandidate[]> {
   const queries = buildFallbackQueries(seed);
   const batches: RecommendationCandidate[][] = [];
 
   for (const query of queries) {
     try {
-      const raw = await searchForSeed(seed, query, Math.min(limit, 10));
+      let raw: Track[] = [];
+      const preferSpotify = Boolean(seed.spotifyId) || seed.id.startsWith('spotify:') || isSpotifyDominant;
+
+      if (preferSpotify) {
+        try {
+          raw = await searchSpotify(query, Math.min(limit, 10));
+        } catch {
+          raw = [];
+        }
+      }
+
+      if (raw.length === 0) {
+        raw = await searchTracks(query, Math.min(limit, 10));
+      }
+
       batches.push(raw.map((track) => ({ track, source: 'search' })));
     } catch (err) {
       console.warn(
@@ -468,50 +563,82 @@ async function getCandidatesFromSearch(seed: Track, limit: number): Promise<Reco
   return batches.flat();
 }
 
+interface RecommendationOptions {
+  excludeIds?: string[];
+  limit?: number;
+  seeds?: Track[];
+}
+
 export async function getRecommendations(
   seed: Track,
   options: RecommendationOptions = {}
 ): Promise<Track[]> {
   const limit = options.limit ?? 12;
-  const excluded = new Set<string>(
-    [seed.id, seed.youtubeId, seed.spotifyId, ...(options.excludeIds ?? [])].filter(Boolean) as string[]
+  const seedsList = (options.seeds && options.seeds.length > 0) ? options.seeds : [seed];
+  const excluded = new Set(
+    (options.excludeIds ?? [])
+      .concat(seedsList.flatMap((s) => [s.id, s.spotifyId ?? '', s.youtubeId ?? '']))
+      .filter(Boolean)
   );
-  for (const id of getPlaybackBlacklist()) excluded.add(id);
 
   const selectedEngine = getEnvConfig().recommendationEngine ?? 'hybrid-ml';
+  const perSeedLimit = Math.max(3, Math.ceil(limit / seedsList.length));
 
-  // ── Tier 1: Local ML Recommendation Engine ──────────────────────────────
+  // Determine dominant source from the last 5 seed tracks
+  const spotifySeedCount = seedsList.filter((s) => Boolean(s.spotifyId) || s.id.startsWith('spotify:')).length;
+  const isSpotifyDominant = spotifySeedCount >= Math.ceil(seedsList.length / 2);
+
+  // ── Tier 1: Local ML Recommendation Engine for all seeds ────────────────
   let mlCandidates: RecommendationCandidate[] = [];
   if (selectedEngine === 'hybrid-ml') {
-    const mlTracks = predictMlRecommendations(seed, { excludeIds: excluded, limit });
-    mlCandidates = mlTracks.map((track) => ({
-      track,
-      source: 'local' as const,
-      match: 0.95,
-    }));
-  }
-
-  // ── Tier 2: Last.fm API ──────────────────────────────────────────────────
-  let lastFmCandidates: RecommendationCandidate[] = [];
-  if (selectedEngine === 'hybrid-ml' || selectedEngine === 'lastfm') {
-    if (isLastFmConfigured()) {
-      try {
-        lastFmCandidates = await getCandidatesFromLastFm(seed, Math.max(limit, 10));
-      } catch (err) {
-        console.warn(`[recommend] Last.fm failed, falling back to search: ${(err as Error).message}`);
-      }
+    for (const sTrack of seedsList) {
+      const mlTracks = predictMlRecommendations(sTrack, { excludeIds: excluded, limit: perSeedLimit });
+      mlCandidates.push(...mlTracks.map((track) => ({
+        track,
+        source: 'local' as const,
+        match: 0.95,
+      })));
     }
   }
 
-  // ── Tier 3: Legacy Search & Rule-based autoqueue ────────────────────────
-  const searchCandidates = await getCandidatesFromSearch(seed, Math.max(limit, 10));
+  // ── Tier 2 & 3: Pool & Interleave Last.fm & Search candidates across seeds ──
+  const seedCandidatesList: RecommendationCandidate[][] = [];
+
+  await Promise.allSettled(
+    seedsList.map(async (sTrack) => {
+      const currentSeedCandidates: RecommendationCandidate[] = [];
+      if (selectedEngine === 'hybrid-ml' || selectedEngine === 'lastfm') {
+        if (isLastFmConfigured()) {
+          try {
+            const lfm = await getCandidatesFromLastFm(sTrack, perSeedLimit * 2, isSpotifyDominant);
+            currentSeedCandidates.push(...lfm);
+          } catch (err) {
+            console.warn(`[recommend] Last.fm failed for seed "${sTrack.title}": ${(err as Error).message}`);
+          }
+        }
+      }
+      const sc = await getCandidatesFromSearch(sTrack, perSeedLimit, isSpotifyDominant);
+      currentSeedCandidates.push(...sc);
+      seedCandidatesList.push(currentSeedCandidates);
+    })
+  );
+
+  // Interleave candidates from each seed so no single seed dominates
+  const pooledCandidates: RecommendationCandidate[] = [];
+  const maxPoolLength = Math.max(...seedCandidatesList.map((c) => c.length), 0);
+  for (let i = 0; i < maxPoolLength; i++) {
+    for (const candList of seedCandidatesList) {
+      if (candList[i]) pooledCandidates.push(candList[i]);
+    }
+  }
 
   const candidates: RecommendationCandidate[] = [
     ...mlCandidates,
-    ...lastFmCandidates,
-    ...searchCandidates,
+    ...pooledCandidates,
   ];
 
+  const seedArtists = new Set(seedsList.map((s) => normalize(primaryArtist(s.artist))));
+  const seedTitles = seedsList.map((s) => cleanTitle(s.title)).filter((t) => t.length >= 3);
   const seen = new Set<string>();
   const ranked: Array<{ item: RecommendationCandidate; score: number }> = [];
 
@@ -521,15 +648,26 @@ export async function getRecommendations(
     if (!isPlayableCandidate(candidate)) return;
     if (isPlaybackBlacklisted(candidate.youtubeId ?? candidate.id)) return;
     if (!key || seen.has(key) || excluded.has(candidate.id) || excluded.has(candidate.spotifyId ?? '')) return;
+
+    // Filter out unrelated songs that happen to share the same title name (e.g. random "Gravity" songs from unrelated artists)
+    const candidateTitleNorm = cleanTitle(candidate.title);
+    const candidateArtistNorm = normalize(primaryArtist(candidate.artist));
+    const sharesTitleWithSeed = seedTitles.some((st) => candidateTitleNorm === st || candidateTitleNorm.includes(st));
+    if (sharesTitleWithSeed && !seedArtists.has(candidateArtistNorm) && item.source === 'search') {
+      return;
+    }
+
     seen.add(key);
-    ranked.push({ item, score: scoreRecommendation(seed, item, order) });
+    let baseScore = scoreRecommendation(seed, item, order);
+    ranked.push({ item, score: baseScore });
   });
 
-  const recommendations = selectRecommendations(ranked, seed, limit, lastFmCandidates.length > 0);
+  const recommendations = selectRecommendations(ranked, seed, limit, pooledCandidates.some(c => c.source === 'lastfm'));
 
   console.log(
-    `[recommend] generated ${JSON.stringify({
-      seed: `${seed.title} - ${seed.artist}`,
+    `[recommend] generated multi-seed ${JSON.stringify({
+      seedsCount: seedsList.length,
+      seeds: seedsList.map(s => `${s.title} - ${s.artist}`),
       source: isLastFmConfigured() ? 'lastfm+search' : 'search',
       candidateCount: candidates.length,
       returned: recommendations.length,

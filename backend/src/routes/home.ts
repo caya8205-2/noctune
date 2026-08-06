@@ -8,8 +8,11 @@ import type { Track } from '../types/index.js';
 // Server-side TTL cache for home screen data — avoids hitting Spotify
 // and re-sorting the full track cache on every navigation back to Home.
 const HOME_CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
+const NIGHTLY_MIX_TTL_MS = 1000 * 60 * 15; // 15 minutes server-side cache for nightly mixes
+
 let homeLocalCache: { data: { playlists: unknown; recentTracks: unknown }; expiresAt: number } | null = null;
 let newReleasesCache: { data: { newReleases: Track[] }; expiresAt: number } | null = null;
+let nightlyMixCache: { data: { mixes: unknown[] }; expiresAt: number } | null = null;
 
 export async function homeRoutes(app: FastifyInstance) {
   // Local home data (playlists + recent tracks) resolves instantly from the
@@ -51,13 +54,19 @@ export async function homeRoutes(app: FastifyInstance) {
   });
 
   app.get('/home/nightly-mix', async (req, reply) => {
+    if (nightlyMixCache && Date.now() < nightlyMixCache.expiresAt) {
+      return reply.send(nightlyMixCache.data);
+    }
+
     const query = req.query as { limit?: string; tracks?: string };
     const mixLimit = Math.min(6, Math.max(1, Number(query.limit ?? 4) || 4));
     const tracksPerMix = Math.min(16, Math.max(4, Number(query.tracks ?? 8) || 8));
 
     try {
       const mixes = await getPersonalMixes({ mixLimit, tracksPerMix });
-      return reply.send({ mixes });
+      const data = { mixes };
+      nightlyMixCache = { data, expiresAt: Date.now() + NIGHTLY_MIX_TTL_MS };
+      return reply.send(data);
     } catch (err) {
       app.log.warn({ message: (err as Error).message }, '[home] nightly mix unavailable');
       return reply.send({ mixes: [] });

@@ -233,17 +233,27 @@ export const api = {
   checkForUpdates: (force = false) =>
     request<UpdateInfo>(`/updates/latest${force ? '?force=true' : ''}`),
 
-  browseArtist: (artistId: string) =>
-    request<ArtistView>(`/browse/artist/${encodeURIComponent(artistId)}`),
+  browseArtist: async (artistId: string) => {
+    const cleanId = artistId.replace(/:(videos|playlists)$/, '');
+    if (detectTauriEnvironment() && (cleanId.startsWith('ytchannel:') || cleanId.startsWith('UC') || cleanId.startsWith('@'))) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<ArtistView>('get_youtube_channel', { channelId: cleanId });
+      } catch (err) {
+        console.warn('[api] Tauri get_youtube_channel failed, falling back to server:', err);
+      }
+    }
+    return request<ArtistView>(`/browse/artist/${encodeURIComponent(cleanId)}`);
+  },
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
   browseYoutubePlaylist: (playlistId: string) =>
     request<YouTubePlaylistView>(`/browse/youtube-playlist/${encodeURIComponent(playlistId)}`),
 
-  recommend: (seed: Track, excludeIds: string[] = [], limit = 12) =>
+  recommend: (seed: Track, excludeIds: string[] = [], limit = 12, seeds?: Track[]) =>
     request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
       method: 'POST',
-      body: JSON.stringify({ seed, excludeIds, limit }),
+      body: JSON.stringify({ seed, excludeIds, limit, seeds }),
     }),
 
   lyrics: (track: Track) =>
@@ -486,6 +496,8 @@ export interface AudioCacheStatus {
     inFlight: boolean;
     prefetched: boolean;
     prefetching: boolean;
+    refreshed?: boolean;
+    resolved?: boolean;
   }>;
 }
 

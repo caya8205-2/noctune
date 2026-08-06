@@ -14,7 +14,13 @@ function logPrefetch(message: string, details?: Record<string, unknown>) {
 }
 
 export function getPrefetched(videoId: string): CachedTrack | undefined {
-  return prefetched.get(videoId);
+  if (prefetched.has(videoId)) return prefetched.get(videoId);
+  const rawId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  return (
+    prefetched.get(rawId) ??
+    prefetched.get(`youtube:${rawId}`) ??
+    prefetched.get(`ytdlp:${rawId}`)
+  );
 }
 
 export function isPrefetching(videoId: string): boolean {

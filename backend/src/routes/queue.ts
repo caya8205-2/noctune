@@ -17,7 +17,8 @@ const TrackSchema = z.object({
 });
 
 const RecommendBody = z.object({
-  seed: TrackSchema,
+  seed: TrackSchema.optional(),
+  seeds: z.array(TrackSchema).optional(),
   excludeIds: z.array(z.string()).default([]),
   limit: z.number().min(1).max(25).default(12),
 });
@@ -30,16 +31,22 @@ export async function queueRoutes(app: FastifyInstance) {
     }
 
     const startedAt = Date.now();
-    const { seed, excludeIds, limit } = parsed.data;
-    app.log.info({ seed: `${seed.title} - ${seed.artist}`, limit }, '[queue] recommend requested');
+    const { seed, seeds, excludeIds, limit } = parsed.data;
+    const primarySeed = seed ?? (seeds && seeds.length > 0 ? seeds[seeds.length - 1] : undefined);
+
+    if (!primarySeed) {
+      return reply.status(400).send({ error: 'Missing recommendation seed track' });
+    }
+
+    app.log.info({ seed: `${primarySeed.title} - ${primarySeed.artist}`, seedsCount: seeds?.length ?? 1, limit }, '[queue] recommend requested');
 
     try {
-      const tracks = await getRecommendations(seed, { excludeIds, limit });
+      const tracks = await getRecommendations(primarySeed, { excludeIds, limit, seeds });
       app.log.info(
-        { seed: seed.id, count: tracks.length, elapsedMs: Date.now() - startedAt },
+        { seed: primarySeed.id, count: tracks.length, elapsedMs: Date.now() - startedAt },
         '[queue] recommend done'
       );
-      return reply.send({ seed, tracks });
+      return reply.send({ seed: primarySeed, tracks });
     } catch (err) {
       app.log.error(err, '[queue] recommend failed');
       return reply

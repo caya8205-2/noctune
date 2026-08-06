@@ -88,9 +88,17 @@ export function getCachedByQuery(query: string): CachedTrack | null {
   return store.tracks[videoId] ?? null;
 }
 
-/** Look up directly by videoId. */
+/** Look up directly by videoId (handles prefix variations like youtube: / ytdlp:). */
 export function getCachedById(videoId: string): CachedTrack | null {
-  return getStore().tracks[videoId] ?? null;
+  const store = getStore();
+  if (store.tracks[videoId]) return store.tracks[videoId];
+  const rawId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  return (
+    store.tracks[rawId] ??
+    store.tracks[`youtube:${rawId}`] ??
+    store.tracks[`ytdlp:${rawId}`] ??
+    null
+  );
 }
 
 export function getCachedBySpotifyId(spotifyId: string): CachedTrack | null {

@@ -28,10 +28,10 @@ import { lyricsQueryOptions } from '../../hooks/useLyrics';
 import { extractDominantColor } from '../../utils/colorExtractor';
 
 const sourceMeta = {
-  prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-accent/15 text-accent border-accent/20' },
-  cache: { label: 'Cache', Icon: Database, className: 'bg-base-700 text-soft border-base-600/40' },
-  cache_refreshed: { label: 'Refreshed', Icon: Activity, className: 'bg-base-700 text-soft border-base-600/40' },
-  resolved: { label: 'Resolved', Icon: Radio, className: 'bg-base-700 text-muted border-base-600/40' },
+  prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/60' },
+  cache: { label: 'Cache', Icon: Database, className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/60' },
+  cache_refreshed: { label: 'Refreshed', Icon: Activity, className: 'bg-sky-500/20 text-sky-300 border-sky-400/60' },
+  resolved: { label: 'Resolved', Icon: Radio, className: 'bg-red-500/20 text-red-400 border-red-500/60' },
 };
 
 const JAPANESE_SCRIPT_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
@@ -398,10 +398,10 @@ export function PlayerView() {
               {/* Badge Legend (toggleable on badge click) */}
               {showLegend && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl border border-white/5 bg-base-900/40 px-4 py-2 text-[11px] text-muted animate-fade-in">
-                  <span><strong className="text-accent font-medium">Prefetch:</strong> Pre-loaded audio stream</span>
-                  <span><strong className="text-soft font-medium">Cache:</strong> Loaded from local matcher</span>
-                  <span><strong className="text-soft font-medium">Refreshed:</strong> Renewed stream URL</span>
-                  <span><strong className="text-soft font-medium">Resolved:</strong> Matched live from YouTube</span>
+                  <span><strong className="text-yellow-400 font-medium">Prefetch:</strong> Audio file on disk or pre-loaded in memory for instant playback</span>
+                  <span><strong className="text-emerald-400 font-medium">Cache:</strong> Matched from learned store cache without searching YouTube</span>
+                  <span><strong className="text-sky-300 font-medium">Refreshed:</strong> Audio stream URL renewed from cached YouTube match</span>
+                  <span><strong className="text-red-400 font-medium">Resolved:</strong> Newly matched live via YouTube search (first-time lookup)</span>
                 </div>
               )}
 

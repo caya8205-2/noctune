@@ -512,6 +512,7 @@ function hasArtistChannelMatch(candidate: ScoredCandidate): boolean {
 }
 
 export function hasTitleEvidence(candidate: ScoredCandidate): boolean {
+  if (candidate.score >= 140) return true;
   if (
     candidate.reasons.includes('artist-channel-match') &&
     (candidate.reasons.includes('duration-close') || candidate.reasons.includes('duration-near'))
@@ -521,7 +522,8 @@ export function hasTitleEvidence(candidate: ScoredCandidate): boolean {
   return (
     candidate.reasons.includes('title-phrase') ||
     candidate.reasons.includes('title-compact') ||
-    candidate.reasons.some((reason) => reason.startsWith('title-word-match:'))
+    candidate.reasons.some((reason) => reason.startsWith('title-word-match:')) ||
+    candidate.reasons.some((reason) => reason.startsWith('positive-title:'))
   );
 }
 
@@ -758,17 +760,18 @@ export async function matchSpotifyTrackToYoutube(spotifyTrack: Track): Promise<T
       })}`
     );
 
-    if (!accepted) return null;
+    const targetMatch = accepted ?? (lastBest && lastBest.score >= 100 ? lastBest : null);
+    if (!targetMatch) return null;
 
-    writeCache(spotifyTrack, accepted);
+    writeCache(spotifyTrack, targetMatch);
 
     return {
       ...spotifyTrack,
-      id: accepted.track.id,
+      id: targetMatch.track.id,
       query: usedQuery,
-      youtubeId: accepted.track.id,
-      youtubeTitle: accepted.track.title,
-      youtubeArtist: accepted.track.artist,
+      youtubeId: targetMatch.track.id,
+      youtubeTitle: targetMatch.track.title,
+      youtubeArtist: targetMatch.track.artist,
     };
   });
 

@@ -19,7 +19,8 @@ import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 
 const NIGHTLY_MIX_CACHE_KEY = 'noctune:nightly-mix:v2';
-const NIGHTLY_MIX_REFRESH_INTERVAL_MS = 1000 * 60 * 60 * 5;
+const NIGHTLY_MIX_REFRESH_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
+const NIGHTLY_MIX_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 3; // 3 hours max localStorage cache age
 const NIGHTLY_MIX_LIMIT = 4;
 const NIGHTLY_MIX_TRACKS = 8;
 
@@ -36,6 +37,8 @@ function readNightlyMixCache(): NightlyMixCache | null {
     if (!raw) return null;
     const cache = JSON.parse(raw) as Partial<NightlyMixCache>;
     if (!cache.updatedAt || !cache.data || !Array.isArray(cache.data.mixes)) return null;
+    // Discard stale localStorage cache so mixes refresh on app restart
+    if (Date.now() - cache.updatedAt > NIGHTLY_MIX_CACHE_MAX_AGE_MS) return null;
     return cache as NightlyMixCache;
   } catch {
     return null;
@@ -351,9 +354,9 @@ function CleanCoverCard({
             onClick={albumViewId ? handleTitleClick : onClick}
             className={clsx(
               'truncate text-sm font-semibold transition-colors cursor-pointer text-white',
-              albumViewId ? 'hover:text-accent' : 'group-hover:text-accent'
+              albumViewId && 'hover:text-accent'
             )}
-            title={title}
+            title={albumViewId ? `Go to album: ${track?.album || title}` : title}
           >
             {title}
           </p>

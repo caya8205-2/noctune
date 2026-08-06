@@ -4,8 +4,9 @@ import { api } from '../utils/api';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
-const AUTOQUEUE_TOP_UP_THRESHOLD = 5;
+const AUTOQUEUE_TOP_UP_THRESHOLD = 0;
 const AUTOQUEUE_TOP_UP_LIMIT = 10;
+let lastTopUpAttemptKey = '';
 
 function recordPlaybackHistory(track: Track): void {
   const now = Date.now();
@@ -55,6 +56,7 @@ interface PlayerState {
   personalMixesMap: Record<string, PersonalMix>;
   activeArtistId: string | null;
   activeAlbumId: string | null;
+  activeChannelTab: 'videos' | 'playlists';
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   sidebarCompact: boolean;
@@ -93,7 +95,7 @@ interface PlayerState {
   setPlaybackRate: (rate: number) => void;
   setSleepTimer: (minutes: number | null) => void;
   setCrossfadeDuration: (seconds: number) => void;
-  setView: (view: PlayerState['activeView'], id?: string) => void;
+  setView: (view: PlayerState['activeView'], id?: string, channelTab?: 'videos' | 'playlists') => void;
   openPersonalMix: (mix: PersonalMix) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
@@ -280,6 +282,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Persist and push history without waiting for backend resolve
         get().saveQueueState();
         get().pushQueueHistory(playableTrack);
+        void get().topUpQueue();
 
         // Fetch missing metadata (thumbnail) for local track in background
         (async () => {
@@ -344,7 +347,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playableTrack.originalPlaylistId = track.originalPlaylistId;
       playableTrack.originalPlaylistName = track.originalPlaylistName;
       const seedTrack = { ...track, queueSource: source };
-      const shouldAutoQueue = options?.autoQueue ?? false;
+      const shouldAutoQueue = (options?.autoQueue ?? false) && (queue.length <= 1);
       let playbackQueue = queue.map((queuedTrack) => queuedTrack.id === track.id ? seedTrack : queuedTrack);
       let playbackIndex = idx;
 
@@ -390,9 +393,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         queueIndex: playbackIndex,
       });
 
-      // Persist queue state and track history
+      // Persist queue state, track history, and check autoqueue top-up
       get().saveQueueState();
       get().pushQueueHistory(playableTrack);
+      void get().topUpQueue();
 
       // Trigger prefetch for next 5 tracks
       if (playbackQueue.length > 0 && playbackIndex >= 0) {
@@ -532,6 +536,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     const seed = state.queue[state.queueIndex] ?? state.currentTrack;
+    const attemptKey = `${seed.id}:${state.queue.length}:${state.queueIndex}`;
+    if (lastTopUpAttemptKey === attemptKey) {
+      return;
+    }
+    lastTopUpAttemptKey = attemptKey;
+
+    const seedStartIndex = Math.max(0, state.queueIndex - 4);
+    const recentSeeds = state.queue.slice(seedStartIndex, state.queueIndex + 1);
+
     const existingIds = new Set(
       state.queue
         .flatMap((track) => [track.id, track.spotifyId ?? '', track.youtubeId ?? ''])
@@ -541,23 +554,37 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ isAutoQueueLoading: true });
     try {
       const excludeIds = [...existingIds];
-      let candidates = (await api.recommend(seed, excludeIds, AUTOQUEUE_TOP_UP_LIMIT)).tracks;
+      let candidates = (await api.recommend(seed, excludeIds, AUTOQUEUE_TOP_UP_LIMIT, recentSeeds)).tracks;
 
       if (candidates.length === 0) {
         const personal = await api.nightlyMixes(1, AUTOQUEUE_TOP_UP_LIMIT);
         candidates = personal.mixes[0]?.tracks ?? [];
       }
 
-      const additions = candidates
+      let additions = candidates
         .filter((track) => !existingIds.has(track.id) && !existingIds.has(track.spotifyId ?? '') && !existingIds.has(track.youtubeId ?? ''))
         .slice(0, AUTOQUEUE_TOP_UP_LIMIT)
         .map((track) => ({ ...track, queueSource: 'autoqueue' as const }));
+
+      // Fallback: If strict deduplication excluded all candidates (long queue), deduplicate against last 20 tracks
+      if (additions.length === 0 && candidates.length > 0) {
+        const recentQueueIds = new Set(
+          state.queue.slice(-20)
+            .flatMap((track) => [track.id, track.spotifyId ?? '', track.youtubeId ?? ''])
+            .filter(Boolean)
+        );
+        additions = candidates
+          .filter((track) => !recentQueueIds.has(track.id) && !recentQueueIds.has(track.spotifyId ?? '') && !recentQueueIds.has(track.youtubeId ?? ''))
+          .slice(0, AUTOQUEUE_TOP_UP_LIMIT)
+          .map((track) => ({ ...track, queueSource: 'autoqueue' as const }));
+      }
 
       if (additions.length === 0) return;
 
       set((current) => ({
         queue: [...current.queue, ...additions],
       }));
+      get().saveQueueState();
 
       api.prefetchTracks(additions.slice(0, 5)).catch(() => {});
       console.info('[player] autoqueue top-up done', {
@@ -682,7 +709,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   }),
   setCrossfadeDuration: (seconds) => set({ crossfadeDuration: Math.min(12, Math.max(0, seconds)) }),
 
-  setView: (view, id) =>
+  setView: (view, id, channelTab) =>
     set((state) => {
       const isNightly = view === 'playlist' && id?.startsWith('nightly:');
       const mixId = isNightly ? id!.replace(/^nightly:/, '') : null;
@@ -696,6 +723,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         activePersonalMix: mix,
         activeArtistId: view === 'artist' ? (id ?? null) : null,
         activeAlbumId: view === 'album' ? (id ?? null) : null,
+        activeChannelTab: view === 'artist' ? (channelTab ?? 'videos') : 'videos',
       };
     }),
 
@@ -745,7 +773,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.queue) && parsed.queue.length > 0) {
-          set({ queue: parsed.queue, queueIndex: parsed.queueIndex ?? -1 });
+          const restoredIndex = parsed.queueIndex ?? -1;
+          const restoredQueue = parsed.queue;
+          set({ queue: restoredQueue, queueIndex: restoredIndex });
         }
       }
       // Also restore queue history

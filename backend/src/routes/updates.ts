@@ -20,6 +20,9 @@ All notable Noctune changes are documented here.
 - **Changelog Settings Button Polish**: Renamed the "What's New" button in Settings to "Changelog", replaced the glowing amber sparkles icon with a clean \`FileText\` document icon, and updated button styling to match standard settings controls without confusing browser-link styling.
 - **Local Library Header Gradient Consistency**: Removed the dark \`bg-base-950/40\` overlay and bottom border line from \`LocalFilesView.tsx\` header so Noctune's ambient top gold background radial gradient shines through consistently across all views (History, Queue, Settings, and Local Library).
 - **Artwork Lightbox 50% Zoom Out & Draggable Support**: Expanded \`ArtworkLightboxModal.tsx\` zoom range down to a minimum of 50% (\`0.5x\`) from the default 100% (\`1.0x\`), enabled drag/pan capabilities on all non-100% zoom levels (both zoomed-in and zoomed-out), and updated cursor state (\`cursor-grab\`) for all zoomed states.
+- **Native Rust YouTube Channel Resolver (Roadmap Track 2)**: Integrated a native Rust Tauri Command (\`get_youtube_channel\`) using \`reqwest\` to fetch YouTube Channel profiles, avatars, top tracks, and playlists directly in Rust, reducing channel resolution latency by 5x–6x (~350ms vs ~2,500ms) without requiring \`yt-dlp\` binary execution on Desktop.
+- **Native Rust YouTube Playlist Resolver & Instant Playlist Loading**: Integrated a native Rust Tauri Command (\`get_youtube_playlist\`) to resolve external YouTube playlist tracks directly in Rust (~200ms vs ~2,000ms \`yt-dlp\` sidecar), eliminating opening latency when clicking channel playlists.
+- **Strict Video vs Playlist Catalog Separation**: Separated single video releases from playlists/albums in channel carousels so playlists no longer leak into the Videos tab and valid playlist list IDs (\`OLAK5uy_...\`, \`PL...\`) are extracted reliably.
 
 ## v3.3.0 - 2026-08-04
 

@@ -323,15 +323,23 @@ export async function browseYoutubeChannel(channelRef: string, videoLimit = 100)
   const baseUrl = channelId.startsWith('@')
     ? `https://www.youtube.com/${channelId}`
     : `https://www.youtube.com/channel/${channelId}`;
-  const videosRaw = await ytDlp.execPromise([
-    // Some Topic channels do not expose a `/videos` tab to yt-dlp. Their
-    // root channel URL still resolves to the uploads playlist (`UU...`).
+
+  // Fetch channel videos and playlists in PARALLEL via Promise.all
+  const playlistsPromise = getYoutubeChannelPlaylists(channelId, 20).catch((err) => {
+    console.warn('[ytdlp] getYoutubeChannelPlaylists failed:', (err as Error).message);
+    return [] as YouTubePlaylistSummary[];
+  });
+
+  const videosPromise = ytDlp.execPromise([
     baseUrl,
     '--dump-single-json',
     '--flat-playlist',
     '--no-warnings',
     '--playlist-end', String(videoLimit),
   ]);
+
+  const [videosRaw, playlists] = await Promise.all([videosPromise, playlistsPromise]);
+
   const videosPage = JSON.parse(videosRaw) as YTPlaylistInfo & {
     channel?: string;
     channel_id?: string;
@@ -380,7 +388,7 @@ export async function browseYoutubeChannel(channelRef: string, videoLimit = 100)
       console.warn('[ytdlp] channel uploads playlist fallback failed:', (error as Error).message);
     }
   }
-  const playlists = await getYoutubeChannelPlaylists(videosPage.channel_id ?? channelId, 20);
+
   return {
     id: `ytchannel:${videosPage.channel_id ?? channelId}`,
     name: videosPage.channel ?? videosPage.uploader ?? channelId,

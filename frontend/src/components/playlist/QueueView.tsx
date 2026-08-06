@@ -18,9 +18,6 @@ function queueSourceBadge(source: Track['queueSource'], originalSource?: Track['
   return { Icon: Search, label: 'Search' };
 }
 
-function isMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 639px)').matches;
-}
 
 function formatTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -57,9 +54,12 @@ export function QueueView() {
     queryKey: ['audio-cache-status', queue.map((track) => track.id).join('|')],
     queryFn: () => api.audioCacheStatus(queue),
     enabled: queue.length > 0,
-    refetchInterval: 10_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: false,
   });
   const cacheByTrackId = new Map((audioCache?.tracks ?? []).map((status) => [status.id, status]));
+
 
   if (queue.length === 0) {
     return (
@@ -85,11 +85,24 @@ export function QueueView() {
             {queue.length} tracks in rotation
             {queueIndex > 0 ? `, ${queueIndex} played` : ''}
           </p>
-          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
+          <div className="flex items-center gap-2 mt-2 text-[10px] text-muted overflow-x-auto no-scrollbar whitespace-nowrap py-0.5 max-w-full">
             <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
             <span className="flex items-center gap-1"><Search size={10} /> Search</span>
             <span className="flex items-center gap-1"><House size={10} /> Home</span>
             <span className="flex items-center gap-1"><Shuffle size={10} /> Autoqueue</span>
+            <span className="text-base-600">|</span>
+            <span className="flex items-center gap-1.5 text-[11px] text-yellow-400 font-semibold" title="Audio cached on disk or pre-loaded in memory for instant playback">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" /> Prefetched
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold" title="Matched from learned store cache without needing live YouTube search">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Cached
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-sky-300 font-semibold" title="Audio stream URL renewed from cached YouTube match">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Refreshed
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-red-400 font-semibold" title="Newly matched live via YouTube search (first-time lookup)">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Resolved
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -152,10 +165,7 @@ export function QueueView() {
                 isPast && 'opacity-40',
                 dragIndex === i && 'opacity-50'
               )}
-              onClick={() => {
-                if (isMobileViewport()) playTrack(track, queue);
-              }}
-              onDoubleClick={() => playTrack(track, queue)}
+              onClick={() => playTrack(track, queue)}
             >
               <div
                 className="w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted cursor-grab"
@@ -197,12 +207,18 @@ export function QueueView() {
                       title={label}
                       aria-label={label}
                       className={clsx(
-                        'inline-flex h-5 w-5 items-center justify-center rounded-md border',
+                        'inline-flex h-5 w-5 items-center justify-center rounded-md border transition-all duration-300',
                         cacheStatus?.prefetched
-                          ? 'border-accent/40 bg-accent/15 text-accent'
+                          ? 'border-yellow-400/80 bg-yellow-400/20 text-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.3)]'
                           : cacheStatus?.prefetching
-                            ? 'border-accent/30 text-accent'
-                            : 'border-base-600/60 text-muted'
+                            ? 'border-lime-400/70 bg-lime-400/20 text-lime-400 animate-pulse'
+                            : cacheStatus?.refreshed
+                              ? 'border-sky-400/70 bg-sky-400/20 text-sky-300'
+                              : cacheStatus?.cached
+                                ? 'border-emerald-500/70 bg-emerald-500/20 text-emerald-400'
+                                : cacheStatus?.resolved
+                                  ? 'border-red-500/70 bg-red-500/20 text-red-400'
+                                  : 'border-base-600/60 text-muted'
                       )}
                     >
                       <Icon size={10} />

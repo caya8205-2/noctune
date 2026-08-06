@@ -18,7 +18,7 @@ import {
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
 import { getSpotifyTrackById } from '../services/spotify.js';
 import { Readable } from 'stream';
-import { clearMatchCacheForSpotifyId, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
+import { clearMatchCacheForSpotifyId, getMatchCacheEntry, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { CachedTrack, Track } from '../types/index.js';
 import {
   consumePrefetch,
@@ -812,13 +812,14 @@ export async function playerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Video is blacklisted' });
     }
 
-    let cached = getCachedById(videoId);
+    let cached = getPrefetched(videoId) || getPrefetched(cleanStreamId) || getCachedById(videoId) || getCachedById(cleanStreamId);
     if (!cached) {
       try {
-        app.log.info({ videoId }, '[player] stream cache miss, resolving on demand');
-        const { track, audio } = await resolveTrack(videoId, videoId);
+        app.log.info({ videoId, cleanStreamId }, '[player] stream cache miss, resolving on demand');
+        const audio = await resolveAudioUrl(cleanStreamId);
+        const { track } = await resolveTrack(cleanStreamId, cleanStreamId);
         cached = upsertTrack(
-          videoId,
+          cleanStreamId,
           track,
           audio.url,
           undefined,
@@ -834,10 +835,10 @@ export async function playerRoutes(app: FastifyInstance) {
       }
     } else if (!isUrlFresh(cached) || !cacheMatchesAudioQuality(cached, preference)) {
       try {
-        app.log.info({ videoId }, '[player] stream cache stale, refreshing URL');
-        const audio = await resolveAudioUrl(videoId);
-        refreshTrackUrl(videoId, audio.url, audio.qualityPreference, audio.format, audio.quality);
-        cached = getCachedById(videoId);
+        app.log.info({ videoId, cleanStreamId }, '[player] stream cache stale, refreshing URL');
+        const audio = await resolveAudioUrl(cleanStreamId);
+        refreshTrackUrl(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality);
+        cached = getPrefetched(cleanStreamId) || getCachedById(cleanStreamId) || getCachedById(videoId);
       } catch (err) {
         app.log.warn(err, `[player] stream stale refresh failed for ${videoId}`);
         return reply
@@ -854,7 +855,7 @@ export async function playerRoutes(app: FastifyInstance) {
       const range = req.headers.range;
       const localAudioPath = cached.localAudioPath && fs.existsSync(cached.localAudioPath)
         ? cached.localAudioPath
-        : getExistingAudioCachePath(videoId, preference);
+        : getExistingAudioCachePath(cleanStreamId, preference);
 
       if (localAudioPath) {
         if (localAudioPath !== cached.localAudioPath) {
@@ -1024,20 +1025,49 @@ export async function playerRoutes(app: FastifyInstance) {
 
     const { videoIds = [], tracks = [] } = parsed.data;
     const preference = getEnvConfig().audioQualityPreference;
-    const trackStatuses = await Promise.all(
-      tracks.map(async (track) => {
-        const [playableId] = await resolvePrefetchIds([], [track]);
-        return {
-          id: track.id,
-          playableId: playableId ?? null,
-          cached: playableId ? Boolean(getExistingAudioCachePath(playableId, preference)) : false,
-          inFlight: playableId ? audioCacheInFlight.has(playableId) : false,
-          prefetched: playableId ? Boolean(getPrefetched(playableId)) : false,
-          prefetching: playableId ? isPrefetching(playableId) : false,
-        };
-      })
-    );
-    const playableIds = await resolvePrefetchIds(videoIds, []);
+    const trackStatuses = tracks.map((track) => {
+      let playableId: string | null = null;
+      const cleanYtId = track.youtubeId ? track.youtubeId.replace(/^(youtube|ytdlp):/, '').trim() : '';
+      const cleanTrackId = track.id ? track.id.replace(/^(youtube|ytdlp):/, '').trim() : '';
+
+      if (cleanYtId && isYoutubeVideoId(cleanYtId)) {
+        playableId = cleanYtId;
+      } else if (!track.id.startsWith('spotify:') && isYoutubeVideoId(cleanTrackId)) {
+        playableId = cleanTrackId;
+      } else if (track.spotifyId) {
+        const cached = getCachedBySpotifyId(track.spotifyId);
+        const match = getMatchCacheEntry(track.spotifyId);
+        if (cached?.youtubeId && isYoutubeVideoId(cached.youtubeId)) {
+          playableId = cached.youtubeId.replace(/^(youtube|ytdlp):/, '').trim();
+        } else if (cached?.id && isYoutubeVideoId(cached.id)) {
+          playableId = cached.id.replace(/^(youtube|ytdlp):/, '').trim();
+        } else if (match?.youtubeId && isYoutubeVideoId(match.youtubeId)) {
+          playableId = match.youtubeId.replace(/^(youtube|ytdlp):/, '').trim();
+        }
+      }
+
+      const prefetchedObj = playableId ? getPrefetched(playableId) : undefined;
+      const isCachedDisk = playableId ? Boolean(getExistingAudioCachePath(playableId, preference)) : false;
+      const isPrefetched = Boolean(prefetchedObj) || isCachedDisk;
+      const isPrefetchingFn = playableId ? isPrefetching(playableId) : false;
+      const cachedTrack = playableId ? (getCachedById(playableId) || (track.spotifyId ? getCachedBySpotifyId(track.spotifyId) : null)) : null;
+      const isRefreshed = cachedTrack ? isUrlFresh(cachedTrack) : false;
+      const matchEntry = track.spotifyId ? getMatchCacheEntry(track.spotifyId) : null;
+      const isResolved = Boolean(matchEntry?.youtubeId || playableId);
+
+      return {
+        id: track.id,
+        playableId,
+        cached: isCachedDisk || Boolean(cachedTrack),
+        inFlight: playableId ? audioCacheInFlight.has(playableId) : false,
+        prefetched: isPrefetched,
+        prefetching: isPrefetchingFn,
+        refreshed: isRefreshed,
+        resolved: isResolved,
+      };
+    });
+
+    const playableIds = trackStatuses.map((s) => s.playableId).filter((id): id is string => Boolean(id));
     const cachedIds = playableIds.filter((id) => Boolean(getExistingAudioCachePath(id, preference)));
     return reply.send({
       playableIds,

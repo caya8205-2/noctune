@@ -14,7 +14,7 @@ function compactNumber(n: number | null | undefined): string {
 }
 
 let pendingChannelReturnTab: 'videos' | 'playlists' | null = null;
-const channelTabByArtist = new Map<string, 'videos' | 'playlists'>();
+export const channelTabByArtist = new Map<string, 'videos' | 'playlists'>();
 
 function ArtistTrackText({
   track,
@@ -68,8 +68,10 @@ function ArtistTrackText({
         >
           {albumName}
         </button>
-      ) : albumName ? (
+      ) : albumName && albumName !== 'YouTube Release' ? (
         <p className="truncate text-xs text-muted">{albumName}</p>
+      ) : track.artist ? (
+        <p className="truncate text-xs text-muted">{track.artist}</p>
       ) : null}
     </div>
   );
@@ -77,72 +79,21 @@ function ArtistTrackText({
 
 export function ArtistView({ artistId }: { artistId: string }) {
   const [showLightbox, setShowLightbox] = useState(false);
-  const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
-  const [channelTab, setChannelTab] = useState<'videos' | 'playlists'>(() => channelTabByArtist.get(artistId) ?? 'videos');
-  const isYouTubeChannelId = artistId.startsWith('ytchannel:') || artistId.startsWith('UC') || artistId.startsWith('@');
+  const { playTrack, currentTrack, isPlaying, setView, activeChannelTab } = usePlayerStore();
+  const cleanArtistId = artistId.replace(/:(videos|playlists)$/, '');
+  const channelTab = activeChannelTab ?? 'videos';
+  const isYouTubeChannelId = cleanArtistId.startsWith('ytchannel:') || cleanArtistId.startsWith('UC') || cleanArtistId.startsWith('@');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['artist', artistId],
-    queryFn: () => api.browseArtist(artistId),
+    queryKey: ['artist', cleanArtistId],
+    queryFn: () => api.browseArtist(cleanArtistId),
     staleTime: isYouTubeChannelId ? 1000 * 60 * 5 : 1000 * 60 * 10,
     refetchOnMount: true,
   });
 
-  useLayoutEffect(() => {
-    setChannelTab(channelTabByArtist.get(artistId) ?? 'videos');
-  }, [artistId]);
-
-  useEffect(() => {
-    try {
-      const rawReturn = sessionStorage.getItem('noctune:channel-return-tab');
-      if (rawReturn) {
-        const returnState = JSON.parse(rawReturn) as { artistId?: string; tab?: 'videos' | 'playlists' };
-      if (returnState.tab === 'playlists' && isYouTubeChannelId) {
-          channelTabByArtist.set(artistId, 'playlists');
-          setChannelTab('playlists');
-          sessionStorage.removeItem('noctune:channel-return-tab');
-        }
-      }
-      if (pendingChannelReturnTab === 'playlists' && isYouTubeChannelId) {
-        channelTabByArtist.set(artistId, 'playlists');
-        setChannelTab('playlists');
-        pendingChannelReturnTab = null;
-      }
-    } catch {
-      // Ignore unavailable session storage in restricted webviews.
-    }
-    if (pendingChannelReturnTab === 'playlists' && isYouTubeChannelId) {
-      setChannelTab('playlists');
-      pendingChannelReturnTab = null;
-    }
-  }, [artistId, isYouTubeChannelId]);
-
-  useEffect(() => {
-    function handleChannelTabPopState(event: PopStateEvent) {
-      if (event.state?.noctuneView !== 'artist' || event.state?.noctuneId !== artistId) return;
-      const nextTab = event.state?.noctuneChannelTab;
-      if (nextTab === 'playlists' || pendingChannelReturnTab === 'playlists') {
-        channelTabByArtist.set(artistId, 'playlists');
-        setChannelTab('playlists');
-        pendingChannelReturnTab = null;
-      } else {
-        channelTabByArtist.set(artistId, 'videos');
-        setChannelTab('videos');
-      }
-    }
-    window.addEventListener('popstate', handleChannelTabPopState);
-    return () => window.removeEventListener('popstate', handleChannelTabPopState);
-  }, [artistId]);
-
   function changeChannelTab(tab: 'videos' | 'playlists') {
     if (!isYouTubeChannelId || tab === channelTab) return;
-    channelTabByArtist.set(artistId, tab);
-    setChannelTab(tab);
-    window.history.pushState(
-      { noctuneView: 'artist', noctuneId: artistId, noctuneChannelTab: tab },
-      '',
-      window.location.href
-    );
+    setView('artist', cleanArtistId, tab);
   }
 
   function handlePlay(track: Track) {
@@ -192,7 +143,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-base-900" />
 
-        <div className="relative flex items-end gap-5 px-6 pb-6 pt-10">
+        <div className="relative flex items-start gap-5 px-6 pb-4 pt-12">
           <button
             onClick={() => history.back()}
             className="btn-ghost absolute left-4 top-4 p-1.5"
@@ -201,12 +152,12 @@ export function ArtistView({ artistId }: { artistId: string }) {
             <ArrowLeft size={16} />
           </button>
 
-          {/* Artist image */}
+          {/* Artist image - anchored at top-left with self-start */}
           {data.image ? (
             <button
               type="button"
               onClick={() => setShowLightbox(true)}
-              className="group relative h-28 w-28 flex-shrink-0 rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+              className="group relative h-28 w-28 flex-shrink-0 self-start rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
               title="Click to view artwork"
             >
               <img
@@ -219,23 +170,21 @@ export function ArtistView({ artistId }: { artistId: string }) {
               </div>
             </button>
           ) : (
-            <div className="flex h-28 w-28 flex-shrink-0 items-center justify-center rounded-full bg-base-800 ring-2 ring-white/10">
+            <div className="flex h-28 w-28 flex-shrink-0 self-start items-center justify-center rounded-full bg-base-800 ring-2 ring-white/10">
               <Users size={36} className="text-muted" />
             </div>
           )}
 
-          <div className="min-w-0 pb-1">
+          <div className="min-w-0 flex-1 pb-1">
             <p className="section-label mb-1">{isYouTubeChannel ? 'CHANNEL' : 'ARTIST'}</p>
             <h1 className="font-display text-3xl font-semibold text-white leading-tight truncate">
               {data.name}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
-              {data.followers != null && (
+              {data.followers != null && typeof data.followers !== 'string' && (
                 <span className="flex items-center gap-1">
                   <Users size={11} />
-                  {typeof data.followers === 'string'
-                    ? data.followers
-                    : `${compactNumber(data.followers as number)} followers`}
+                  {`${compactNumber(data.followers as number)} followers`}
                 </span>
               )}
               {data.genres.slice(0, 3).map(g => (
@@ -244,6 +193,16 @@ export function ArtistView({ artistId }: { artistId: string }) {
                 </span>
               ))}
             </div>
+
+            {/* Clamped long bio description for topic/official channels */}
+            {data.followers != null && typeof data.followers === 'string' && (
+              <p
+                className="mt-2 text-xs text-muted line-clamp-2 max-w-3xl leading-relaxed"
+                title={data.followers}
+              >
+                {data.followers}
+              </p>
+            )}
           </div>
 
           {data.spotifyUrl && (
@@ -263,7 +222,7 @@ export function ArtistView({ artistId }: { artistId: string }) {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         {isYouTubeChannel && (
-          <div className="mb-7 flex items-center gap-5 border-b border-white/[0.08]">
+          <div className="sticky top-0 z-20 -mx-6 mb-5 flex items-center gap-6 border-b border-white/[0.08] bg-base-900/95 px-6 py-1 backdrop-blur-md">
             <button
               type="button"
               onClick={() => changeChannelTab('videos')}
@@ -416,11 +375,17 @@ export function ArtistView({ artistId }: { artistId: string }) {
                       setView('playlist', `ytplaylist:${playlist.id}`);
                     }}
                   >
-                    <div className="overflow-hidden rounded-lg bg-base-800 aspect-square">
-                      {playlist.image ? (
-                        <img src={playlist.image} alt={playlist.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center"><Music2 size={28} className="text-muted" /></div>
+                    <div className="relative overflow-hidden rounded-lg bg-base-800 aspect-square flex items-center justify-center">
+                      <Music2 size={28} className="text-muted absolute" />
+                      {playlist.image && (
+                        <img
+                          src={playlist.image}
+                          alt={playlist.name}
+                          className="relative z-10 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                       )}
                     </div>
                     <p className="mt-2 truncate font-display text-sm font-medium text-white group-hover:text-accent transition-colors">{playlist.name}</p>

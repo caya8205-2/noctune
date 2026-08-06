@@ -21,6 +21,7 @@ export interface Track {
   originalSource?: 'manual' | 'search' | 'playlist' | 'autoqueue' | 'recommendation' | 'play-next';
   originalPlaylistId?: string;
   originalPlaylistName?: string;
+  genres?: string[];
 }
 
 export interface CachedTrack extends Track {

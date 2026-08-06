@@ -46,11 +46,21 @@ export async function statsRoutes(app: FastifyInstance) {
     const allTracks = getAllCachedTracks();
     const filteredTracks = filterByPeriod(allTracks, period);
     
-    // Sort by play count
+    const now = Date.now();
+    // Sort by weighted score: playCount + recency boost so the list evolves over time
     const sorted = filteredTracks
-      .sort((a, b) => (b.playCount || 0) - (a.playCount || 0))
+      .map(t => {
+        const playCount = t.playCount || 0;
+        const daysSinceLastPlayed = t.lastPlayed
+          ? (now - t.lastPlayed) / (1000 * 60 * 60 * 24)
+          : 90;
+        // Recency multiplier: recently played tracks get up to 1.5x boost, old tracks decay to 0.5x
+        const recencyMultiplier = 0.5 + Math.exp(-daysSinceLastPlayed / 14);
+        return { track: t, score: playCount * recencyMultiplier };
+      })
+      .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(t => ({
+      .map(({ track: t }) => ({
         track: {
           id: t.id,
           title: t.title,

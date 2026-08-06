@@ -34,10 +34,10 @@ const qc = new QueryClient({
 
 function viewRouteId(
   view: ReturnType<typeof usePlayerStore.getState>['activeView'],
-  ids: { playlistId: string | null; artistId: string | null; albumId: string | null }
+  ids: { playlistId: string | null; artistId: string | null; albumId: string | null; channelTab?: 'videos' | 'playlists' }
 ): string {
   if (view === 'playlist') return ids.playlistId || 'playlist';
-  if (view === 'artist') return ids.artistId || 'artist';
+  if (view === 'artist') return `${ids.artistId || 'artist'}:${ids.channelTab ?? 'videos'}`;
   if (view === 'album') return ids.albumId || 'album';
   return view;
 }
@@ -59,14 +59,19 @@ function AppInner() {
     toggleShortcutsHelp,
     activeArtistId,
     activeAlbumId,
+    activeChannelTab,
   } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const activeViewRef = useRef(activeView);
-  const activeRouteIdRef = useRef(viewRouteId(activeView, {
+
+  const currentRouteId = viewRouteId(activeView, {
     playlistId: activePlaylistId,
     artistId: activeArtistId,
     albumId: activeAlbumId,
-  }));
+    channelTab: activeChannelTab,
+  });
+
+  const activeViewRef = useRef(activeView);
+  const activeRouteIdRef = useRef(currentRouteId);
   const skipHistoryPushRef = useRef(false);
 
   const IS_TAURI =
@@ -96,17 +101,23 @@ function AppInner() {
   }
 
   useEffect(() => {
-    window.history.replaceState(
-      { noctuneView: activeViewRef.current, noctuneId: activeRouteIdRef.current },
-      '',
-      window.location.href
-    );
+    if (!window.history.state?.noctuneView) {
+      window.history.replaceState(
+        {
+          noctuneView: activeViewRef.current,
+          noctuneId: activeArtistId || activePlaylistId || activeAlbumId || activeViewRef.current,
+          noctuneChannelTab: activeChannelTab,
+        },
+        '',
+        window.location.href
+      );
+    }
 
     function handlePopState(event: PopStateEvent) {
       const nextView = event.state?.noctuneView;
       if (!nextView) return;
       skipHistoryPushRef.current = true;
-      setView(nextView, event.state?.noctuneId);
+      setView(nextView, event.state?.noctuneId, event.state?.noctuneChannelTab);
     }
 
     window.addEventListener('popstate', handlePopState);
@@ -130,12 +141,6 @@ function AppInner() {
 
   const mainRef = useRef<HTMLElement | null>(null);
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
-
-  const currentRouteId = viewRouteId(activeView, {
-    playlistId: activePlaylistId,
-    artistId: activeArtistId,
-    albumId: activeAlbumId,
-  });
 
   useEffect(() => {
     const mainEl = mainRef.current;
@@ -187,23 +192,42 @@ function AppInner() {
   }, [currentRouteId]);
 
   useEffect(() => {
-    const routeId = viewRouteId(activeView, {
-      playlistId: activePlaylistId,
-      artistId: activeArtistId,
-      albumId: activeAlbumId,
-    });
+    const routeId = viewRouteId(
+      activeView,
+      {
+        playlistId: activePlaylistId,
+        artistId: activeArtistId,
+        albumId: activeAlbumId,
+        channelTab: activeChannelTab,
+      }
+    );
     if (activeViewRef.current === activeView && activeRouteIdRef.current === routeId) return;
+
     activeViewRef.current = activeView;
     activeRouteIdRef.current = routeId;
+
     if (skipHistoryPushRef.current) {
       skipHistoryPushRef.current = false;
       return;
     }
-    if (window.history.state?.noctuneView === activeView && window.history.state?.noctuneId === routeId) {
+
+    // On forward navigation (user clicked a link / fresh view visit), reset scroll position for the target route to 0 so fresh load starts at top
+    scrollPositionsRef.current.set(routeId, 0);
+
+    const targetId = activeArtistId || activePlaylistId || activeAlbumId || activeView;
+    if (window.history.state?.noctuneView === activeView && window.history.state?.noctuneId === targetId && window.history.state?.noctuneChannelTab === activeChannelTab) {
       return;
     }
-    window.history.pushState({ noctuneView: activeView, noctuneId: routeId }, '', window.location.href);
-  }, [activeView, activePlaylistId, activeArtistId, activeAlbumId]);
+    window.history.pushState(
+      {
+        noctuneView: activeView,
+        noctuneId: targetId,
+        noctuneChannelTab: activeChannelTab,
+      },
+      '',
+      window.location.href
+    );
+  }, [activeView, activePlaylistId, activeArtistId, activeAlbumId, activeChannelTab]);
 
   const playerBarClass =
     'relative z-10 h-20 flex-shrink-0 border-t border-white/[0.06] bg-base-950/60 backdrop-blur-xl';

@@ -1,3 +1,6 @@
+mod youtube_channel;
+use youtube_channel::{get_youtube_channel, get_youtube_playlist};
+
 use std::process::Command;
 #[cfg(not(debug_assertions))]
 use tauri::{path::BaseDirectory, Manager};
@@ -42,7 +45,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![open_external_url])
+        .invoke_handler(tauri::generate_handler![open_external_url, get_youtube_channel, get_youtube_playlist])
         .setup(|_app| {
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.
