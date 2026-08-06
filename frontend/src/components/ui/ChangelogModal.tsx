@@ -5,7 +5,7 @@ import { apiUrl } from '../../utils/api';
 const APP_VERSION = __APP_VERSION__;
 const LAST_SEEN_VERSION_KEY = 'noctune:last-seen-version';
 
-function parseLatestHighlights(fullText: string | null): Array<{ title: string; desc: string }> {
+export function parseLatestHighlights(fullText: string | null): Array<{ title: string; desc: string }> {
   if (!fullText) return [];
   const sections = fullText.split(/\n(?=##\s+v\d+)/g);
   const latestSection = sections.find((s) => s.trim().startsWith('## '));
@@ -214,7 +214,7 @@ const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | 
   },
 };
 
-function toPresentationHighlights(items: Array<{ title: string; desc: string }>) {
+export function toPresentationHighlights(items: Array<{ title: string; desc: string }>) {
   const seen = new Set<string>();
   const highlights = items.reduce<Array<{ title: string; desc: string }>>((result, item) => {
     const mapped = Object.prototype.hasOwnProperty.call(PRESENTATION_HIGHLIGHTS, item.title)

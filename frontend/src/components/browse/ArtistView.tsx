@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, ListMusic, Maximize2, Music2, Users } from 'lucide-react';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, isTrackActive, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
@@ -13,7 +13,6 @@ function compactNumber(n: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n);
 }
 
-let pendingChannelReturnTab: 'videos' | 'playlists' | null = null;
 export const channelTabByArtist = new Map<string, 'videos' | 'playlists'>();
 
 function ArtistTrackText({
@@ -354,7 +353,6 @@ export function ArtistView({ artistId }: { artistId: string }) {
                       } catch {
                         // Ignore unavailable session storage in restricted webviews.
                       }
-                      pendingChannelReturnTab = 'playlists';
                       channelTabByArtist.set(artistId, 'playlists');
                       window.history.replaceState(
                         { ...window.history.state, noctuneChannelTab: 'playlists' },

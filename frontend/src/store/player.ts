@@ -163,6 +163,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isAutoQueueLoading: false,
   queueHistory: [],
   activeView: 'home',
+  activeChannelTab: 'videos',
   activePlaylistId: null,
   activePersonalMix: null,
   personalMixesMap: {},
