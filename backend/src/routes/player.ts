@@ -254,14 +254,11 @@ async function fetchAudioStream(
   videoId: string,
   audioUrl: string,
   range: string | undefined,
-  refreshIfWebm: boolean,
+  _refreshIfWebm = false,
   boundedRange = false
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
   const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
-  const headers: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  };
+  const headers: Record<string, string> = {};
   if (upstreamRange) {
     headers.Range = upstreamRange;
   }
@@ -269,10 +266,7 @@ async function fetchAudioStream(
 
   const shouldRefresh =
     !res.ok ||
-    isLimitedIosStream(audioUrl) ||
-    (refreshIfWebm &&
-      getEnvConfig().audioQualityPreference === 'auto' &&
-      isLikelyWebmStream(res.headers.get('content-type'), audioUrl));
+    isLimitedIosStream(audioUrl);
 
   if (!shouldRefresh) {
     return { res, refreshed: false, audioUrl };
