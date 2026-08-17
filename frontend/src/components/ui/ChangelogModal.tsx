@@ -54,6 +54,10 @@ const V400_HIGHLIGHTS = [
     title: 'Bundled Binary Detection & Dev Mode Reliability',
     desc: 'Improved bundled helper path detection across both development and installed desktop modes, ensuring automatic fallback execution is always ready whenever needed.',
   },
+  {
+    title: 'Cache Store v2 Auto-Migration',
+    desc: 'Local cache store automatically upgrades to v2 on launch, purging legacy 403-prone audio links while safely preserving all your listening history, playlists, favorites, and track metadata.',
+  },
 ];
 
 const DEFAULT_HIGHLIGHTS = V400_HIGHLIGHTS;
@@ -82,6 +86,14 @@ const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | 
   'Bundled `yt-dlp` Path Discovery in Dev & Production': {
     title: 'Bundled Binary Discovery',
     desc: 'Enhanced bundled helper detection across development and production desktop builds for seamless fallback readiness.',
+  },
+  'Cache Store v2 Auto-Migration & Stale URL Purging': {
+    title: 'Cache Store v2 Auto-Migration',
+    desc: 'Upgrades the local cache store to v2, clearing legacy unplayable stream links while safely preserving your entire listening history and playlists.',
+  },
+  'Cache Store v2 Auto-Migration': {
+    title: 'Cache Store v2 Auto-Migration',
+    desc: 'Upgrades the local cache store to v2, clearing legacy unplayable stream links while safely preserving your entire listening history and playlists.',
   },
   'Native Rust Channel Scraper Engine': {
     title: 'Native Rust Channel Engine',

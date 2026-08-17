@@ -15,7 +15,8 @@ This document tracks all implemented features, bug fixes, patches, and current s
   - **Stream Quality & Compatibility**: Updated `streamingOptionSets` and `pickBestAudioFormat` to prioritize native WebM Opus (`itag 251`, ~160kbps), eliminating player decipher signature failures previously caused by `m4a`/`mp4` streams.
 - [x] **yt-dlp Stream Validation & Bundled Binary Path Discovery**
   - **Stream Validation**: Added mandatory `validateStreamingUrl` HTTP range checks (HTTP 206 Partial Content verification) to `ytdlp.ts` so fallback streams with blocked signatures fail gracefully.
-  - **Bundled Binary Discovery**: Enhanced `resolveYtdlpBinaryPath` in `ytdlp.ts` to automatically search `src-tauri/resources/` and `../src-tauri/resources/` during both dev and production execution.
+- [x] **Cache Store v2 Auto-Migration & Stale URL Purging**
+  - **Auto-Migration**: Bumped `CACHE_VERSION` to `2` with automated store migration on startup, purging legacy unplayable `audioUrl` entries from `songs.json` while preserving 100% of user history, playlists, and track metadata.
 
 ---
 
