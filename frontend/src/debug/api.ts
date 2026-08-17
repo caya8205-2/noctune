@@ -101,6 +101,7 @@ export interface LearnedTrack extends DebugTrack {
   audioFormat?: string;
   audioQuality?: string;
   audioQualityPreference?: string;
+  resolverSource?: 'youtubei' | 'ytdlp' | 'local' | string;
   source?: string;
 }
 

@@ -550,6 +550,21 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     : null;
   const src = track.source ? sourceMeta[track.source] ?? { label: track.source, cls: 'text-soft' } : null;
 
+  const resolverSource = snapshot?.learned?.resolverSource || ((track as any).source === 'local' || (track as any).localAudioPath ? 'local' : null);
+  const resolverEngine = resolverSource === 'youtubei'
+    ? { label: 'Innertube (youtubei.js)', cls: 'text-emerald-400 font-semibold' }
+    : resolverSource === 'ytdlp'
+    ? { label: 'yt-dlp (bundled fallback)', cls: 'text-amber-400 font-semibold' }
+    : resolverSource === 'local'
+    ? { label: 'Local storage', cls: 'text-sky-400 font-semibold' }
+    : { label: 'Innertube (primary)', cls: 'text-emerald-400/80' };
+
+  const formatStr = snapshot?.learned?.audioFormat
+    ? `${snapshot.learned.audioFormat.toUpperCase()}${snapshot.learned.audioQuality && snapshot.learned.audioQuality !== 'unknown' ? ` · ${snapshot.learned.audioQuality}` : ''}`
+    : (track as any).audioFormat
+    ? `${String((track as any).audioFormat).toUpperCase()}`
+    : '—';
+
   return (
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -576,6 +591,8 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
       </div>
 
       <div className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
+        <StatusRow label="Resolver engine" value={<span className={resolverEngine.cls}>{resolverEngine.label}</span>} />
+        <StatusRow label="Audio format" value={formatStr} tone={formatStr !== '—' ? 'ok' : 'muted'} />
         <StatusRow label="Playback source" value={src ? <span className={src.cls}>{src.label}</span> : '—'} />
         <StatusRow label="Queue source" value={track.queueSource ?? '—'} />
         <StatusRow label="Spotify ID" value={spotifyId ?? '—'} tone="muted" />

@@ -161,6 +161,7 @@ export async function resolveAudioUrl(
   const startedAt = Date.now();
   try {
     const audio = await getAudioResolver().resolveAudioUrl(videoId, preference);
+    audio.resolverSource = 'youtubei';
     logResolvedStream('youtubei', 'resolveAudioUrl', audio, Date.now() - startedAt);
     return audio;
   } catch (err) {
@@ -171,6 +172,7 @@ export async function resolveAudioUrl(
     );
     try {
       const audio = await (await getYtdlpResolver()).resolveAudioUrl(videoId, preference);
+      audio.resolverSource = 'ytdlp';
       logResolvedStream('ytdlp', 'resolveAudioUrl', audio, Date.now() - startedAt);
       return audio;
     } catch (fallbackErr) {
@@ -191,6 +193,7 @@ export async function resolveTrack(
   const startedAt = Date.now();
   try {
     const result = await getAudioResolver().resolveTrack(videoId, originalQuery, preference);
+    result.audio.resolverSource = 'youtubei';
     logResolvedStream('youtubei', 'resolveTrack', result.audio, Date.now() - startedAt);
     return result;
   } catch (err) {
@@ -201,6 +204,7 @@ export async function resolveTrack(
     );
     try {
       const result = await (await getYtdlpResolver()).resolveTrack(videoId, originalQuery, preference);
+      result.audio.resolverSource = 'ytdlp';
       logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
       return result;
     } catch (fallbackErr) {

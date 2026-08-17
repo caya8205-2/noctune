@@ -88,7 +88,8 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             undefined,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource
           );
           prefetched.set(videoId, refreshed);
           logPrefetch('job done', {
@@ -109,7 +110,8 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             undefined,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource
           );
           prefetched.set(videoId, saved);
           logPrefetch('job done', {

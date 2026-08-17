@@ -286,7 +286,8 @@ async function fetchAudioStream(
       refreshedAudio.url,
       refreshedAudio.qualityPreference,
       refreshedAudio.format,
-      refreshedAudio.quality
+      refreshedAudio.quality,
+      refreshedAudio.resolverSource
     );
     const refreshedRes = await fetch(refreshedAudio.url, { headers });
     if (refreshedRes.ok) {
@@ -518,7 +519,7 @@ export async function playerRoutes(app: FastifyInstance) {
 
         // Ensure local file is upserted into the cache store so recordPlay() works
         try {
-          const saved = upsertTrack(localFile.title || localFile.path, cachedLike as any, cachedLike.audioUrl, localFile.path, 'high', cachedLike.audioFormat, 'local');
+          const saved = upsertTrack(localFile.title || localFile.path, cachedLike as any, cachedLike.audioUrl, localFile.path, 'high', cachedLike.audioFormat, 'local', 'local');
           return reply.send({ ...saved, source: 'local' });
         } catch (err) {
           // If upsert fails for any reason, fall back to returning the cachedLike object
@@ -560,7 +561,8 @@ export async function playerRoutes(app: FastifyInstance) {
             undefined,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource
           );
           return reply.send({ ...saved, source: 'resolved' });
         }
@@ -604,7 +606,8 @@ export async function playerRoutes(app: FastifyInstance) {
             undefined,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource
           );
           return reply.send({ ...saved, source: 'resolved' });
         }
@@ -637,7 +640,8 @@ export async function playerRoutes(app: FastifyInstance) {
             audio.url,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource
           );
           const refreshed = getCachedById(playableVideoId)!;
           app.log.info(
@@ -673,7 +677,8 @@ export async function playerRoutes(app: FastifyInstance) {
             undefined,
             replacement.audio.qualityPreference,
             replacement.audio.format,
-            replacement.audio.quality
+            replacement.audio.quality,
+            replacement.audio.resolverSource
           );
           return reply.send({ ...saved, source: 'resolved' });
         }
@@ -685,7 +690,8 @@ export async function playerRoutes(app: FastifyInstance) {
           undefined,
           audio.qualityPreference,
           audio.format,
-          audio.quality
+          audio.quality,
+          audio.resolverSource
         );
         app.log.info(
           {
@@ -825,7 +831,8 @@ export async function playerRoutes(app: FastifyInstance) {
           undefined,
           audio.qualityPreference,
           audio.format,
-          audio.quality
+          audio.quality,
+          audio.resolverSource
         );
       } catch (err) {
         app.log.warn(err, `[player] stream cache miss resolve failed for ${videoId}`);
@@ -837,7 +844,7 @@ export async function playerRoutes(app: FastifyInstance) {
       try {
         app.log.info({ videoId, cleanStreamId }, '[player] stream cache stale, refreshing URL');
         const audio = await resolveAudioUrl(cleanStreamId);
-        refreshTrackUrl(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality);
+        refreshTrackUrl(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality, audio.resolverSource);
         cached = getPrefetched(cleanStreamId) || getCachedById(cleanStreamId) || getCachedById(videoId);
       } catch (err) {
         app.log.warn(err, `[player] stream stale refresh failed for ${videoId}`);
@@ -908,7 +915,8 @@ export async function playerRoutes(app: FastifyInstance) {
             undefined,
             audio.qualityPreference,
             audio.format,
-            audio.quality
+            audio.quality,
+            audio.resolverSource || 'ytdlp'
           );
           const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
           if (retry.res.ok && retry.res.body) {

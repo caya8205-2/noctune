@@ -138,7 +138,8 @@ export function upsertTrack(
   localAudioPath?: string,
   audioQualityPreference: AudioQualityPreference = 'auto',
   audioFormat?: string,
-  audioQuality?: string
+  audioQuality?: string,
+  resolverSource?: 'youtubei' | 'ytdlp' | 'local'
 ): CachedTrack {
   const store = getStore();
   const hash = hashQuery(query);
@@ -151,6 +152,7 @@ export function upsertTrack(
     audioQualityPreference,
     audioFormat: audioFormat ?? existing?.audioFormat,
     audioQuality: audioQuality ?? existing?.audioQuality,
+    resolverSource: resolverSource ?? existing?.resolverSource,
     localAudioPath,
     cachedAt: existing?.cachedAt ?? Date.now(),
     playCount: existing?.playCount ?? 0,
@@ -174,7 +176,8 @@ export function refreshTrackUrl(
   audioUrl: string,
   audioQualityPreference: AudioQualityPreference = 'auto',
   audioFormat?: string,
-  audioQuality?: string
+  audioQuality?: string,
+  resolverSource?: 'youtubei' | 'ytdlp' | 'local'
 ): void {
   const store = getStore();
   const track = store.tracks[videoId];
@@ -185,6 +188,9 @@ export function refreshTrackUrl(
   track.audioQualityPreference = audioQualityPreference;
   track.audioFormat = audioFormat ?? track.audioFormat;
   track.audioQuality = audioQuality ?? track.audioQuality;
+  if (resolverSource) {
+    track.resolverSource = resolverSource;
+  }
   if (previousPreference !== audioQualityPreference) {
     track.localAudioPath = undefined;
   }
