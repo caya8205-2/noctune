@@ -4,6 +4,21 @@ This document tracks all implemented features, bug fixes, patches, and current s
 
 ---
 
+## v4.0.0 - 2026-08-17
+
+### YouTube Streaming & Audio Resolver Engine Overhaul (Breaking Changes)
+- [x] **Innertube `youtubei.js@18.0.0` Upgrade & `ANDROID_VR` Client Prioritization**
+  - **Cipher & 403 Bypass**: Upgraded `youtubei.js` to version `18.0.0` and prioritized `ANDROID_VR` client over Web/Android clients to bypass YouTube's latest signature cipher and bot detection updates that caused HTTP 403 playback failures.
+- [x] **Dual-Mode JavaScript Evaluator Shim (`Platform.shim.eval`)**
+  - **Decipher Evaluator**: Implemented resilient JavaScript evaluator in `youtubei.ts` supporting both plain string expressions and InnerTube AST extractor objects (`arg.output`).
+- [x] **Native WebM Opus Format Prioritization**
+  - **Stream Quality & Compatibility**: Updated `streamingOptionSets` and `pickBestAudioFormat` to prioritize native WebM Opus (`itag 251`, ~160kbps), eliminating player decipher signature failures previously caused by `m4a`/`mp4` streams.
+- [x] **yt-dlp Stream Validation & Bundled Binary Path Discovery**
+  - **Stream Validation**: Added mandatory `validateStreamingUrl` HTTP range checks (HTTP 206 Partial Content verification) to `ytdlp.ts` so fallback streams with blocked signatures fail gracefully.
+  - **Bundled Binary Discovery**: Enhanced `resolveYtdlpBinaryPath` in `ytdlp.ts` to automatically search `src-tauri/resources/` and `../src-tauri/resources/` during both dev and production execution.
+
+---
+
 ## v3.3.1 - 2026-08-05
 
 ### Version-Aware Changelog Modal & Playback Polish

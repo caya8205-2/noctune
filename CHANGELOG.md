@@ -2,6 +2,15 @@
 
 All notable Noctune changes are documented here.
 
+## v4.0.0 - 2026-08-17
+
+### YouTube Streaming & Audio Resolver Engine Overhaul (Breaking Changes)
+- **Innertube `youtubei.js@18.0.0` Upgrade & `ANDROID_VR` Client Prioritization**: Upgraded `youtubei.js` to version `18.0.0` and prioritized the `ANDROID_VR` client across all audio resolution paths. Bypasses YouTube's latest signature cipher obfuscation and GoogleVideo HTTP 403 Forbidden blocking that previously broke playback across all v3.4.0 and older installations.
+- **Dual-Mode JavaScript Evaluator Shim (`Platform.shim.eval`)**: Implemented a resilient JavaScript evaluator in `youtubei.ts` supporting both plain string expressions and InnerTube AST extractor objects (`arg.output`), completely preventing decipher extraction syntax failures during player initialization.
+- **Native WebM Opus Stream Prioritization**: Updated streaming format selection in both `youtubei.ts` and `ytdlp.ts` (`pickBestAudioFormat`) to prioritize native WebM Opus (`itag 251`, ~160kbps). Eliminates player decipher signature failures previously triggered by `m4a`/`mp4` streams.
+- **Mandatory HTTP Range Stream Validation (`validateStreamingUrl`)**: Hardened `ytdlp.ts` (`resolveAudioUrl` and `resolveTrack`) with mandatory `validateStreamingUrl` HTTP range checks (requiring HTTP 206 Partial Content verification) so fallback streams with expired or blocked signatures fail gracefully rather than causing player skip cascades.
+- **Bundled `yt-dlp` Path Discovery in Dev & Production**: Enhanced `resolveYtdlpBinaryPath` in `ytdlp.ts` to automatically search `src-tauri/resources/` and `../src-tauri/resources/`, ensuring the bundled binary is detected across all run modes.
+
 ## v3.4.0 - 2026-08-05
 
 ### Multi-Seed AutoQueue & YouTube Channel Scraper Refinements
