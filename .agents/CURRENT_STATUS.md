@@ -13,10 +13,12 @@ This document tracks all implemented features, bug fixes, patches, and current s
   - **Decipher Evaluator**: Implemented resilient JavaScript evaluator in `youtubei.ts` supporting both plain string expressions and InnerTube AST extractor objects (`arg.output`).
 - [x] **Native WebM Opus Format Prioritization**
   - **Stream Quality & Compatibility**: Updated `streamingOptionSets` and `pickBestAudioFormat` to prioritize native WebM Opus (`itag 251`, ~160kbps), eliminating player decipher signature failures previously caused by `m4a`/`mp4` streams.
-- [x] **yt-dlp Stream Validation & Bundled Binary Path Discovery**
-  - **Stream Validation**: Added mandatory `validateStreamingUrl` HTTP range checks (HTTP 206 Partial Content verification) to `ytdlp.ts` so fallback streams with blocked signatures fail gracefully.
+- [x] **Automated `yt-dlp` Android Extractor & Stream Auto-Recovery**
+  - **Stream Fallback Recovery**: Configured bundled `yt-dlp` extraction to use official `youtube:player_client=android` client. Fastify's `/player/stream/:videoId` endpoint automatically catches 403 or non-OK stream responses and resolves via `yt-dlp` to prevent player skipping.
 - [x] **Cache Store v2 Auto-Migration & Stale URL Purging**
   - **Auto-Migration**: Bumped `CACHE_VERSION` to `2` with automated store migration on startup, purging legacy unplayable `audioUrl` entries from `songs.json` while preserving 100% of user history, playlists, and track metadata.
+- [x] **Debug Dashboard Resolver Engine & Audio Format Inspector**
+  - **Live Inspector**: Added `Resolver engine` (with badges for Innertube `youtubei.js`, bundled `yt-dlp` fallback, and local storage) and `Audio format` (container codec and bitrate) status rows in the Debug Dashboard Current Track panel.
 
 ---
 

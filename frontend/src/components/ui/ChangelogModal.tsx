@@ -39,16 +39,16 @@ const V400_HIGHLIGHTS = [
     desc: 'Upgraded the core YouTube audio streaming resolver to Innertube 18.0.0 with dedicated ANDROID_VR client routing. Bypasses YouTube’s latest bot detection and signature cipher changes that caused playback to fail with 403 Forbidden errors across v3.4.0 and older versions.',
   },
   {
-    title: 'Dual-Mode JavaScript Decipher Evaluator',
-    desc: 'Integrated a resilient dual-mode decipher evaluator supporting both string expressions and syntax extractors, ensuring YouTube stream links are deciphered cleanly without playback crashes or failed signatures.',
+    title: 'Automated Fallback Stream Recovery',
+    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery in the backend, completely preventing unwanted track-skipping cascades if an upstream stream URL fails.',
   },
   {
     title: 'High-Quality WebM Opus Stream Prioritization',
     desc: 'Streaming formats now prioritize native WebM Opus (160kbps high-bitrate audio) across all playback resolvers. This eliminates player decipher blocks previously encountered with legacy MP4/M4A streams.',
   },
   {
-    title: 'Hardened Fallback Stream Validation',
-    desc: 'Added live HTTP range stream verification to ensure fallback audio streams are 100% playable before playback begins, preventing unplayable links from causing unwanted track-skipping cascades.',
+    title: 'Debug Dashboard Resolver Engine & Audio Format Inspector',
+    desc: 'Added live Resolver Engine indicators (Innertube, yt-dlp fallback, or Local storage) and audio format/bitrate information directly inside the Debug Dashboard Current Track panel.',
   },
   {
     title: 'Bundled Binary Detection & Dev Mode Reliability',
@@ -79,9 +79,17 @@ const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | 
     title: 'WebM Opus Stream Prioritization',
     desc: 'Prioritizes high-quality WebM Opus audio (160kbps) across all resolvers, avoiding decipher blocks from legacy MP4 streams.',
   },
-  'Mandatory HTTP Range Stream Validation (`validateStreamingUrl`)': {
-    title: 'Fallback Stream Verification',
-    desc: 'Added live HTTP range verification to validate audio streams before playback, preventing sudden track skips.',
+  'Automated `yt-dlp` Android Extractor & Stream Auto-Recovery': {
+    title: 'Automated Stream Fallback Recovery',
+    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery to eliminate track skipping on 403 errors.',
+  },
+  'Automated Fallback Stream Recovery': {
+    title: 'Automated Stream Fallback Recovery',
+    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery to eliminate track skipping on 403 errors.',
+  },
+  'Debug Dashboard Resolver Engine & Audio Format Inspector': {
+    title: 'Debug Dashboard Resolver Inspector',
+    desc: 'Added live Resolver Engine indicators and audio format/bitrate information directly inside the Debug Dashboard.',
   },
   'Bundled `yt-dlp` Path Discovery in Dev & Production': {
     title: 'Bundled Binary Discovery',
