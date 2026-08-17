@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { AudioQualityPreference, CacheStore, CachedTrack, Track } from '../types/index.js';
 import { recordMlPlayEvent } from './mlRecommendation.js';
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const URL_TTL_MS = 6 * 60 * 60 * 1000;        // 6 hours — YT URL expiry
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
@@ -31,7 +31,20 @@ function loadStore(): CacheStore {
   }
   try {
     const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
-    return JSON.parse(raw) as CacheStore;
+    const parsed = JSON.parse(raw) as CacheStore;
+    if ((parsed.version ?? 0) < CACHE_VERSION) {
+      console.log(`[cache] Migrating cache store to v${CACHE_VERSION}: clearing stale pre-v4 audio URLs...`);
+      for (const track of Object.values(parsed.tracks)) {
+        delete (track as any).audioUrl;
+        delete (track as any).audioUrlExpiry;
+        delete (track as any).audioFormat;
+        delete (track as any).audioQuality;
+      }
+      parsed.version = CACHE_VERSION;
+      parsed.updatedAt = Date.now();
+      saveStore(parsed);
+    }
+    return parsed;
   } catch {
     console.warn('[cache] Corrupt cache file, resetting...');
     return { version: CACHE_VERSION, updatedAt: Date.now(), tracks: {}, queryIndex: {} };
