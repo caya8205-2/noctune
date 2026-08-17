@@ -113,6 +113,17 @@ interface YTPlaylistInfo {
   entries?: YTInfo[];
 }
 
+async function fetchVideoInfo(url: string): Promise<YTInfo> {
+  const raw = await ytDlp.execPromise([
+    url,
+    '--dump-single-json',
+    '--no-warnings',
+    '--extractor-args',
+    'youtube:player_client=android',
+  ]);
+  return JSON.parse(raw) as YTInfo;
+}
+
 function pickBestAudioFormat(
   info: YTInfo,
   preference: AudioQualityPreference = 'auto'
@@ -122,16 +133,21 @@ function pickBestAudioFormat(
     .filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
     .sort((a, b) => (b.abr ?? 0) - (a.abr ?? 0));
 
-  // Prioritize highest bitrate audio format (typically WebM Opus 160kbps), fallback to compatible/first format
-  const best = audioOnly[0] ?? formats.find(f => f.url) ?? formats[0];
-  if (!best?.url && !info.url) {
+  const format18 = formats.find(f => f.format_id === '18');
+  const candidate = audioOnly[0] ?? format18 ?? formats.find(f => f.url) ?? formats[0];
+
+  if (!candidate?.url && !info.url) {
     throw new Error(`No playable format found for ${info.id}`);
   }
 
+  const chosenUrl = candidate?.url ?? info.url!;
+  const ext = candidate?.ext ?? 'mp4';
+  const abr = candidate?.abr ? `${Math.round(candidate.abr)}kbps` : '128kbps';
+
   return {
-    url: best?.url ?? info.url!,
-    format: best?.ext ?? 'webm',
-    quality: best?.abr ? `${best.abr}kbps` : 'unknown',
+    url: chosenUrl,
+    format: ext,
+    quality: abr,
     qualityPreference: preference,
   };
 }
@@ -402,7 +418,7 @@ export async function resolveAudioUrl(
   videoId: string,
   preference: AudioQualityPreference = 'auto'
 ): Promise<AudioStreamInfo> {
-  const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
+  const info = await fetchVideoInfo(`https://www.youtube.com/watch?v=${videoId}`);
   const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
 
   // YT URLs are typically valid for ~6h; we conservatively expire at 5h45m
@@ -424,7 +440,7 @@ export async function resolveTrack(
   track: Track;
   audio: AudioStreamInfo;
 }> {
-  const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
+  const info = await fetchVideoInfo(`https://www.youtube.com/watch?v=${videoId}`);
   const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
 
   const track: Track = {

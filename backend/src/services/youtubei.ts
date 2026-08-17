@@ -160,9 +160,10 @@ async function getBasicInfoWithFallback(videoId: string) {
 }
 
 function streamingOptionSets(preference: AudioQualityPreference) {
+  const webmAudio = { type: 'audio', quality: 'best', format: 'webm' } as const;
   const anyAudio = { type: 'audio', quality: 'best', format: 'any' } as const;
   const mp4Audio = { type: 'audio', quality: 'best', format: 'mp4' } as const;
-  return [anyAudio, mp4Audio];
+  return [webmAudio, anyAudio, mp4Audio];
 }
 
 async function getStreamingDataWithFallback(

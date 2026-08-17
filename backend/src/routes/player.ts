@@ -19,7 +19,7 @@ import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioRe
 import { getSpotifyTrackById } from '../services/spotify.js';
 import { Readable } from 'stream';
 import { clearMatchCacheForSpotifyId, getMatchCacheEntry, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
-import type { CachedTrack, Track } from '../types/index.js';
+import type { AudioStreamInfo, CachedTrack, Track } from '../types/index.js';
 import {
   consumePrefetch,
   getPrefetched,
@@ -274,7 +274,13 @@ async function fetchAudioStream(
 
   res.body?.cancel().catch(() => {});
   try {
-    const refreshedAudio = await resolveAudioUrl(videoId);
+    const { resolveAudioUrl: resolveWithYtdlp } = await import('../services/ytdlp.js');
+    let refreshedAudio: AudioStreamInfo;
+    try {
+      refreshedAudio = await resolveWithYtdlp(videoId);
+    } catch {
+      refreshedAudio = await resolveAudioUrl(videoId);
+    }
     refreshTrackUrl(
       videoId,
       refreshedAudio.url,
@@ -872,8 +878,15 @@ export async function playerRoutes(app: FastifyInstance) {
       if (!ytRes.ok || !ytRes.body) {
         ytRes.body?.cancel().catch(() => {});
         try {
-          app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL');
-          const { track, audio } = await resolveTrack(videoId, cached.query || videoId);
+          app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL via ytdlp fallback');
+          const { resolveTrack: resolveWithYtdlp } = await import('../services/ytdlp.js');
+          let recovered: { track: Track; audio: AudioStreamInfo };
+          try {
+            recovered = await resolveWithYtdlp(videoId, cached.query || videoId);
+          } catch {
+            recovered = await resolveTrack(videoId, cached.query || videoId);
+          }
+          const { track, audio } = recovered;
           const saved = upsertTrack(
             cached.query || videoId,
             {
@@ -906,7 +919,7 @@ export async function playerRoutes(app: FastifyInstance) {
             const retryNodeStream = Readable.fromWeb(retry.res.body as any);
             reply
               .status(retry.res.status === 206 ? 206 : 200)
-              .header('Content-Type', retry.res.headers.get('content-type') || 'audio/mp4')
+              .header('Content-Type', retry.res.headers.get('content-type') || (saved.audioFormat === 'webm' ? 'audio/webm' : 'audio/mp4'))
               .header('Access-Control-Allow-Origin', '*')
               .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
               .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
