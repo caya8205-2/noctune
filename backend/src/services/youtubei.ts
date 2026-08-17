@@ -8,7 +8,7 @@ type YoutubeiModule = typeof import('youtubei.js');
 type InnertubeLike = Awaited<ReturnType<YoutubeiModule['Innertube']['create']>>;
 
 const nodeRequire = createRequire(__filename);
-const YOUTUBEI_CLIENTS = ['ANDROID', 'IOS', 'WEB', 'MWEB', 'TV_SIMPLY', 'ANDROID_VR'] as const;
+const YOUTUBEI_CLIENTS = ['ANDROID_VR', 'IOS', 'TV_SIMPLY', 'MWEB', 'ANDROID', 'WEB'] as const;
 
 let youtubeiModulePromise: Promise<YoutubeiModule> | null = null;
 let innertubePromise: Promise<InnertubeLike> | null = null;
@@ -17,7 +17,7 @@ function loadYoutubeiWebBundle(): YoutubeiModule {
   const bundlePath = nodeRequire.resolve('youtubei.js/web.bundle');
   const bundleSource = readFileSync(bundlePath, 'utf8').replace(
     /export\s*\{[\s\S]*?\};\s*(?:\/\/# sourceMappingURL=.*)?\s*$/,
-    'return { Innertube };'
+    'return { Innertube, Platform };'
   );
   const loadBundle = new Function(bundleSource) as () => YoutubeiModule;
   return loadBundle();
@@ -30,7 +30,28 @@ async function getYoutubeiModule(): Promise<YoutubeiModule> {
 
 async function getInnertube(): Promise<InnertubeLike> {
   if (!innertubePromise) {
-    innertubePromise = getYoutubeiModule().then(({ Innertube }) => Innertube.create());
+    innertubePromise = getYoutubeiModule().then(({ Innertube, Platform }: any) => {
+      if (Platform?.shim) {
+        Platform.shim.eval = async (arg: any) => {
+          if (typeof arg === 'string') {
+            try {
+              return new Function(`return (${arg})`)();
+            } catch {
+              return new Function(arg)();
+            }
+          }
+          if (typeof arg === 'object' && arg !== null) {
+            const code = arg.output || arg.code;
+            if (code) {
+              const fn = new Function(code);
+              return fn();
+            }
+          }
+          return (0, eval)(arg);
+        };
+      }
+      return Innertube.create();
+    });
   }
   return innertubePromise;
 }
@@ -139,14 +160,9 @@ async function getBasicInfoWithFallback(videoId: string) {
 }
 
 function streamingOptionSets(preference: AudioQualityPreference) {
-  const stable = { type: 'audio', quality: 'best', format: 'mp4' } as const;
-  if (preference === 'high') {
-    return [
-      { type: 'audio', quality: 'best', format: 'any' } as const,
-      stable,
-    ];
-  }
-  return [stable];
+  const anyAudio = { type: 'audio', quality: 'best', format: 'any' } as const;
+  const mp4Audio = { type: 'audio', quality: 'best', format: 'mp4' } as const;
+  return [anyAudio, mp4Audio];
 }
 
 async function getStreamingDataWithFallback(
