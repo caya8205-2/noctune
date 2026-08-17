@@ -33,52 +33,56 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
   return items;
 }
 
-const V340_HIGHLIGHTS = [
+const V400_HIGHLIGHTS = [
   {
-    title: 'Native Rust Channel View Engine',
-    desc: 'Channel view now runs on a native Rust scraper as the primary engine, accelerating channel loading by roughly 5x (<400ms). yt-dlp remains available as an automatic fallback if the native engine encounters an error, consistent with how the audio resolver falls back from Innertube to yt-dlp.',
+    title: 'YouTube Audio Streaming & Playback Engine Overhaul',
+    desc: 'Upgraded the core YouTube audio streaming resolver to Innertube 18.0.0 with dedicated ANDROID_VR client routing. Bypasses YouTube’s latest bot detection and signature cipher changes that caused playback to fail with 403 Forbidden errors across v3.4.0 and older versions.',
   },
   {
-    title: 'YouTube Channel View Refinement',
-    desc: 'Comprehensive improvements to channel browsing: accurate video upload lists, topic channel releases and shelves (e.g. AISHA), automatic VEVO channel rerouting to the official artist channel (e.g. DragonForce), reliable creator avatars, preserved original English system playlist titles ("Favorites"), a sticky edge-to-edge tab toolbar, and first-class Videos / Playlists tab navigation with mouse back/forward (MB4/MB5) history and independent scroll memory.',
+    title: 'Dual-Mode JavaScript Decipher Evaluator',
+    desc: 'Integrated a resilient dual-mode decipher evaluator supporting both string expressions and syntax extractors, ensuring YouTube stream links are deciphered cleanly without playback crashes or failed signatures.',
   },
   {
-    title: 'AutoQueue Refinement',
-    desc: 'AutoQueue now triggers seamlessly when the queue runs out, using the last 5 tracks as multi-seed context. Recommendations leverage parsed video title metadata, Spotify genre matching, and dominant source routing (Spotify vs YouTube) for higher accuracy, with infinite loop prevention.',
+    title: 'High-Quality WebM Opus Stream Prioritization',
+    desc: 'Streaming formats now prioritize native WebM Opus (160kbps high-bitrate audio) across all playback resolvers. This eliminates player decipher blocks previously encountered with legacy MP4/M4A streams.',
   },
   {
-    title: 'Nightly Mix & Smart Playlist Refinement',
-    desc: 'Nightly Mixes scoring now applies recency decay (21-day half-life) with a wider randomized seed pool (top 8 candidates). Top Favorites uses recency-weighted play counts so active favorites rise and stale ones decay. Deep Rotation and artist/channel name drift refresh dynamically.',
+    title: 'Hardened Fallback Stream Validation',
+    desc: 'Added live HTTP range stream verification to ensure fallback audio streams are 100% playable before playback begins, preventing unplayable links from causing unwanted track-skipping cascades.',
   },
   {
-    title: 'Badge Cache Status Refinement',
-    desc: 'Audio cache status badges now appear in both Full Player and Queue View with a new interactive legend explaining each status: Prefetched (Gold), Cached (Emerald), Refreshed (Sky Blue), Resolved (Red), and Prefetching (Lime Green) — all high-contrast and colorblind-accessible.',
-  },
-  {
-    title: 'Playback & Stream Reliability',
-    desc: 'Resolved prefetched tracks getting stuck in infinite loading by adding memory map lookups to the stream endpoint. YouTube ID prefix mismatches (youtube:, ytdlp:) are now cleaned automatically so cached and prefetched streams deliver instantly without redundant resolves. Verified seamless yt-dlp audio fallback when the Innertube decipherer is unavailable.',
-  },
-  {
-    title: 'Spotify-to-YouTube Matcher Fix',
-    desc: 'Fixed a bug where high-confidence Spotify-to-YouTube matches were incorrectly rejected due to overly strict title evidence checks. Valid fallback matches now write to cache properly, eliminating repeated multi-query search loops during prefetch and queue playback.',
-  },
-  {
-    title: 'Queue & Playback UX Polish',
-    desc: 'Queue tracks now play on single click instead of double click on desktop. The queue is fully preserved on app reopen but the mini-player stays hidden until you explicitly start playback. Continue Listening cards no longer show misleading clickable hover highlights on YouTube track titles.',
-  },
-  {
-    title: 'YouTube Playlist & Channel Metadata',
-    desc: 'YouTube playlist headers now display real playlist titles and high-resolution cover artwork instead of generic placeholders. Channel track subtitles show the actual creator name (e.g. Neo Genesis) instead of static "YouTube Upload". Unrelated artists are filtered out from Topic channel track lists.',
-  },
-  {
-    title: 'ML Telemetry & Dataset Isolation',
-    desc: 'Development datasets now prioritize local project data directories over AppData, and telemetry submissions filter out unplayed search cache entries. Importing telemetry updates ML recommendations safely without modifying or overwriting local playback history.',
+    title: 'Bundled Binary Detection & Dev Mode Reliability',
+    desc: 'Improved bundled helper path detection across both development and installed desktop modes, ensuring automatic fallback execution is always ready whenever needed.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V340_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V400_HIGHLIGHTS;
 
 const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | null> = {
+  'YouTube Audio Streaming & Playback Engine Overhaul': {
+    title: 'YouTube Streaming Engine Overhaul',
+    desc: 'Upgraded the core audio resolver to Innertube 18.0.0 with ANDROID_VR client routing, bypassing YouTube bot detection and 403 Forbidden errors.',
+  },
+  'Innertube `youtubei.js@18.0.0` Upgrade & `ANDROID_VR` Client Prioritization': {
+    title: 'YouTube Streaming Engine Overhaul',
+    desc: 'Upgraded the core audio resolver to Innertube 18.0.0 with ANDROID_VR client routing, bypassing YouTube bot detection and 403 Forbidden errors.',
+  },
+  'Dual-Mode JavaScript Evaluator Shim (`Platform.shim.eval`)': {
+    title: 'Resilient Decipher Evaluator',
+    desc: 'Integrated a dual-mode decipher engine supporting both string and syntax extractors for crash-free signature decoding.',
+  },
+  'Native WebM Opus Stream Prioritization': {
+    title: 'WebM Opus Stream Prioritization',
+    desc: 'Prioritizes high-quality WebM Opus audio (160kbps) across all resolvers, avoiding decipher blocks from legacy MP4 streams.',
+  },
+  'Mandatory HTTP Range Stream Validation (`validateStreamingUrl`)': {
+    title: 'Fallback Stream Verification',
+    desc: 'Added live HTTP range verification to validate audio streams before playback, preventing sudden track skips.',
+  },
+  'Bundled `yt-dlp` Path Discovery in Dev & Production': {
+    title: 'Bundled Binary Discovery',
+    desc: 'Enhanced bundled helper detection across development and production desktop builds for seamless fallback readiness.',
+  },
   'Native Rust Channel Scraper Engine': {
     title: 'Native Rust Channel Engine',
     desc: 'Replaced legacy yt-dlp sidecar binary dependency with a high-performance native Rust scraper, removing sidecar bundling overhead to shrink the application size and accelerate channel page loading by 5x (<400ms).',
