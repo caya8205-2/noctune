@@ -47,7 +47,26 @@ fn load_dotenv(path: &Path) {
     }
 }
 
+fn ensure_sidecar_dummy() {
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.is_empty() {
+        return;
+    }
+    let binaries_dir = Path::new("binaries");
+    let binary_name = if target.contains("windows") {
+        format!("noctune-backend-{}.exe", target)
+    } else {
+        format!("noctune-backend-{}", target)
+    };
+    let binary_path = binaries_dir.join(binary_name);
+    if !binary_path.exists() {
+        let _ = fs::create_dir_all(binaries_dir);
+        let _ = fs::write(&binary_path, b"");
+    }
+}
+
 fn main() {
+    ensure_sidecar_dummy();
     load_dotenv(Path::new("../.env"));
     for key in FORWARDED_ENV_KEYS {
         println!("cargo:rerun-if-env-changed={}", key);

@@ -1,5 +1,26 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createDevEnv, printDevEnv } from './dev-env.mjs';
+
+function ensureDevSidecarStubs() {
+  const binariesDir = join(process.cwd(), 'src-tauri', 'binaries');
+  mkdirSync(binariesDir, { recursive: true });
+  const targetTriples = [
+    'x86_64-pc-windows-msvc.exe',
+    'x86_64-unknown-linux-gnu',
+    'x86_64-apple-darwin',
+    'aarch64-apple-darwin',
+  ];
+  for (const triple of targetTriples) {
+    const binaryPath = join(binariesDir, `noctune-backend-${triple}`);
+    if (!existsSync(binaryPath)) {
+      writeFileSync(binaryPath, '');
+    }
+  }
+}
+
+ensureDevSidecarStubs();
 
 const env = createDevEnv({ defaultPort: '3132', preferDotEnvPort: false });
 const children = [];
