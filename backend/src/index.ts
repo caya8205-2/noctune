@@ -213,6 +213,14 @@ async function bootstrap() {
   throw new Error(`Could not find an available port in range ${PREFERRED_PORT}-${PREFERRED_PORT + MAX_PORT_ATTEMPTS - 1}`);
 }
 
+process.on('uncaughtException', (err) => {
+  console.error('[fatal:uncaughtException]', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal:unhandledRejection]', reason);
+});
+
 bootstrap().catch(err => {
   console.error('[fatal]', err);
   process.exit(1);

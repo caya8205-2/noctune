@@ -16,6 +16,7 @@ import {
   upsertTrack,
 } from '../services/cache.js';
 import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioResolver.js';
+import { resolveTrack as resolveTrackWithYtdlp, resolveAudioUrl as resolveAudioUrlWithYtdlp } from '../services/ytdlp.js';
 import { getSpotifyTrackById } from '../services/spotify.js';
 import { Readable } from 'stream';
 import { clearMatchCacheForSpotifyId, getMatchCacheEntry, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
@@ -274,10 +275,9 @@ async function fetchAudioStream(
 
   res.body?.cancel().catch(() => {});
   try {
-    const { resolveAudioUrl: resolveWithYtdlp } = await import('../services/ytdlp.js');
     let refreshedAudio: AudioStreamInfo;
     try {
-      refreshedAudio = await resolveWithYtdlp(videoId);
+      refreshedAudio = await resolveAudioUrlWithYtdlp(videoId);
     } catch {
       refreshedAudio = await resolveAudioUrl(videoId);
     }
@@ -886,60 +886,68 @@ export async function playerRoutes(app: FastifyInstance) {
         ytRes.body?.cancel().catch(() => {});
         try {
           app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL via ytdlp fallback');
-          const { resolveTrack: resolveWithYtdlp } = await import('../services/ytdlp.js');
-          let recovered: { track: Track; audio: AudioStreamInfo };
+          let recovered: { track: Track; audio: AudioStreamInfo } | null = null;
           try {
-            recovered = await resolveWithYtdlp(videoId, cached.query || videoId);
+            recovered = await resolveTrackWithYtdlp(videoId, cached.query || videoId);
           } catch {
-            recovered = await resolveTrack(videoId, cached.query || videoId);
-          }
-          const { track, audio } = recovered;
-          const saved = upsertTrack(
-            cached.query || videoId,
-            {
-              ...track,
-              title: cached.title || track.title,
-              artist: cached.artist || track.artist,
-              album: cached.album ?? track.album,
-              duration: cached.duration || track.duration,
-              thumbnail: cached.thumbnail || track.thumbnail,
-              query: cached.query || track.query,
-              spotifyId: cached.spotifyId,
-              spotifyUrl: cached.spotifyUrl,
-              youtubeId: cached.youtubeId,
-              youtubeTitle: cached.youtubeTitle,
-              youtubeArtist: cached.youtubeArtist,
-              queueSource: cached.queueSource,
-            },
-            audio.url,
-            undefined,
-            audio.qualityPreference,
-            audio.format,
-            audio.quality,
-            audio.resolverSource || 'ytdlp'
-          );
-          const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
-          if (retry.res.ok && retry.res.body) {
-            cached = saved;
-            if (retry.refreshed) {
-              app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
+            try {
+              recovered = await resolveTrack(videoId, cached.query || videoId);
+            } catch {
+              recovered = null;
             }
-            const retryNodeStream = Readable.fromWeb(retry.res.body as any);
-            reply
-              .status(retry.res.status === 206 ? 206 : 200)
-              .header('Content-Type', retry.res.headers.get('content-type') || (saved.audioFormat === 'webm' ? 'audio/webm' : 'audio/mp4'))
-              .header('Access-Control-Allow-Origin', '*')
-              .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-              .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
-              .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
-              .header('Cross-Origin-Resource-Policy', 'cross-origin')
-              .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
-              .header('Cache-Control', 'public, max-age=3600');
-            const retryLength = retry.res.headers.get('content-length');
-            const retryRange = retry.res.headers.get('content-range');
-            if (retryLength) reply.header('Content-Length', retryLength);
-            if (retryRange) reply.header('Content-Range', retryRange);
-            return reply.send(retryNodeStream);
+          }
+          if (recovered) {
+            const { track, audio } = recovered;
+            const saved = upsertTrack(
+              cached.query || videoId,
+              {
+                ...track,
+                title: cached.title || track.title,
+                artist: cached.artist || track.artist,
+                album: cached.album ?? track.album,
+                duration: cached.duration || track.duration,
+                thumbnail: cached.thumbnail || track.thumbnail,
+                query: cached.query || track.query,
+                spotifyId: cached.spotifyId,
+                spotifyUrl: cached.spotifyUrl,
+                youtubeId: cached.youtubeId,
+                youtubeTitle: cached.youtubeTitle,
+                youtubeArtist: cached.youtubeArtist,
+                queueSource: cached.queueSource,
+              },
+              audio.url,
+              undefined,
+              audio.qualityPreference,
+              audio.format,
+              audio.quality,
+              audio.resolverSource || 'ytdlp'
+            );
+            const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
+            if (retry.res.ok && retry.res.body) {
+              cached = saved;
+              if (retry.refreshed) {
+                app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
+              }
+              const retryNodeStream = Readable.fromWeb(retry.res.body as any);
+              retryNodeStream.on('error', (err) => {
+                app.log.warn({ videoId, err }, '[player] upstream stream closed on retry');
+              });
+              reply
+                .status(retry.res.status === 206 ? 206 : 200)
+                .header('Content-Type', retry.res.headers.get('content-type') || (saved.audioFormat === 'webm' ? 'audio/webm' : 'audio/mp4'))
+                .header('Access-Control-Allow-Origin', '*')
+                .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+                .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+                .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+                .header('Cross-Origin-Resource-Policy', 'cross-origin')
+                .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
+                .header('Cache-Control', 'public, max-age=3600');
+              const retryLength = retry.res.headers.get('content-length');
+              const retryRange = retry.res.headers.get('content-range');
+              if (retryLength) reply.header('Content-Length', retryLength);
+              if (retryRange) reply.header('Content-Range', retryRange);
+              return reply.send(retryNodeStream);
+            }
           }
         } catch (err) {
           app.log.warn({ videoId, err }, '[player] full stream recovery failed');
