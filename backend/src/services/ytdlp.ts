@@ -397,24 +397,6 @@ export async function browseYoutubeChannel(channelRef: string, videoLimit = 100)
   };
 }
 
-async function validateStreamingUrl(url: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  try {
-    const res = await fetch(url, {
-      headers: { Range: 'bytes=0-1048575' },
-      signal: controller.signal,
-    });
-    res.body?.cancel().catch(() => {});
-
-    if (!res.ok && res.status !== 206) {
-      throw new Error(`Resolved audio URL is not playable: ${res.status} ${res.statusText}`);
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 /** Resolve a full audio stream URL for a videoId. */
 export async function resolveAudioUrl(
   videoId: string,
@@ -422,8 +404,6 @@ export async function resolveAudioUrl(
 ): Promise<AudioStreamInfo> {
   const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
   const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
-
-  await validateStreamingUrl(url);
 
   // YT URLs are typically valid for ~6h; we conservatively expire at 5h45m
   const expiry = Date.now() + (5 * 60 + 45) * 60 * 1000;
@@ -446,8 +426,6 @@ export async function resolveTrack(
 }> {
   const info = await ytDlp.getVideoInfo(`https://www.youtube.com/watch?v=${videoId}`) as YTInfo;
   const { url, format, quality, qualityPreference } = pickBestAudioFormat(info, preference);
-
-  await validateStreamingUrl(url);
 
   const track: Track = {
     id: info.id,

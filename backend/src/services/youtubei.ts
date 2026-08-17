@@ -188,8 +188,6 @@ async function getStreamingDataWithFallback(
           throw new Error('Skipping limited iOS stream URL');
         }
 
-        await validateStreamingUrl(format.url);
-
         return { format: { ...format, url: format.url }, client, qualityPreference: preference };
       } catch (err) {
         failures.push(`${client}/${options.format}: ${(err as Error).message}`);
@@ -205,24 +203,6 @@ function isLimitedIosStream(url: string): boolean {
     return new URL(url).searchParams.get('c')?.toUpperCase() === 'IOS';
   } catch {
     return url.includes('c=IOS');
-  }
-}
-
-async function validateStreamingUrl(url: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  try {
-    const res = await fetch(url, {
-      headers: { Range: 'bytes=0-1048575' },
-      signal: controller.signal,
-    });
-    res.body?.cancel().catch(() => {});
-
-    if (!res.ok && res.status !== 206) {
-      throw new Error(`Resolved audio URL is not playable: ${res.status} ${res.statusText}`);
-    }
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
