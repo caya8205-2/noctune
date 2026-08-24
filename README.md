@@ -23,6 +23,7 @@
 [![MIT](https://img.shields.io/badge/License-MIT-white)](./LICENSE)
 [![Traffic Report](https://img.shields.io/badge/Traffic_Report-Latest-2F80ED?logo=github&logoColor=white)](https://caya8205-2.github.io/noctune/caya8205-2/noctune/latest-report/report.html)
 [![Stats Data](https://img.shields.io/badge/Stats_Data-github--repo--stats-111111?logo=github&logoColor=white)](https://github.com/caya8205-2/noctune/tree/github-repo-stats)
+[![GitHub All Releases](https://img.shields.io/github/downloads/caya8205-2/noctune/total?logo=github)](https://github.com)
 
 </div>
 
