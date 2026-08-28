@@ -1,5 +1,7 @@
+mod db;
 mod innertube_service;
 mod youtube_channel;
+use db::DbState;
 use innertube_service::{
     get_video_metadata, get_watch_next_tracks, get_youtube_channel_innertube,
     get_youtube_playlist_innertube, resolve_audio_stream, search_youtube_tracks, InnertubeState,
@@ -7,8 +9,9 @@ use innertube_service::{
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
 use std::process::Command;
+use tauri::Manager;
 #[cfg(not(debug_assertions))]
-use tauri::{path::BaseDirectory, Manager};
+use tauri::path::BaseDirectory;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
 
@@ -63,6 +66,9 @@ pub fn run() {
             get_youtube_playlist_innertube
         ])
         .setup(|_app| {
+            if let Ok(db_state) = DbState::init(_app.handle()) {
+                _app.manage(db_state);
+            }
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.
             #[cfg(not(debug_assertions))]

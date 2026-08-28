@@ -1,0 +1,12 @@
+# GitHub Linguist language overrides
+# Collapse frontend/UI markup & styles from language statistics
+frontend/** linguist-vendored
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.json linguist-detectable=false
+*.svg linguist-detectable=false
+*.png binary
+*.ico binary
+
+# Ensure Rust is highlighted as primary
+*.rs linguist-detectable=true
