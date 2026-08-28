@@ -292,10 +292,24 @@ export const api = {
     });
   },
 
-  lyrics: (track: Track) =>
-    request<LyricsResult | undefined>(
+  lyrics: async (track: Track) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<LyricsResult | null>('get_lyrics', {
+          title: track.title,
+          artist: track.artist,
+          duration: track.duration ? Math.round(track.duration) : undefined,
+        });
+        if (res) return res;
+      } catch (err) {
+        console.warn('[api] Tauri get_lyrics failed, falling back to server:', err);
+      }
+    }
+    return request<LyricsResult | undefined>(
       `/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}`
-    ).then((lyrics) => lyrics ?? null),
+    ).then((lyrics) => lyrics ?? null);
+  },
 
   getPlaylists: async () => {
     if (detectTauriEnvironment()) {

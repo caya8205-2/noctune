@@ -1,5 +1,6 @@
 mod db;
 mod innertube_service;
+mod lyrics_service;
 mod youtube_channel;
 use db::{
     add_track_to_playlist, create_user_playlist, delete_user_playlist, get_all_playlists,
@@ -9,6 +10,7 @@ use innertube_service::{
     get_video_metadata, get_watch_next_tracks, get_youtube_channel_innertube,
     get_youtube_playlist_innertube, resolve_audio_stream, search_youtube_tracks, InnertubeState,
 };
+use lyrics_service::{get_lyrics, LyricsState};
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
 use std::process::Command;
@@ -57,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(InnertubeState::new())
+        .manage(LyricsState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             get_youtube_channel,
@@ -72,7 +75,8 @@ pub fn run() {
             delete_user_playlist,
             add_track_to_playlist,
             remove_track_from_playlist,
-            toggle_like_track
+            toggle_like_track,
+            get_lyrics
         ])
         .setup(|_app| {
             if let Ok(db_state) = DbState::init(_app.handle()) {
