@@ -435,8 +435,23 @@ export const api = {
   },
 
   // Local files
-  scanLocalFiles: (path: string) =>
-    request<{
+  scanLocalFiles: async (path: string) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const files = await invoke<LocalFile[]>('scan_local_folder', { folderPath: path });
+        return {
+          ok: true,
+          scanned: files.length,
+          failed: 0,
+          importRoot: path,
+          folderName: path.split(/[/\\]/).pop() || path,
+        };
+      } catch (err) {
+        console.warn('[api] Tauri scan_local_folder failed, falling back to server:', err);
+      }
+    }
+    return request<{
       ok: boolean;
       scanned: number;
       failed: number;
@@ -445,8 +460,24 @@ export const api = {
     }>('/local-files/scan', {
       method: 'POST',
       body: JSON.stringify({ path }),
-    }),
-  getLocalFiles: (limit = 50, offset = 0, importRoot?: string | null) => {
+    });
+  },
+  getLocalFiles: async (limit = 50, offset = 0, importRoot?: string | null) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const files = await invoke<LocalFile[]>('get_local_files', { folderPath: importRoot || undefined });
+        return {
+          files: files.slice(offset, offset + limit),
+          total: files.length,
+          limit,
+          offset,
+          importRoot: importRoot || null,
+        };
+      } catch (err) {
+        console.warn('[api] Tauri get_local_files failed, falling back to server:', err);
+      }
+    }
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),

@@ -1,5 +1,6 @@
 mod db;
 mod innertube_service;
+mod local_files;
 mod lyrics_service;
 mod youtube_channel;
 use db::{
@@ -10,6 +11,7 @@ use innertube_service::{
     get_video_metadata, get_watch_next_tracks, get_youtube_channel_innertube,
     get_youtube_playlist_innertube, resolve_audio_stream, search_youtube_tracks, InnertubeState,
 };
+use local_files::{get_local_files, scan_local_folder};
 use lyrics_service::{get_lyrics, LyricsState};
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
@@ -76,7 +78,9 @@ pub fn run() {
             add_track_to_playlist,
             remove_track_from_playlist,
             toggle_like_track,
-            get_lyrics
+            get_lyrics,
+            scan_local_folder,
+            get_local_files
         ])
         .setup(|_app| {
             if let Ok(db_state) = DbState::init(_app.handle()) {
