@@ -552,7 +552,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
 
   const resolverSource = snapshot?.learned?.resolverSource || ((track as any).source === 'local' || (track as any).localAudioPath ? 'local' : null);
   const resolverEngine = resolverSource === 'youtubei'
-    ? { label: 'Innertube (youtubei.js)', cls: 'text-emerald-400 font-semibold' }
+    ? { label: 'Innertube-rs', cls: 'text-emerald-400 font-semibold' }
     : resolverSource === 'ytdlp'
     ? { label: 'yt-dlp (bundled fallback)', cls: 'text-amber-400 font-semibold' }
     : resolverSource === 'local'

@@ -16,14 +16,13 @@ import {
   Keyboard,
   RefreshCw,
   Scale,
-  ShieldAlert,
   Sparkles,
   Trash2,
   Zap,
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type BackendStatus, type UpdateInfo, IS_TAURI } from '../../utils/api';
+import { api, apiUrl, type UpdateInfo, IS_TAURI } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
@@ -160,8 +159,6 @@ export function SettingsView() {
     description: string;
     action: () => Promise<void>;
   } | null>(null);
-  const [diagnostics, setDiagnostics] = useState<BackendStatus | null>(null);
-  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [previewBusy, setPreviewBusy] = useState<'start' | 'stop' | 'open' | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
@@ -232,7 +229,6 @@ export function SettingsView() {
 
   useEffect(() => {
     loadSettings().catch(console.error);
-    api.status().then(setDiagnostics).catch(console.error);
     api.checkForUpdates().then(setUpdateInfo).catch(console.error);
   }, []);
 
@@ -492,47 +488,6 @@ export function SettingsView() {
     } catch (err) {
       setAudioQualityPreference(previous);
       setCacheMessage({ ok: false, text: (err as Error).message });
-    }
-  }
-
-  async function handleRefreshDiagnostics() {
-    setDiagnosticsBusy(true);
-    try {
-      const status = await api.status();
-      setDiagnostics(status);
-      await loadSettings();
-    } catch (err) {
-      setCacheMessage({ ok: false, text: (err as Error).message });
-    } finally {
-      setDiagnosticsBusy(false);
-    }
-  }
-
-  async function handleClearResolverBlacklist() {
-    setDiagnosticsBusy(true);
-    setCacheMessage(null);
-    try {
-      const result = await api.clearResolverBlacklist();
-      await handleRefreshDiagnostics();
-      setCacheMessage({ ok: true, text: `Cleared ${result.blacklist.cleared} failed resolver entr${result.blacklist.cleared === 1 ? 'y' : 'ies'}.` });
-    } catch (err) {
-      setCacheMessage({ ok: false, text: (err as Error).message });
-    } finally {
-      setDiagnosticsBusy(false);
-    }
-  }
-
-  async function handleClearResolverMatchCache() {
-    setDiagnosticsBusy(true);
-    setCacheMessage(null);
-    try {
-      const result = await api.clearResolverMatchCache();
-      await handleRefreshDiagnostics();
-      setCacheMessage({ ok: true, text: `Cleared ${result.matchCache.cleared} Spotify match entr${result.matchCache.cleared === 1 ? 'y' : 'ies'}.` });
-    } catch (err) {
-      setCacheMessage({ ok: false, text: (err as Error).message });
-    } finally {
-      setDiagnosticsBusy(false);
     }
   }
 
@@ -1006,88 +961,20 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Diagnostics */}
+      {/* Debug & Diagnostics */}
       <section className="surface-panel flex flex-col gap-4 p-5">
-        <div>
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Diagnostics
-          </h2>
-          <p className="text-xs text-muted leading-relaxed mt-2">
-            Quick local health snapshot for resolver, prefetch, and temporary failed-stream blacklist.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-            <p className="text-xs text-muted">Resolver</p>
-            <p className="text-sm font-semibold text-white mt-1">
-              {diagnostics?.resolver?.name ?? 'Unknown'}
-            </p>
-          </div>
-          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-            <p className="text-xs text-muted">Prefetched</p>
-            <p className="text-sm font-semibold text-white mt-1">
-              {diagnostics?.prefetch?.prefetched?.length ?? 0}
-            </p>
-          </div>
-          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-            <p className="text-xs text-muted">Failed IDs</p>
-            <p className="text-sm font-semibold text-white mt-1">
-              {diagnostics?.playbackBlacklist?.failedIds ?? data?.resolver?.failedIds ?? 0}
-            </p>
-          </div>
-          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-            <p className="text-xs text-muted">Matches</p>
-            <p className="text-sm font-semibold text-white mt-1">
-              {diagnostics?.matchCache?.total ?? data?.resolver?.matchCache?.total ?? 0}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={handleRefreshDiagnostics}
-            disabled={diagnosticsBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
-          >
-            {diagnosticsBusy ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} />}
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => requestCacheClear('Clear failed resolver IDs?', 'Failed resolver IDs will be removed so Noctune can try resolving those tracks again.', handleClearResolverBlacklist)}
-            disabled={diagnosticsBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
-          >
-            <ShieldAlert size={14} />
-            Clear failed IDs
-          </button>
-          <button
-            type="button"
-            onClick={() => requestCacheClear('Clear resolver matches?', 'Cached Spotify-to-YouTube match results will be removed and rebuilt when needed.', handleClearResolverMatchCache)}
-            disabled={diagnosticsBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
-          >
-            <Trash2 size={14} />
-            Clear matches
-          </button>
-        </div>
-
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${IS_TAURI ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]' : 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]'}`}
+                  className="h-2.5 w-2.5 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.45)]"
                   aria-hidden="true"
                 />
                 <span className="text-sm font-medium text-white">Debug Dashboard</span>
               </div>
               <span className="block text-xs text-muted mt-1">
-                {IS_TAURI
-                  ? 'Opens the bundled debug dashboard in a separate app window.'
-                  : 'Opens the bundled debug dashboard in a separate app window.'}
+                Opens the full Noctune debug and diagnostic dashboard in a separate window.
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1355,7 +1242,7 @@ export function SettingsView() {
         title={cacheConfirmation?.title ?? ''}
         description={cacheConfirmation?.description ?? ''}
         confirmLabel="Clear"
-        loading={cacheBusy || diagnosticsBusy}
+        loading={cacheBusy}
         onConfirm={() => {
           if (!cacheConfirmation) return;
           void (async () => {
@@ -1363,7 +1250,7 @@ export function SettingsView() {
             setCacheConfirmation(null);
           })();
         }}
-        onCancel={() => !(cacheBusy || diagnosticsBusy) && setCacheConfirmation(null)}
+        onCancel={() => !cacheBusy && setCacheConfirmation(null)}
       />
     </div>
   );

@@ -272,15 +272,27 @@ export const api = {
   },
 
   recommend: async (seed: Track, excludeIds: string[] = [], limit = 12, seeds?: Track[]) => {
-    if (detectTauriEnvironment() && (seed.youtubeId || (seed.id && !seed.id.startsWith('spotify:') && !seed.id.startsWith('local:')))) {
+    if (detectTauriEnvironment()) {
       try {
-        const vid = seed.youtubeId || seed.id;
+        let vid = seed.youtubeId || (!seed.id.startsWith('spotify:') && !seed.id.startsWith('local:') ? seed.id : '');
         const { invoke } = await import('@tauri-apps/api/core');
-        const tracks = await invoke<Track[]>('get_watch_next_tracks', { videoId: vid });
-        if (tracks && tracks.length > 0) {
-          const excludeSet = new Set(excludeIds.filter(Boolean));
-          const filtered = tracks.filter((t) => !excludeSet.has(t.id) && !excludeSet.has(t.youtubeId || ''));
-          return { seed, tracks: filtered.slice(0, limit) };
+
+        // If Spotify track without resolved youtubeId, quickly search YouTube to find the matching video ID
+        if (!vid && (seed.title || seed.query)) {
+          const q = `${seed.title} ${seed.artist || ''}`.trim();
+          const found = await invoke<Track[]>('search_youtube_tracks', { query: q, limit: 1 });
+          if (found && found.length > 0) {
+            vid = found[0].youtubeId || found[0].id;
+          }
+        }
+
+        if (vid) {
+          const tracks = await invoke<Track[]>('get_watch_next_tracks', { videoId: vid });
+          if (tracks && tracks.length > 0) {
+            const excludeSet = new Set(excludeIds.filter(Boolean));
+            const filtered = tracks.filter((t) => !excludeSet.has(t.id) && !excludeSet.has(t.youtubeId || ''));
+            return { seed, tracks: filtered.slice(0, limit) };
+          }
         }
       } catch (err) {
         console.warn('[api] Tauri get_watch_next_tracks failed, falling back to server:', err);
