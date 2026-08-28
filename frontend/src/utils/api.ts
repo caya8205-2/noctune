@@ -166,8 +166,17 @@ export const api = {
     }),
   clearDiscordActivity: () =>
     request<{ ok: boolean }>('/rpc/activity', { method: 'DELETE' }),
-  spotifyMetadata: (spotifyId: string) =>
-    request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
+  spotifyMetadata: async (spotifyId: string) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<SpotifyTrackMetadata>('get_spotify_track_metadata', { spotifyId });
+      } catch (err) {
+        console.warn('[api] Tauri get_spotify_track_metadata failed, falling back to server:', err);
+      }
+    }
+    return request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`);
+  },
   youtubeMetadata: (videoId: string) =>
     request<Track>(`/metadata/youtube/${encodeURIComponent(videoId.replace(/^(youtube|ytdlp):/, ''))}`),
 

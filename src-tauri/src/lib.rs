@@ -2,6 +2,7 @@ mod db;
 mod innertube_service;
 mod local_files;
 mod lyrics_service;
+mod spotify_service;
 mod youtube_channel;
 use db::{
     add_track_to_playlist, create_user_playlist, delete_user_playlist, get_all_playlists,
@@ -13,6 +14,7 @@ use innertube_service::{
 };
 use local_files::{get_local_files, scan_local_folder};
 use lyrics_service::{get_lyrics, LyricsState};
+use spotify_service::{get_spotify_track_metadata, set_spotify_credentials, SpotifyState};
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
 use std::process::Command;
@@ -62,6 +64,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(InnertubeState::new())
         .manage(LyricsState::new())
+        .manage(SpotifyState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             get_youtube_channel,
@@ -80,7 +83,9 @@ pub fn run() {
             toggle_like_track,
             get_lyrics,
             scan_local_folder,
-            get_local_files
+            get_local_files,
+            set_spotify_credentials,
+            get_spotify_track_metadata
         ])
         .setup(|_app| {
             if let Ok(db_state) = DbState::init(_app.handle()) {
