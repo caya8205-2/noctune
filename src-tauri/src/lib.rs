@@ -1,4 +1,9 @@
+mod innertube_service;
 mod youtube_channel;
+use innertube_service::{
+    get_video_metadata, get_watch_next_tracks, get_youtube_channel_innertube,
+    get_youtube_playlist_innertube, resolve_audio_stream, search_youtube_tracks, InnertubeState,
+};
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
 use std::process::Command;
@@ -45,7 +50,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![open_external_url, get_youtube_channel, get_youtube_playlist])
+        .manage(InnertubeState::new())
+        .invoke_handler(tauri::generate_handler![
+            open_external_url,
+            get_youtube_channel,
+            get_youtube_playlist,
+            resolve_audio_stream,
+            get_video_metadata,
+            search_youtube_tracks,
+            get_watch_next_tracks,
+            get_youtube_channel_innertube,
+            get_youtube_playlist_innertube
+        ])
         .setup(|_app| {
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.

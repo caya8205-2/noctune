@@ -77,6 +77,7 @@ export function seekAudio(seconds: number) {
 export function useAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadedAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const crossfadeActiveRef = useRef(false);
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
   const suppressNextErrorRef = useRef(false);
@@ -84,6 +85,9 @@ export function useAudio() {
 
   const {
     currentTrack,
+    queue,
+    queueIndex,
+    shuffle,
     isPlaying,
     volume,
     playbackRate,
@@ -231,6 +235,24 @@ export function useAudio() {
 
     let cancelled = false;
     const targetId = (currentTrack.youtubeId || currentTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
+    
+    // Check if we already have a prebuffered audio element in memory
+    const prebufferedAudio = preloadedAudiosRef.current.get(targetId) || preloadedAudiosRef.current.get(currentTrack.id);
+    if (prebufferedAudio && prebufferedAudio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      delete recoveryAttemptsRef.current[currentTrack.id];
+      if (audio.src !== prebufferedAudio.src) {
+        audio.crossOrigin = prebufferedAudio.crossOrigin;
+        audio.src = prebufferedAudio.src;
+      }
+      setLoading(false);
+      if (usePlayerStore.getState().isPlaying) {
+        playAudio(audio).catch(() => {});
+      }
+      preloadedAudiosRef.current.delete(targetId);
+      preloadedAudiosRef.current.delete(currentTrack.id);
+      return;
+    }
+
     apiUrl('/player/stream/' + targetId)
       .then((src) => {
         if (cancelled || !audioRef.current) return;
@@ -243,6 +265,7 @@ export function useAudio() {
         waitForAudioReady(audio)
           .then(() => {
             if (cancelled) return;
+            setLoading(false);
             if (usePlayerStore.getState().isPlaying) {
               return playAudio(audio);
             }
@@ -251,11 +274,49 @@ export function useAudio() {
             console.warn('[audio] play blocked or metadata load failed:', err);
           });
       })
-      .catch(err => console.warn('[audio] stream URL failed:', err));
+      .catch((err) => {
+        console.warn('[audio] stream URL failed:', err);
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, [currentTrack?.id, currentTrack?.youtubeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prebuffer audio elements in background for next tracks in queue
+  useEffect(() => {
+    if (!queue || queue.length === 0 || queueIndex < 0) return;
+    const upcoming = queue.slice(queueIndex + 1, queueIndex + 4);
+    
+    // Clean old prebuffered audios not in upcoming
+    const upcomingIds = new Set(upcoming.map(t => (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim()));
+    for (const [id, el] of preloadedAudiosRef.current.entries()) {
+      if (!upcomingIds.has(id)) {
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+        preloadedAudiosRef.current.delete(id);
+      }
+    }
+
+    // Preload next upcoming audio streams into browser media cache
+    for (const track of upcoming) {
+      const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
+      if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
+
+      apiUrl('/player/stream/' + cleanId)
+        .then((src) => {
+          if (preloadedAudiosRef.current.has(cleanId)) return;
+          const preAudio = new Audio();
+          preAudio.preload = 'auto';
+          preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+          preAudio.src = src;
+          preAudio.load();
+          preloadedAudiosRef.current.set(cleanId, preAudio);
+        })
+        .catch(() => {});
+    }
+  }, [queue, queueIndex, shuffle]);
 
   // Sync play/pause
   useEffect(() => {

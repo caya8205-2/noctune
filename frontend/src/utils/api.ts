@@ -135,10 +135,22 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search: (q: string, limit = 25) =>
-    request<{ fromCache: boolean; query: string; tracks: Track[] }>(
+  search: async (q: string, limit = 25) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const tracks = await invoke<Track[]>('search_youtube_tracks', { query: q, limit });
+        if (tracks && tracks.length > 0) {
+          return { fromCache: false, query: q, tracks };
+        }
+      } catch (err) {
+        console.warn('[api] Tauri search_youtube_tracks failed, falling back to server:', err);
+      }
+    }
+    return request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
-    ),
+    );
+  },
 
   home: () =>
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[] }>('/home'),
@@ -247,14 +259,38 @@ export const api = {
   },
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
-  browseYoutubePlaylist: (playlistId: string) =>
-    request<YouTubePlaylistView>(`/browse/youtube-playlist/${encodeURIComponent(playlistId)}`),
+  browseYoutubePlaylist: async (playlistId: string) => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<YouTubePlaylistView>('get_youtube_playlist_innertube', { playlistId });
+      } catch (err) {
+        console.warn('[api] Tauri get_youtube_playlist_innertube failed, falling back to server:', err);
+      }
+    }
+    return request<YouTubePlaylistView>(`/browse/youtube-playlist/${encodeURIComponent(playlistId)}`);
+  },
 
-  recommend: (seed: Track, excludeIds: string[] = [], limit = 12, seeds?: Track[]) =>
-    request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
+  recommend: async (seed: Track, excludeIds: string[] = [], limit = 12, seeds?: Track[]) => {
+    if (detectTauriEnvironment() && (seed.youtubeId || (seed.id && !seed.id.startsWith('spotify:') && !seed.id.startsWith('local:')))) {
+      try {
+        const vid = seed.youtubeId || seed.id;
+        const { invoke } = await import('@tauri-apps/api/core');
+        const tracks = await invoke<Track[]>('get_watch_next_tracks', { videoId: vid });
+        if (tracks && tracks.length > 0) {
+          const excludeSet = new Set(excludeIds.filter(Boolean));
+          const filtered = tracks.filter((t) => !excludeSet.has(t.id) && !excludeSet.has(t.youtubeId || ''));
+          return { seed, tracks: filtered.slice(0, limit) };
+        }
+      } catch (err) {
+        console.warn('[api] Tauri get_watch_next_tracks failed, falling back to server:', err);
+      }
+    }
+    return request<{ seed: Track; tracks: Track[] }>('/queue/recommend', {
       method: 'POST',
       body: JSON.stringify({ seed, excludeIds, limit, seeds }),
-    }),
+    });
+  },
 
   lyrics: (track: Track) =>
     request<LyricsResult | undefined>(

@@ -275,6 +275,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({
           currentTrack: playableTrack,
           isPlaying: true,
+          isLoading: false,
           progress: 0,
           queue: queue.map((queuedTrack) => queuedTrack.id === track.id ? ({ ...track, queueSource: source }) : queuedTrack),
           queueIndex: idx,
@@ -389,6 +390,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({
         currentTrack: playableTrack,
         isPlaying: true,
+        isLoading: false,
         progress: 0,
         queue: playbackQueue,
         queueIndex: playbackIndex,
