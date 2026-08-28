@@ -311,77 +311,16 @@ export const api = {
     ).then((lyrics) => lyrics ?? null);
   },
 
-  getPlaylists: async () => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<Playlist[]>('get_all_playlists');
-      } catch (err) {
-        console.warn('[api] Tauri get_all_playlists failed, falling back to server:', err);
-      }
-    }
-    return request<Playlist[]>('/playlists');
-  },
-  getLiked: async () => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const playlists = await invoke<Playlist[]>('get_all_playlists');
-        const liked = playlists.find(p => p.id === 'system-liked-songs');
-        if (liked) return liked;
-      } catch (err) {
-        console.warn('[api] Tauri getLiked failed, falling back to server:', err);
-      }
-    }
-    return request<Playlist>('/library/liked');
-  },
-  toggleLike: async (track: Track) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const liked = await invoke<boolean>('toggle_like_track', { track });
-        const playlists = await invoke<Playlist[]>('get_all_playlists');
-        const likedPl = playlists.find(p => p.id === 'system-liked-songs') || {
-          id: 'system-liked-songs',
-          name: 'Liked Songs',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          trackIds: [],
-        };
-        return { liked, playlist: likedPl };
-      } catch (err) {
-        console.warn('[api] Tauri toggleLike failed, falling back to server:', err);
-      }
-    }
-    return request<{ liked: boolean; playlist: Playlist }>('/library/liked/toggle', {
+  getPlaylists: () => request<Playlist[]>('/playlists'),
+  getLiked: () => request<Playlist>('/library/liked'),
+  toggleLike: (track: Track) =>
+    request<{ liked: boolean; playlist: Playlist }>('/library/liked/toggle', {
       method: 'POST',
       body: JSON.stringify(track),
-    });
-  },
-  createPlaylist: async (name: string) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<Playlist>('create_user_playlist', { name });
-      } catch (err) {
-        console.warn('[api] Tauri create_user_playlist failed, falling back to server:', err);
-      }
-    }
-    return request<Playlist>('/playlists', { method: 'POST', body: JSON.stringify({ name }) });
-  },
-  getPlaylist: async (id: string) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const playlists = await invoke<Playlist[]>('get_all_playlists');
-        const pl = playlists.find(p => p.id === id);
-        if (pl) return pl;
-      } catch (err) {
-        console.warn('[api] Tauri getPlaylist failed, falling back to server:', err);
-      }
-    }
-    return request<Playlist>(`/playlists/${id}`);
-  },
+    }),
+  createPlaylist: (name: string) =>
+    request<Playlist>('/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
+  getPlaylist: (id: string) => request<Playlist>(`/playlists/${id}`),
   updatePlaylist: (id: string, data: { name?: string; coverDataUrl?: string | null }) =>
     request<{ ok: boolean; playlist: Playlist }>(`/playlists/${id}`, {
       method: 'PATCH',
@@ -397,42 +336,12 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ fromIndex, toIndex }),
     }),
-  deletePlaylist: async (id: string) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const ok = await invoke<boolean>('delete_user_playlist', { id });
-        return { ok };
-      } catch (err) {
-        console.warn('[api] Tauri delete_user_playlist failed, falling back to server:', err);
-      }
-    }
-    return request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' });
-  },
-  addTrackToPlaylist: async (playlistId: string, track: Track) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const added = await invoke<boolean>('add_track_to_playlist', { playlistId, track });
-        return { ok: added, added };
-      } catch (err) {
-        console.warn('[api] Tauri add_track_to_playlist failed, falling back to server:', err);
-      }
-    }
-    return request<{ ok: boolean; added: boolean }>(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify(track) });
-  },
-  removeTrack: async (playlistId: string, trackId: string) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke<boolean>('remove_track_from_playlist', { playlistId, trackId });
-        return;
-      } catch (err) {
-        console.warn('[api] Tauri remove_track_from_playlist failed, falling back to server:', err);
-      }
-    }
-    return request(`/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' });
-  },
+  deletePlaylist: (id: string) =>
+    request<{ ok: boolean }>(`/playlists/${id}`, { method: 'DELETE' }),
+  addTrackToPlaylist: (playlistId: string, track: Track) =>
+    request<{ ok: boolean; added: boolean }>(`/playlists/${playlistId}/tracks`, { method: 'POST', body: JSON.stringify(track) }),
+  removeTrack: (playlistId: string, trackId: string) =>
+    request(`/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' }),
 
   // Local files
   scanLocalFiles: async (path: string) => {
