@@ -135,22 +135,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search: async (q: string, limit = 25) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const tracks = await invoke<Track[]>('search_youtube_tracks', { query: q, limit });
-        if (tracks && tracks.length > 0) {
-          return { fromCache: false, query: q, tracks };
-        }
-      } catch (err) {
-        console.warn('[api] Tauri search_youtube_tracks failed, falling back to server:', err);
-      }
-    }
-    return request<{ fromCache: boolean; query: string; tracks: Track[] }>(
+  search: (q: string, limit = 25) =>
+    request<{ fromCache: boolean; query: string; tracks: Track[] }>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`
-    );
-  },
+    ),
 
   home: () =>
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[] }>('/home'),
