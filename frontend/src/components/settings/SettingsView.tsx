@@ -33,7 +33,7 @@ const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
-  recommendationEngine?: 'hybrid-ml' | 'lastfm' | 'legacy';
+  recommendationEngine?: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy';
   audioQualityPreference: 'auto' | 'high';
   audioCacheLimitMb: number;
   discordRpcEnabled: boolean;
@@ -140,7 +140,7 @@ export function SettingsView() {
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
-  const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'legacy'>('lastfm');
+  const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy'>('innertube-rs');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
   const [downloadDir, setDownloadDir] = useState('');
   const [downloadDirSaving, setDownloadDirSaving] = useState(false);
@@ -174,7 +174,7 @@ export function SettingsView() {
     setClientId(d.spotify.clientId);
     setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
-    setRecommendationEngine(d.recommendationEngine ?? 'lastfm');
+    setRecommendationEngine(d.recommendationEngine ?? 'innertube-rs');
     setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
     if (d.downloadDir) setDownloadDir(d.downloadDir);
   }
@@ -894,11 +894,11 @@ export function SettingsView() {
                 Active Engine
               </label>
               <p className="mt-1 text-xs text-muted leading-relaxed">
-                {recommendationEngine === 'hybrid-ml'
+                {recommendationEngine === 'innertube-rs' || recommendationEngine === 'legacy'
+                  ? 'InnerTube-rs Engine: Native YouTube watch next & related video recommendation graph (Fastest & most relevant).'
+                  : recommendationEngine === 'hybrid-ml'
                   ? 'ML Hybrid Collaborative: Combines local Markov chain transitions, metadata similarity, and play history.'
-                  : recommendationEngine === 'lastfm'
-                  ? 'Last.fm Similar Tracks: Uses Last.fm online graph API to suggest similar tracks.'
-                  : 'Legacy Noctune Search: Original query-based search engine fallback.'}
+                  : 'Last.fm Similar Tracks: Uses Last.fm online graph API to suggest similar tracks.'}
               </p>
             </div>
             <select
@@ -907,14 +907,14 @@ export function SettingsView() {
               onChange={(e) => setRecommendationEngine(e.target.value as any)}
               className="rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
             >
+              <option value="innertube-rs" className="bg-base-900 text-white">
+                InnerTube-rs (Recommended)
+              </option>
               <option value="hybrid-ml" className="bg-base-900 text-white">
-                ML Hybrid Collaborative (Recommended)
+                ML Hybrid Collaborative
               </option>
               <option value="lastfm" className="bg-base-900 text-white">
                 Last.fm Similar Tracks
-              </option>
-              <option value="legacy" className="bg-base-900 text-white">
-                Legacy Noctune Search
               </option>
             </select>
           </div>

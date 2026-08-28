@@ -22,7 +22,7 @@ export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
-    recommendationEngine: 'hybrid-ml' | 'lastfm' | 'legacy';
+    recommendationEngine: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy';
     audioQualityPreference: 'auto' | 'high';
     audioCacheLimitMb: number;
     discordRpcEnabled: boolean;
@@ -36,7 +36,7 @@ const DEFAULTS: EnvConfig = {
     spotifyClientId: '',
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
-    recommendationEngine: 'lastfm',
+    recommendationEngine: 'innertube-rs',
     audioQualityPreference: 'auto',
     audioCacheLimitMb: 1024,
     discordRpcEnabled: true,
@@ -52,10 +52,10 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
     const envClientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
     const envApiKey = process.env.NOCTUNE_API_KEY?.trim();
 
-    // If user hasn't explicitly saved an engine choice via Settings UI, default to lastfm
-    let recEngine = config.recommendationEngine ?? 'lastfm';
-    if (!config.recommendationEngineUserSelected && recEngine === 'hybrid-ml') {
-        recEngine = 'lastfm';
+    // If user hasn't explicitly saved an engine choice via Settings UI, default to innertube-rs
+    let recEngine = config.recommendationEngine ?? 'innertube-rs';
+    if (!config.recommendationEngineUserSelected && (recEngine === 'hybrid-ml' || (recEngine as string) === 'legacy')) {
+        recEngine = 'innertube-rs';
     }
 
     return {
@@ -92,7 +92,7 @@ export function getEnvConfig(): EnvConfig {
         _config = withProcessEnv({ ...DEFAULTS, ...parsed });
         // If config on disk was stale hybrid-ml, update disk file to lastfm
         if (parsed.recommendationEngine === 'hybrid-ml' && !parsed.recommendationEngineUserSelected) {
-            fs.writeFileSync(CONFIG_FILE, JSON.stringify(_config, null, 2), 'utf-8');
+            parsed.recommendationEngine = 'innertube-rs';
         }
         return _config;
     } catch {

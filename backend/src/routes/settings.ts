@@ -22,7 +22,7 @@ const UpdateBody = z.object({
     spotifyClientId: z.string().optional(),
     spotifyClientSecret: z.string().optional(),
     searchEngine: z.enum(['ytdlp', 'spotify']).optional(),
-    recommendationEngine: z.enum(['hybrid-ml', 'lastfm', 'legacy']).optional(),
+    recommendationEngine: z.enum(['hybrid-ml', 'lastfm', 'innertube-rs', 'legacy']).optional(),
     audioQualityPreference: z.enum(['auto', 'high']).optional(),
     audioCacheLimitMb: z.number().min(128).max(10240).optional(),
     discordRpcEnabled: z.boolean().optional(),
