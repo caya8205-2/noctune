@@ -166,17 +166,8 @@ export const api = {
     }),
   clearDiscordActivity: () =>
     request<{ ok: boolean }>('/rpc/activity', { method: 'DELETE' }),
-  spotifyMetadata: async (spotifyId: string) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<SpotifyTrackMetadata>('get_spotify_track_metadata', { spotifyId });
-      } catch (err) {
-        console.warn('[api] Tauri get_spotify_track_metadata failed, falling back to server:', err);
-      }
-    }
-    return request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`);
-  },
+  spotifyMetadata: (spotifyId: string) =>
+    request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
   youtubeMetadata: (videoId: string) =>
     request<Track>(`/metadata/youtube/${encodeURIComponent(videoId.replace(/^(youtube|ytdlp):/, ''))}`),
 
@@ -274,24 +265,10 @@ export const api = {
       body: JSON.stringify({ seed, excludeIds, limit, seeds }),
     }),
 
-  lyrics: async (track: Track) => {
-    if (detectTauriEnvironment()) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const res = await invoke<LyricsResult | null>('get_lyrics', {
-          title: track.title,
-          artist: track.artist,
-          duration: track.duration ? Math.round(track.duration) : undefined,
-        });
-        if (res) return res;
-      } catch (err) {
-        console.warn('[api] Tauri get_lyrics failed, falling back to server:', err);
-      }
-    }
-    return request<LyricsResult | undefined>(
+  lyrics: (track: Track) =>
+    request<LyricsResult | undefined>(
       `/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&duration=${track.duration}`
-    ).then((lyrics) => lyrics ?? null);
-  },
+    ).then((lyrics) => lyrics ?? null),
 
   getPlaylists: () => request<Playlist[]>('/playlists'),
   getLiked: () => request<Playlist>('/library/liked'),
