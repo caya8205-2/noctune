@@ -190,7 +190,7 @@ export function SearchView() {
   }
 
   function handlePlay(track: Track) {
-    playTrack(track, results, { autoQueue: true, queueSource: 'search' });
+    playTrack(track, [track], { autoQueue: true, queueSource: 'search' });
   }
 
   async function handleImportPlaylist() {
