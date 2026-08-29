@@ -105,7 +105,7 @@ export function QueueView() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-1 sm:pr-2">
           <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2" title="Shuffle upcoming tracks">
             <Shuffle size={12} /> Shuffle
           </button>
