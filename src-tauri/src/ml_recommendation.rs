@@ -30,6 +30,7 @@ pub struct MlModelStats {
 
 #[derive(Debug, Deserialize, Clone)]
 struct SeedModelData {
+    #[allow(dead_code)]
     #[serde(default)]
     pub version: u32,
     #[serde(default)]
@@ -40,6 +41,7 @@ pub struct MlState {
     pub data_dir: Mutex<PathBuf>,
     pub play_log_cache: Mutex<Option<Vec<PlayLogEvent>>>,
     pub transition_matrix: Mutex<Option<HashMap<String, HashMap<String, f64>>>>,
+    #[allow(dead_code)]
     pub last_train_time: Mutex<u64>,
 }
 
@@ -53,6 +55,7 @@ impl MlState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_data_dir(&self, path: PathBuf) {
         if let Ok(mut dir) = self.data_dir.lock() {
             *dir = path;
