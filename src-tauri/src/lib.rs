@@ -9,8 +9,8 @@ use db::{
     remove_track_from_playlist, toggle_like_track, DbState,
 };
 use innertube_service::{
-    get_video_metadata, get_watch_next_tracks, get_youtube_channel_innertube,
-    get_youtube_playlist_innertube, resolve_audio_stream, search_youtube_tracks, InnertubeState,
+    get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
+    InnertubeState,
 };
 use local_files::{get_local_files, scan_local_folder};
 use lyrics_service::{get_lyrics, LyricsState};
@@ -73,8 +73,6 @@ pub fn run() {
             get_video_metadata,
             search_youtube_tracks,
             get_watch_next_tracks,
-            get_youtube_channel_innertube,
-            get_youtube_playlist_innertube,
             get_all_playlists,
             create_user_playlist,
             delete_user_playlist,

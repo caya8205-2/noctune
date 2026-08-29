@@ -1,6 +1,5 @@
 use innertube_rs::{
-    models::playlist::PlaylistView, ChannelArtistView, FormatFilter, FormatType, Innertube,
-    QualityPreference, SearchResultItem,
+    FormatFilter, FormatType, Innertube, QualityPreference, SearchResultItem,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -244,28 +243,4 @@ pub async fn get_watch_next_tracks(
     }
 
     Ok(tracks)
-}
-
-#[tauri::command]
-pub async fn get_youtube_channel_innertube(
-    channel_id: String,
-    state: State<'_, InnertubeState>,
-) -> Result<ChannelArtistView, String> {
-    let client = state.get_or_init().await?;
-    client
-        .get_channel(&channel_id)
-        .await
-        .map_err(|e| format!("Failed to get channel: {}", e))
-}
-
-#[tauri::command]
-pub async fn get_youtube_playlist_innertube(
-    playlist_id: String,
-    state: State<'_, InnertubeState>,
-) -> Result<PlaylistView, String> {
-    let client = state.get_or_init().await?;
-    client
-        .get_playlist(&playlist_id)
-        .await
-        .map_err(|e| format!("Failed to get playlist: {}", e))
 }
