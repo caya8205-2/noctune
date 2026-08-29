@@ -124,6 +124,8 @@ function loadInitialLyricsOffsets(): Record<string, number> {
   }
 }
 
+let shufflePlayedCount = 0;
+
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
   isPlaying: false,
@@ -466,14 +468,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
       return candidate;
     };
-    if (repeat === 'one') {
-      nextIdx = queue[queueIndex]?.playbackError
-        ? queueIndex + 1
-        : queueIndex;
-      if (nextIdx >= queue.length) return;
-    } else if (shuffle) {
+    if (shuffle) {
+      shufflePlayedCount += 1;
       nextIdx = Math.floor(Math.random() * queue.length);
     } else {
+      shufflePlayedCount = 0;
       nextIdx = queueIndex + 1;
       if (nextIdx >= queue.length) {
         if (repeat === 'all') nextIdx = 0;
@@ -534,12 +533,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     const upcomingCount = state.queue.length - state.queueIndex - 1;
-    // Keep autoqueue strictly contained: only top up when queue is almost exhausted (< 3 tracks left in shuffle or normal)
-    if (!state.shuffle && upcomingCount > AUTOQUEUE_TOP_UP_THRESHOLD) {
+    const shouldTopUpInShuffle = state.shuffle && shufflePlayedCount >= Math.min(state.queue.length, 12);
+
+    if (!shouldTopUpInShuffle && upcomingCount > AUTOQUEUE_TOP_UP_THRESHOLD) {
       return;
     }
-    if (state.shuffle && upcomingCount > 2) {
-      return;
+
+    if (shouldTopUpInShuffle) {
+      shufflePlayedCount = 0;
     }
 
     const seed = state.queue[state.queueIndex] ?? state.currentTrack;
