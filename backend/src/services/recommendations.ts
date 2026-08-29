@@ -607,7 +607,7 @@ export async function getRecommendations(
   await Promise.allSettled(
     seedsList.map(async (sTrack) => {
       const currentSeedCandidates: RecommendationCandidate[] = [];
-      if (selectedEngine === 'hybrid-ml' || selectedEngine === 'lastfm') {
+      if (selectedEngine === 'lastfm') {
         if (isLastFmConfigured()) {
           try {
             const lfm = await getCandidatesFromLastFm(sTrack, perSeedLimit * 2, isSpotifyDominant);
@@ -615,6 +615,21 @@ export async function getRecommendations(
           } catch (err) {
             console.warn(`[recommend] Last.fm failed for seed "${sTrack.title}": ${(err as Error).message}`);
           }
+        }
+      } else if (selectedEngine === 'innertube-rs' || selectedEngine === 'legacy') {
+        try {
+          const { getInnertubeWatchNextCandidates } = await import('./innertubeRecommendation.js');
+          const ytTracks = await getInnertubeWatchNextCandidates(sTrack, perSeedLimit * 2, isSpotifyDominant);
+          currentSeedCandidates.push(...ytTracks);
+        } catch (err) {
+          console.warn(`[recommend] innertube-rs watch_next failed for seed "${sTrack.title}": ${(err as Error).message}`);
+        }
+      } else if (selectedEngine === 'hybrid-ml') {
+        if (isLastFmConfigured()) {
+          try {
+            const lfm = await getCandidatesFromLastFm(sTrack, perSeedLimit, isSpotifyDominant);
+            currentSeedCandidates.push(...lfm);
+          } catch {}
         }
       }
       const sc = await getCandidatesFromSearch(sTrack, perSeedLimit, isSpotifyDominant);
