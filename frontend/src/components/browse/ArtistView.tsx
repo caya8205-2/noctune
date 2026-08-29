@@ -354,22 +354,6 @@ export function ArtistView({ artistId }: { artistId: string }) {
                         // Ignore unavailable session storage in restricted webviews.
                       }
                       channelTabByArtist.set(artistId, 'playlists');
-                      window.history.replaceState(
-                        { ...window.history.state, noctuneChannelTab: 'playlists' },
-                        '',
-                        window.location.href
-                      );
-                      window.history.pushState(
-                        {
-                          noctuneView: 'playlist',
-                          noctuneId: `ytplaylist:${playlist.id}`,
-                          noctuneReturnView: 'artist',
-                          noctuneReturnId: artistId,
-                          noctuneChannelTab: 'playlists',
-                        },
-                        '',
-                        window.location.href
-                      );
                       setView('playlist', `ytplaylist:${playlist.id}`);
                     }}
                   >

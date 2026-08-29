@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Grid, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, List, ListMusic, Loader2, Maximize2, Music2, Pencil, Play, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Grid, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, List, ListMusic, Loader2, Maximize2, Music2, Pencil, Play, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 import { api, isTrackActive, resolveYouTubeChannelId, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -666,9 +666,19 @@ export function PlaylistView() {
           onApply={handleApplyCover}
         />
       )}
-      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col gap-5">
+      <div className="relative px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col gap-5">
+        {isYoutubePlaylist && (
+          <button
+            type="button"
+            onClick={() => history.back()}
+            className="btn-ghost absolute left-4 top-4 p-1.5 z-20 sm:left-6 lg:left-9"
+            title="Go back"
+          >
+            <ArrowLeft size={16} />
+          </button>
+        )}
         {/* Top: Cover + Details */}
-        <div className="flex items-end gap-5 min-w-0">
+        <div className={clsx('flex items-end gap-5 min-w-0', isYoutubePlaylist && 'pt-6 sm:pt-4')}>
           <button
             type="button"
             onClick={() => playlistCover && setShowArtwork(true)}
