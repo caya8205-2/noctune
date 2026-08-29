@@ -407,7 +407,13 @@ function selectRecommendations(
   limit: number,
   preferDiversity: boolean
 ): Track[] {
-  const sorted = ranked.sort((a, b) => b.score - a.score);
+  // Add dynamic entropy variance to top-ranked candidates so identical seeds produce fresh queues each session
+  const withVariance = ranked.map((entry) => ({
+    ...entry,
+    score: entry.score + (Math.random() * 24 - 12),
+  }));
+
+  const sorted = withVariance.sort((a, b) => b.score - a.score);
 
   // Enforce a strict cap of max 3 tracks per artist to balance variety and creator collabs
   const maxPerArtist = 3;
