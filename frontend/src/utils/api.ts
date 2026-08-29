@@ -251,9 +251,9 @@ export const api = {
     if (detectTauriEnvironment()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<YouTubePlaylistView>('get_youtube_playlist_innertube', { playlistId });
+        return await invoke<YouTubePlaylistView>('get_youtube_playlist', { playlistId });
       } catch (err) {
-        console.warn('[api] Tauri get_youtube_playlist_innertube failed, falling back to server:', err);
+        console.warn('[api] Tauri get_youtube_playlist failed, falling back to server:', err);
       }
     }
     return request<YouTubePlaylistView>(`/browse/youtube-playlist/${encodeURIComponent(playlistId)}`);

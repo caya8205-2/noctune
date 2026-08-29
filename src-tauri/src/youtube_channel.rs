@@ -249,8 +249,10 @@ fn extract_avatar_from_html(html: &str) -> Option<String> {
     for marker in ["og:image", "twitter:image", "image_src", "avatar"] {
         let mut curr = html;
         while let Some(pos) = curr.find(marker) {
-            let start = pos.saturating_sub(100);
-            let end = (pos + 400).min(curr.len());
+            let start = curr
+                .floor_char_boundary(pos.saturating_sub(100));
+            let end = curr
+                .floor_char_boundary((pos + 400).min(curr.len()));
             let snippet = &curr[start..end];
             for protocol in ["https://yt3.googleusercontent.com", "https://yt3.ggpht.com", "https://yt4.ggpht.com", "https://lh3.googleusercontent.com", "https://i.ytimg.com"] {
                 if let Some(u_start) = snippet.find(protocol) {
@@ -264,7 +266,13 @@ fn extract_avatar_from_html(html: &str) -> Option<String> {
                     }
                 }
             }
-            curr = &curr[pos + marker.len()..];
+            if let Some(next_pos) = curr[pos..].char_indices().nth(marker.len()).map(|(i, _)| pos + i) {
+                curr = &curr[next_pos..];
+            } else if pos + marker.len() <= curr.len() && curr.is_char_boundary(pos + marker.len()) {
+                curr = &curr[pos + marker.len()..];
+            } else {
+                break;
+            }
         }
     }
     None
