@@ -1,5 +1,6 @@
 mod db;
 mod innertube_service;
+mod lastfm_service;
 mod local_files;
 mod lyrics_service;
 mod spotify_service;
@@ -12,6 +13,7 @@ use innertube_service::{
     get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
     InnertubeState,
 };
+use lastfm_service::{get_lastfm_similar_tracks, LastFmState};
 use local_files::{get_local_files, scan_local_folder};
 use lyrics_service::{get_lyrics, LyricsState};
 use spotify_service::{get_spotify_track_metadata, set_spotify_credentials, SpotifyState};
@@ -65,6 +67,7 @@ pub fn run() {
         .manage(InnertubeState::new())
         .manage(LyricsState::new())
         .manage(SpotifyState::new())
+        .manage(LastFmState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             get_youtube_channel,
@@ -83,7 +86,8 @@ pub fn run() {
             scan_local_folder,
             get_local_files,
             set_spotify_credentials,
-            get_spotify_track_metadata
+            get_spotify_track_metadata,
+            get_lastfm_similar_tracks
         ])
         .setup(|_app| {
             if let Ok(db_state) = DbState::init(_app.handle()) {
