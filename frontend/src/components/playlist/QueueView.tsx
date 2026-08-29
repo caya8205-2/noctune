@@ -77,7 +77,7 @@ export function QueueView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4 pr-6 sm:pr-8">
         <div>
           <p className="section-label text-accent">Queue</p>
           <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
@@ -105,7 +105,7 @@ export function QueueView() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 pr-1 sm:pr-2">
+        <div className="flex items-center gap-2">
           <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2" title="Shuffle upcoming tracks">
             <Shuffle size={12} /> Shuffle
           </button>

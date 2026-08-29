@@ -534,11 +534,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     const upcomingCount = state.queue.length - state.queueIndex - 1;
-    // Top up if we are near the end OR in shuffle mode when total queue size is low (< 20)
+    // Keep autoqueue strictly contained: only top up when queue is almost exhausted (< 3 tracks left in shuffle or normal)
     if (!state.shuffle && upcomingCount > AUTOQUEUE_TOP_UP_THRESHOLD) {
       return;
     }
-    if (state.shuffle && state.queue.length >= 24) {
+    if (state.shuffle && upcomingCount > 2) {
       return;
     }
 
