@@ -2,6 +2,36 @@
 
 All notable Noctune changes are documented here.
 
+## v4.1.0 - 2026-08-29
+
+### Native Rust Engine Migration & Core Performance
+- **Pure Rust `innertube-rs` YouTube Resolver**: Replaced the Node.js `youtube.js` resolver engine with native Rust [`innertube-rs`](https://github.com/caya8205-2/innertube-rs) with embedded QuickJS (`rquickjs`) for signature/n-token deciphering. Cuts JavaScript runtime overhead and latency for resolving audio streams.
+- **Native Spotify Client & Token Management**: Ported Spotify Client Credentials authorization flow and track metadata resolution (`get_spotify_track_metadata`) to native Rust using `reqwest` with thread-safe in-memory token cache auto-renewal.
+- **Native Last.fm Similar Tracks Client**: Ported Last.fm similarity graph client to native Rust (`get_lastfm_similar_tracks`) with automatic runtime/build-time `LAST_FM_KEY` resolution and graceful error handling.
+- **Native Local Audio Scanner & Tag Extractor**: Replaced `music-metadata` with high-performance pure Rust `lofty` and `walkdir` in `src-tauri/src/local_files.rs` for lightning-fast recursive folder scanning, tag extraction (ID3/Vorbis/MP4), and embedded artwork base64 decoding.
+- **Native LRCLIB Synced Lyrics Client**: Ported LRCLIB lyrics client and LRC timestamp parser (`[MM:SS.xx]`) to native Rust (`get_lyrics`).
+- **Native SQLite & ML Markov Matrix Layer**: Initialized embedded bundled `rusqlite` database layer (`db.rs`) and in-memory ML Markov transition matrix builder (`ml_recommendation.rs`) reading `seed-model.json` with dynamic 30-minute play-log overlay.
+
+### Recommendation & Queue Improvements
+- **InnerTube-rs Default Recommendation Engine**: Set `innertube-rs` (YouTube watch-next graph) as the default recommendation engine in Settings, with dedicated `getInnertubeWatchNextCandidates` pipeline and Spotify metadata hydration for Spotify-dominant listening.
+- **Dynamic AutoQueue Entropy Scoring**: Injected bounded entropy variance into recommendation scoring so re-playing the same seed produces fresh, non-deterministic queues rather than static lists.
+- **Shuffle Mode AutoQueue Top-Up Counter**: Added a background playback counter for Shuffle mode that automatically triggers a queue top-up after 12 tracks have been played, regardless of queue index position.
+- **Single Track Queue Seeding from Search**: Fixed an issue where playing a track from search results added all 25 search results into the queue instead of seeding a single track and generating autoqueue recommendations.
+
+### Navigation & UI Refinements
+- **Channel Playlist Back Navigation**: Added an ArrowLeft back button to Channel Playlist views matching AlbumView positioning, and fixed duplicate `pushState` calls in ArtistView that caused mouse back (MB4) to require two clicks.
+- **Queue View Header Alignment & Legend Wrap**: Refined QueueView header layout with `sm:translate-y-2` button container baseline alignment matching sub-label text, and eliminated horizontal scrollbars by wrapping the status legend.
+- **Recommendation Engine Select Order**: Reordered engine selection options in SettingsView to InnerTube-rs (Recommended) -> Last.fm Similar Tracks -> ML Hybrid Collaborative.
+- **Settings Diagnostics Cleanup**: Removed redundant diagnostics tiles in SettingsView in favor of the dedicated Debug Dashboard.
+- **GitHub Linguist Override**: Added `.gitattributes` vendoring frontend assets so GitHub accurately detects Rust as the primary project language.
+
+### Bug Fixes
+- **Recommendation Engine Selection Fix**: Fixed an issue where non-Last.fm recommendation engines fell back to generic search candidates instead of querying the selected engine.
+- **Channel Playlist Track Hydration Fix**: Fixed an issue where YouTube channel playlist tracks failed to map and appeared empty in PlaylistView.
+- **Startup Prefetch ID Resolution Fix**: Mapped valid YouTube video IDs for Spotify tracks during startup prefetch warmup, preventing unresolvable Spotify IDs from triggering invalid yt-dlp fallbacks.
+- **UTF-8 Slicing Panic in Channel Scraper**: Used `floor_char_boundary` in `extract_avatar_from_html` to prevent string slicing panics on multibyte Japanese/Unicode characters.
+- **Search Engine Mode Preservation**: Ensured search queries properly route through user-configured search engines (Spotify vs YouTube) without defaulting to raw YouTube results.
+
 ## v4.0.0 - 2026-08-17
 
 ### YouTube Streaming & Audio Resolver Engine Overhaul (Breaking Changes)

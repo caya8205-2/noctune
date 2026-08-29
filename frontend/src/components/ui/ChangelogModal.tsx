@@ -33,34 +33,38 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
   return items;
 }
 
-const V400_HIGHLIGHTS = [
+const V410_HIGHLIGHTS = [
   {
-    title: 'YouTube Audio Streaming & Playback Engine Overhaul',
-    desc: 'Upgraded the core YouTube audio streaming resolver to Innertube 18.0.0 with dedicated ANDROID_VR client routing. Bypasses YouTube’s latest bot detection and signature cipher changes that caused playback to fail with 403 Forbidden errors across v3.4.0 and older versions.',
+    title: 'Native Rust Core Migration',
+    desc: 'Migrated legacy JavaScript backend services to pure Rust, including YouTube stream resolving via innertube-rs, local audio tagging via lofty, Spotify metadata, Last.fm, LRCLIB lyrics, and ML Markov matrix.',
   },
   {
-    title: 'Automated Fallback Stream Recovery',
-    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery in the backend, completely preventing unwanted track-skipping cascades if an upstream stream URL fails.',
+    title: 'InnerTube-rs Default Recommendation Engine',
+    desc: 'Switched default recommendation engine to InnerTube-rs (YouTube watch-next graph) with full Spotify metadata hydration for Spotify-dominant listening sessions.',
   },
   {
-    title: 'High-Quality WebM Opus Stream Prioritization',
-    desc: 'Streaming formats now prioritize native WebM Opus (160kbps high-bitrate audio) across all playback resolvers. This eliminates player decipher blocks previously encountered with legacy MP4/M4A streams.',
+    title: 'Dynamic AutoQueue & Shuffle Top-Up Counter',
+    desc: 'Added entropy variance to recommendation scoring for fresh, non-repetitive queues, plus a background counter that tops up autoqueue every 12 songs played in shuffle mode.',
   },
   {
-    title: 'Debug Dashboard Resolver Engine & Audio Format Inspector',
-    desc: 'Added live Resolver Engine indicators (Innertube, yt-dlp fallback, or Local storage) and audio format/bitrate information directly inside the Debug Dashboard Current Track panel.',
+    title: 'Single Track Queue Seeding',
+    desc: 'Playing a track from search results now seeds that single track and generates contextually relevant recommendations instead of loading all search results into the queue.',
   },
   {
-    title: 'Bundled Binary Detection & Dev Mode Reliability',
-    desc: 'Improved bundled helper path detection across both development and installed desktop modes, ensuring automatic fallback execution is always ready whenever needed.',
+    title: 'Channel Playlist Navigation & Back Button',
+    desc: 'Added a dedicated back button to channel playlist views and fixed mouse back (MB4) requiring two clicks to return to channel profiles.',
   },
   {
-    title: 'Cache Store v2 Auto-Migration',
-    desc: 'Local cache store automatically upgrades to v2 on launch, purging legacy 403-prone audio links while safely preserving all your listening history, playlists, favorites, and track metadata.',
+    title: 'Queue View Alignment & UI Polish',
+    desc: 'Refined QueueView header layout with button container baseline alignment matching sub-label text, wrapped the status legend, and reordered engine options in Settings.',
+  },
+  {
+    title: 'Resolver & Scraper Stability Fixes',
+    desc: 'Fixed empty playlist hydration, YouTube channel UTF-8 scraping panics, startup prefetch ID mapping, and preserved Spotify search mode.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V400_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V410_HIGHLIGHTS;
 
 const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | null> = {
   'YouTube Audio Streaming & Playback Engine Overhaul': {
