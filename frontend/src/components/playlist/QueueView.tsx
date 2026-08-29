@@ -77,56 +77,59 @@ export function QueueView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 gap-4 pr-6 sm:pr-8">
-        <div>
-          <p className="section-label text-accent">Queue</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
-          <p className="text-xs text-muted mt-2">
-            {queue.length} tracks in rotation
-            {queueIndex > 0 ? `, ${queueIndex} played` : ''}
-          </p>
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-muted overflow-x-auto no-scrollbar whitespace-nowrap py-0.5 max-w-full">
-            <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
-            <span className="flex items-center gap-1"><Search size={10} /> Search</span>
-            <span className="flex items-center gap-1"><House size={10} /> Home</span>
-            <span className="flex items-center gap-1"><Shuffle size={10} /> Autoqueue</span>
-            <span className="text-base-600">|</span>
-            <span className="flex items-center gap-1.5 text-[11px] text-yellow-400 font-semibold" title="Audio cached on disk or pre-loaded in memory for instant playback">
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" /> Prefetched
-            </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold" title="Matched from learned store cache without needing live YouTube search">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Cached
-            </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-sky-300 font-semibold" title="Audio stream URL renewed from cached YouTube match">
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Refreshed
-            </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-red-400 font-semibold" title="Newly matched live via YouTube search (first-time lookup)">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Resolved
-            </span>
+      <div className="px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <p className="section-label text-accent">Queue</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Up next.</h1>
+            <p className="text-xs text-muted mt-2">
+              {queue.length} tracks in rotation
+              {queueIndex > 0 ? `, ${queueIndex} played` : ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 sm:translate-y-2">
+            <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap" title="Shuffle upcoming tracks">
+              <Shuffle size={12} /> Shuffle
+            </button>
+            <button
+              onClick={() => setHideFailed((value) => !value)}
+              className={clsx('btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap', hideFailed && 'text-accent')}
+              title="Hide failed tracks"
+            >
+              <EyeOff size={12} /> Failed
+            </button>
+            <button
+              onClick={removePlayedTracks}
+              disabled={queueIndex <= 0}
+              className="btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Remove tracks that already played"
+            >
+              <X size={12} /> Played
+            </button>
+            <button onClick={clearQueue} className="btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap">
+              <X size={12} /> Clear
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2" title="Shuffle upcoming tracks">
-            <Shuffle size={12} /> Shuffle
-          </button>
-          <button
-            onClick={() => setHideFailed((value) => !value)}
-            className={clsx('btn-ghost text-xs gap-1.5 px-2', hideFailed && 'text-accent')}
-            title="Hide failed tracks"
-          >
-            <EyeOff size={12} /> Failed
-          </button>
-          <button
-            onClick={removePlayedTracks}
-            disabled={queueIndex <= 0}
-            className="btn-ghost text-xs gap-1.5 px-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Remove tracks that already played"
-          >
-            <X size={12} /> Played
-          </button>
-          <button onClick={clearQueue} className="btn-ghost text-xs gap-1.5 px-2">
-            <X size={12} /> Clear
-          </button>
+
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted py-0.5">
+          <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
+          <span className="flex items-center gap-1"><Search size={10} /> Search</span>
+          <span className="flex items-center gap-1"><House size={10} /> Home</span>
+          <span className="flex items-center gap-1"><Shuffle size={10} /> Autoqueue</span>
+          <span className="text-base-600">|</span>
+          <span className="flex items-center gap-1.5 text-[11px] text-yellow-400 font-semibold" title="Audio cached on disk or pre-loaded in memory for instant playback">
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" /> Prefetched
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold" title="Matched from learned store cache without needing live YouTube search">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Cached
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-sky-300 font-semibold" title="Audio stream URL renewed from cached YouTube match">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Refreshed
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-red-400 font-semibold" title="Newly matched live via YouTube search (first-time lookup)">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Resolved
+          </span>
         </div>
       </div>
 

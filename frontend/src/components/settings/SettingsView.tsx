@@ -865,11 +865,11 @@ export function SettingsView() {
               <option value="innertube-rs" className="bg-base-900 text-white">
                 InnerTube-rs (Recommended)
               </option>
-              <option value="hybrid-ml" className="bg-base-900 text-white">
-                ML Hybrid Collaborative
-              </option>
               <option value="lastfm" className="bg-base-900 text-white">
                 Last.fm Similar Tracks
+              </option>
+              <option value="hybrid-ml" className="bg-base-900 text-white">
+                ML Hybrid Collaborative
               </option>
             </select>
           </div>
