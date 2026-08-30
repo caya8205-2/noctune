@@ -22,7 +22,7 @@ const NIGHTLY_MIX_CACHE_KEY = 'noctune:nightly-mix:v2';
 const NIGHTLY_MIX_REFRESH_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const NIGHTLY_MIX_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 3; // 3 hours max localStorage cache age
 const NIGHTLY_MIX_LIMIT = 4;
-const NIGHTLY_MIX_TRACKS = 8;
+const NIGHTLY_MIX_TRACKS = 20;
 
 interface NightlyMixCache {
   updatedAt: number;

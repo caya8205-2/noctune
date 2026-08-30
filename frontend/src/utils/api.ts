@@ -144,7 +144,7 @@ export const api = {
     request<{ playlists: Playlist[]; recentTracks: CachedTrack[] }>('/home'),
   homeNewReleases: () =>
     request<{ newReleases: Track[] }>('/home/new-releases'),
-  nightlyMixes: (limit = 4, tracks = 8) =>
+  nightlyMixes: (limit = 4, tracks = 20) =>
     request<{ mixes: PersonalMix[] }>(`/home/nightly-mix?limit=${limit}&tracks=${tracks}`),
   history: () =>
     request<{ tracks: CachedTrack[] }>('/history'),

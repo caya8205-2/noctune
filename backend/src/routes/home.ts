@@ -60,7 +60,7 @@ export async function homeRoutes(app: FastifyInstance) {
 
     const query = req.query as { limit?: string; tracks?: string };
     const mixLimit = Math.min(6, Math.max(1, Number(query.limit ?? 4) || 4));
-    const tracksPerMix = Math.min(16, Math.max(4, Number(query.tracks ?? 8) || 8));
+    const tracksPerMix = Math.min(30, Math.max(4, Number(query.tracks ?? 20) || 20));
 
     try {
       const mixes = await getPersonalMixes({ mixLimit, tracksPerMix });
