@@ -54,11 +54,13 @@ export async function homeRoutes(app: FastifyInstance) {
   });
 
   app.get('/home/nightly-mix', async (req, reply) => {
-    if (nightlyMixCache && Date.now() < nightlyMixCache.expiresAt) {
+    const query = req.query as { limit?: string; tracks?: string; force?: string };
+    const forceRefresh = query.force === 'true';
+
+    if (!forceRefresh && nightlyMixCache && Date.now() < nightlyMixCache.expiresAt) {
       return reply.send(nightlyMixCache.data);
     }
 
-    const query = req.query as { limit?: string; tracks?: string };
     const mixLimit = Math.min(6, Math.max(1, Number(query.limit ?? 4) || 4));
     const tracksPerMix = Math.min(30, Math.max(4, Number(query.tracks ?? 20) || 20));
 
