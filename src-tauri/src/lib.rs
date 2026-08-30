@@ -1,76 +1,76 @@
-mod db;
 mod innertube_service;
-mod lastfm_service;
-mod local_files;
-mod lyrics_service;
-mod ml_recommendation;
-mod spotify_service;
 mod youtube_channel;
-use db::{
-    add_track_to_playlist, create_user_playlist, delete_user_playlist, get_all_playlists,
-    remove_track_from_playlist, toggle_like_track, DbState,
-};
+
 use innertube_service::{
     get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
     InnertubeState,
 };
-use lastfm_service::{get_lastfm_similar_tracks, LastFmState};
-use local_files::{get_local_files, scan_local_folder};
-use lyrics_service::{get_lyrics, LyricsState};
-use ml_recommendation::{get_ml_model_stats, record_ml_play_event, MlState};
-use spotify_service::{get_spotify_track_metadata, set_spotify_credentials, SpotifyState};
 use youtube_channel::{get_youtube_channel, get_youtube_playlist};
 
 use std::process::Command;
+#[cfg(not(debug_assertions))]
+use std::sync::Mutex;
+#[cfg(not(debug_assertions))]
 use tauri::Manager;
 #[cfg(not(debug_assertions))]
 use tauri::path::BaseDirectory;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
-
 #[cfg(not(debug_assertions))]
-struct BackendProcess(std::sync::Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+use tauri_plugin_shell::process::CommandChild;
 
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Only http(s) URLs can be opened externally".to_string());
-    }
-
     #[cfg(target_os = "windows")]
-    let result = Command::new("rundll32")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .spawn();
-
+    {
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
     #[cfg(target_os = "macos")]
-    let result = Command::new("open").arg(&url).spawn();
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let result = Command::new("xdg-open").arg(&url).spawn();
-
-    result.map(|_| ()).map_err(|err| err.to_string())
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(not(debug_assertions))]
-fn kill_backend_sidecar<R: tauri::Runtime>(manager: &impl Manager<R>) {
-    if let Some(state) = manager.try_state::<BackendProcess>() {
-        if let Ok(mut child) = state.0.lock() {
-            if let Some(child) = child.take() {
-                let _ = child.kill();
+struct BackendProcess(Mutex<Option<CommandChild>>);
+
+#[cfg(not(debug_assertions))]
+fn kill_backend_sidecar(app: &tauri::Window) {
+    if let Some(state) = app.try_state::<BackendProcess>() {
+        let mut child_lock = state.0.lock().unwrap();
+        if let Some(child) = child_lock.take() {
+            let pid = child.pid();
+            let _ = child.kill();
+            #[cfg(target_os = "windows")]
+            {
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .spawn();
             }
         }
     }
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(InnertubeState::new())
-        .manage(LyricsState::new())
-        .manage(SpotifyState::new())
-        .manage(LastFmState::new())
-        .manage(MlState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             get_youtube_channel,
@@ -78,26 +78,9 @@ pub fn run() {
             resolve_audio_stream,
             get_video_metadata,
             search_youtube_tracks,
-            get_watch_next_tracks,
-            get_all_playlists,
-            create_user_playlist,
-            delete_user_playlist,
-            add_track_to_playlist,
-            remove_track_from_playlist,
-            toggle_like_track,
-            get_lyrics,
-            scan_local_folder,
-            get_local_files,
-            set_spotify_credentials,
-            get_spotify_track_metadata,
-            get_lastfm_similar_tracks,
-            record_ml_play_event,
-            get_ml_model_stats
+            get_watch_next_tracks
         ])
         .setup(|_app| {
-            if let Ok(db_state) = DbState::init(_app.handle()) {
-                _app.manage(db_state);
-            }
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.
             #[cfg(not(debug_assertions))]
