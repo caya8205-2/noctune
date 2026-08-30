@@ -39,6 +39,10 @@ const V410_HIGHLIGHTS = [
     desc: 'Upgraded the core YouTube audio streaming resolver to pure Rust innertube-rs with embedded QuickJS deciphering, slashing startup latency and resource overhead.',
   },
   {
+    title: '20-Track Nightly Mixes & Smart Playlists',
+    desc: 'Expanded default track count to 20 tracks across all Nightly Mixes and Smart Playlists, with strict genre and artist coherence to prevent disjointed track recommendations.',
+  },
+  {
     title: 'Adaptive Shuffle Mode AutoQueue Top-Up',
     desc: 'Automatically tracks played songs in shuffle mode based on your current queue length and tops up fresh recommendations seamlessly.',
   },

@@ -361,7 +361,7 @@ export function PlaylistView() {
   const playlistCover = smartPlaylist?.cover ?? activePersonalMix?.cover ?? youtubePlaylist?.image ?? playlist?.coverDataUrl ?? '';
   const playlistLabel = isSmartPlaylist ? 'Smart Playlist' : isNightlyMix ? 'Nightly Mix' : isYoutubePlaylist ? 'YouTube Playlist' : 'Playlist';
   const queueSource = isSmartPlaylist ? 'playlist' : isNightlyMix ? 'recommendation' : 'playlist';
-  const isSmartPlaylistLoading = isDiscoverWeekly ? isDiscoverWeeklyFetching : smartPlaylistsLoading;
+  const isSmartPlaylistLoading = isDiscoverWeekly ? isDiscoverWeeklyFetching : (isSmartPlaylist ? smartPlaylistsLoading : false);
   const isPlaylistLoading = isSmartPlaylist
     ? isSmartPlaylistLoading && tracks.length === 0
     : isYoutubePlaylist
