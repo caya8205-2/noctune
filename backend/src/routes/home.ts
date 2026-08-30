@@ -54,10 +54,11 @@ export async function homeRoutes(app: FastifyInstance) {
   });
 
   app.get('/home/nightly-mix', async (req, reply) => {
-    const query = req.query as { limit?: string; tracks?: string; force?: string };
+    const query = req.query as { limit?: string; tracks?: string; force?: string; mixId?: string };
     const forceRefresh = query.force === 'true';
+    const singleMixId = query.mixId;
 
-    if (!forceRefresh && nightlyMixCache && Date.now() < nightlyMixCache.expiresAt) {
+    if (!forceRefresh && !singleMixId && nightlyMixCache && Date.now() < nightlyMixCache.expiresAt) {
       return reply.send(nightlyMixCache.data);
     }
 
@@ -65,6 +66,11 @@ export async function homeRoutes(app: FastifyInstance) {
     const tracksPerMix = Math.min(30, Math.max(4, Number(query.tracks ?? 20) || 20));
 
     try {
+      if (singleMixId) {
+        const singleMixList = await getPersonalMixes({ mixLimit: 1, tracksPerMix, singleMixId });
+        return reply.send({ mixes: singleMixList });
+      }
+
       const mixes = await getPersonalMixes({ mixLimit, tracksPerMix });
       const data = { mixes };
       nightlyMixCache = { data, expiresAt: Date.now() + NIGHTLY_MIX_TTL_MS };

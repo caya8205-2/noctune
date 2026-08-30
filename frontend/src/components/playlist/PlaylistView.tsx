@@ -279,8 +279,6 @@ function PlaylistTrackTitle({
   );
 }
 
-const NIGHTLY_MIX_CACHE_KEY = 'noctune:nightly-mix:v2';
-
 export function PlaylistView() {
   const [draggedTrackId, setDraggedTrackId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -329,14 +327,12 @@ export function PlaylistView() {
         qc.invalidateQueries({ queryKey: ['history'] });
         qc.invalidateQueries({ queryKey: ['stats'] });
       } else if (isNightlyMix && activePersonalMix) {
-        const res = await api.nightlyMixes(4, 20, true);
-        const updatedMix = res.mixes?.find((m: { id: string }) => m.id === activePersonalMix.id) || res.mixes?.[0];
+        // Refresh ONLY the currently opened Nightly Mix
+        const res = await api.nightlyMixes(1, 20, true, activePersonalMix.id);
+        const updatedMix = res.mixes?.[0];
         if (updatedMix) {
           usePlayerStore.getState().openPersonalMix(updatedMix);
         }
-        localStorage.removeItem(NIGHTLY_MIX_CACHE_KEY);
-        qc.invalidateQueries({ queryKey: ['home'] });
-        qc.invalidateQueries({ queryKey: ['nightly-mix'] });
       }
     } catch (err) {
       console.error('Failed to refresh mix or smart playlist:', err);

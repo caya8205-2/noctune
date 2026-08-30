@@ -707,11 +707,16 @@ export async function getRecommendations(
 }
 
 export async function getPersonalMixes(
-  options: { mixLimit?: number; tracksPerMix?: number; excludeIds?: string[] } = {}
+  options: { mixLimit?: number; tracksPerMix?: number; excludeIds?: string[]; singleMixId?: string } = {}
 ): Promise<PersonalMix[]> {
   const mixLimit = options.mixLimit ?? 4;
   const tracksPerMix = options.tracksPerMix ?? 8;
-  const seeds = buildPersonalMixSeeds().slice(0, mixLimit);
+  let seeds = buildPersonalMixSeeds();
+  if (options.singleMixId) {
+    seeds = seeds.filter((s) => s.id === options.singleMixId);
+  } else {
+    seeds = seeds.slice(0, mixLimit);
+  }
   const globalExcluded = new Set((options.excludeIds ?? []).filter(Boolean));
   const mixes: PersonalMix[] = [];
 
