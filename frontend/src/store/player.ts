@@ -231,6 +231,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({
       currentTrack: initialTrack as any,
       isLoading: true,
+      isPlaying: false,
+      progress: 0,
       queue: queue.length > 0 ? queue : [initialTrack],
       queueIndex: idx >= 0 ? idx : 0,
     });
@@ -533,7 +535,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     const upcomingCount = state.queue.length - state.queueIndex - 1;
-    const shouldTopUpInShuffle = state.shuffle && shufflePlayedCount >= Math.min(state.queue.length, 12);
+    const shouldTopUpInShuffle = state.shuffle && shufflePlayedCount >= Math.max(1, state.queue.length);
 
     if (!shouldTopUpInShuffle && upcomingCount > AUTOQUEUE_TOP_UP_THRESHOLD) {
       return;

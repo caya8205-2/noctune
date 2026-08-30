@@ -35,236 +35,32 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
 
 const V410_HIGHLIGHTS = [
   {
-    title: 'Native Rust Core Migration',
-    desc: 'Migrated legacy JavaScript backend services to pure Rust, including YouTube stream resolving via innertube-rs, local audio tagging via lofty, Spotify metadata, Last.fm, LRCLIB lyrics, and ML Markov matrix.',
+    title: 'Native YouTube Engine (innertube-rs)',
+    desc: 'Upgraded the core YouTube audio streaming resolver to pure Rust innertube-rs with embedded QuickJS deciphering, slashing startup latency and resource overhead.',
   },
   {
-    title: 'InnerTube-rs Default Recommendation Engine',
-    desc: 'Switched default recommendation engine to InnerTube-rs (YouTube watch-next graph) with full Spotify metadata hydration for Spotify-dominant listening sessions.',
+    title: 'Adaptive Shuffle Mode AutoQueue Top-Up',
+    desc: 'Automatically tracks played songs in shuffle mode based on your current queue length and tops up fresh recommendations seamlessly.',
   },
   {
-    title: 'Dynamic AutoQueue & Shuffle Top-Up Counter',
-    desc: 'Added entropy variance to recommendation scoring for fresh, non-repetitive queues, plus a background counter that tops up autoqueue every 12 songs played in shuffle mode.',
+    title: 'Dynamic AutoQueue Entropy Scoring',
+    desc: 'Injected bounded score variance into recommendation selection so replaying tracks generates fresh, non-deterministic queues without genre drift.',
   },
   {
     title: 'Single Track Queue Seeding',
-    desc: 'Playing a track from search results now seeds that single track and generates contextually relevant recommendations instead of loading all search results into the queue.',
+    desc: 'Playing from search results now seeds the chosen track directly into dynamic autoqueue instead of queuing the entire search results list.',
   },
   {
     title: 'Channel Playlist Navigation & Back Button',
-    desc: 'Added a dedicated back button to channel playlist views and fixed mouse back (MB4) requiring two clicks to return to channel profiles.',
+    desc: 'Added dedicated back button navigation to YouTube playlist views, fixed MB4 mouse history navigation, and improved Japanese avatar parsing.',
   },
   {
-    title: 'Queue View Alignment & UI Polish',
-    desc: 'Refined QueueView header layout with button container baseline alignment matching sub-label text, wrapped the status legend, and reordered engine options in Settings.',
-  },
-  {
-    title: 'Resolver & Scraper Stability Fixes',
-    desc: 'Fixed empty playlist hydration, YouTube channel UTF-8 scraping panics, startup prefetch ID mapping, and preserved Spotify search mode.',
+    title: 'Queue View & Settings Alignment',
+    desc: 'Refined QueueView header layout with baseline button alignment, removed horizontal legend scrollbars, and cleaned up Settings diagnostics.',
   },
 ];
 
 const DEFAULT_HIGHLIGHTS = V410_HIGHLIGHTS;
-
-const PRESENTATION_HIGHLIGHTS: Record<string, { title: string; desc: string } | null> = {
-  'YouTube Audio Streaming & Playback Engine Overhaul': {
-    title: 'YouTube Streaming Engine Overhaul',
-    desc: 'Upgraded the core audio resolver to Innertube 18.0.0 with ANDROID_VR client routing, bypassing YouTube bot detection and 403 Forbidden errors.',
-  },
-  'Innertube `youtubei.js@18.0.0` Upgrade & `ANDROID_VR` Client Prioritization': {
-    title: 'YouTube Streaming Engine Overhaul',
-    desc: 'Upgraded the core audio resolver to Innertube 18.0.0 with ANDROID_VR client routing, bypassing YouTube bot detection and 403 Forbidden errors.',
-  },
-  'Dual-Mode JavaScript Evaluator Shim (`Platform.shim.eval`)': {
-    title: 'Resilient Decipher Evaluator',
-    desc: 'Integrated a dual-mode decipher engine supporting both string and syntax extractors for crash-free signature decoding.',
-  },
-  'Native WebM Opus Stream Prioritization': {
-    title: 'WebM Opus Stream Prioritization',
-    desc: 'Prioritizes high-quality WebM Opus audio (160kbps) across all resolvers, avoiding decipher blocks from legacy MP4 streams.',
-  },
-  'Automated `yt-dlp` Android Extractor & Stream Auto-Recovery': {
-    title: 'Automated Stream Fallback Recovery',
-    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery to eliminate track skipping on 403 errors.',
-  },
-  'Automated Fallback Stream Recovery': {
-    title: 'Automated Stream Fallback Recovery',
-    desc: 'Integrated official YouTube Android client extraction in bundled yt-dlp with automatic stream recovery to eliminate track skipping on 403 errors.',
-  },
-  'Debug Dashboard Resolver Engine & Audio Format Inspector': {
-    title: 'Debug Dashboard Resolver Inspector',
-    desc: 'Added live Resolver Engine indicators and audio format/bitrate information directly inside the Debug Dashboard.',
-  },
-  'Bundled `yt-dlp` Path Discovery in Dev & Production': {
-    title: 'Bundled Binary Discovery',
-    desc: 'Enhanced bundled helper detection across development and production desktop builds for seamless fallback readiness.',
-  },
-  'Cache Store v2 Auto-Migration & Stale URL Purging': {
-    title: 'Cache Store v2 Auto-Migration',
-    desc: 'Upgrades the local cache store to v2, clearing legacy unplayable stream links while safely preserving your entire listening history and playlists.',
-  },
-  'Cache Store v2 Auto-Migration': {
-    title: 'Cache Store v2 Auto-Migration',
-    desc: 'Upgrades the local cache store to v2, clearing legacy unplayable stream links while safely preserving your entire listening history and playlists.',
-  },
-  'Native Rust Channel Scraper Engine': {
-    title: 'Native Rust Channel Engine',
-    desc: 'Replaced legacy yt-dlp sidecar binary dependency with a high-performance native Rust scraper, removing sidecar bundling overhead to shrink the application size and accelerate channel page loading by 5x (<400ms).',
-  },
-  'Comprehensive YouTube Channel View Refinement': {
-    title: 'YouTube Channel View Polish',
-    desc: 'Completely overhauled channel browsing with exact video upload lists, topic channel discography playlists, automatic VEVO link rerouting to official artist channels (such as DragonForce), original English system titles ("Favorites"), accurate creator avatars, and mouse back/forward (MB4/MB5) tab history.',
-  },
-  'Multi-Seed AutoQueue Engine Refinement': {
-    title: 'Multi-Seed AutoQueue Engine',
-    desc: 'AutoQueue recommendations now trigger seamlessly on playlist completion using multi-track seed analysis, Spotify genre matching, and dominant source routing (Spotify vs YouTube) for higher recommendation accuracy.',
-  },
-  'Nightly Mix & Smart Playlist Refinement': {
-    title: 'Nightly Mix & Smart Playlist Drift',
-    desc: 'Nightly mixes and Top Favorites smart playlists now evolve dynamically with recency decay, wider seed pool randomization, and artist/channel drift refresh so your recommendations stay fresh.',
-  },
-  'Audio Cache Status & Legend Badges Refinement': {
-    title: 'Interactive Audio Cache Legend',
-    desc: 'Added an interactive status legend in Full Player and Queue View with high-contrast colorblind-accessible badges (Gold, Emerald, Sky Blue, Red, Lime Green) and detailed prefetch/cache tooltips.',
-  },
-  'Supporting Polish & Bug Fixes': {
-    title: 'Performance & Bug Fixes',
-    desc: 'Fixed stream prefetch map lookups, Spotify-to-YouTube matcher cache evidence, desktop queue single-click play, and clean app reopen queue restoration.',
-  },
-  'Dedicated YouTube Channel Profiles': {
-    title: 'Dedicated YouTube Channel',
-    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
-  },
-  'Dedicated YouTube Channel View & Multi-Platform Extraction': {
-    title: 'Dedicated YouTube Channel',
-    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
-  },
-  'Cross-Platform yt-dlp Sidecar Bundling': {
-    title: 'Bundled yt-dlp for Channel View',
-    desc: 'Channel view currently uses bundled yt-dlp as a temporary compatibility approach because Innertube cannot expose channel uploads and playlists reliably enough. This keeps channel browsing available on Windows and Linux, but makes loading slower and increases the app size. Playback and search still use the faster Innertube resolver; we will keep looking for a lighter, faster long-term solution.',
-  },
-  'Dedicated yt-dlp Channel Extraction': null,
-  'External YouTube Playlist Resolution': null,
-  'Channel Videos & Playlists Tabs': null,
-  'Interactive Artwork Lightbox & Cover Downloads': {
-    title: 'Interactive Artwork Viewer',
-    desc: 'View high-resolution artwork in a full-screen viewer that starts at a comfortable fitted size, then zoom and pan when you need a closer look.',
-  },
-  'Interactive Artwork Lightbox': {
-    title: 'Interactive Artwork Viewer',
-    desc: 'View high-resolution artwork in a full-screen viewer that starts at a comfortable fitted size, then zoom and pan when you need a closer look.',
-  },
-  'Direct Cover Downloads': {
-    title: 'Direct Cover Downloads',
-    desc: 'Added data URL (Base64) handling and 10-second fetch timeout to POST /player/download-artwork to save original high-quality cover images directly into Noctune\'s configured download folder with real-time status and destination path feedback (Saved to ...).',
-  },
-  'Playlist View Controls': {
-    title: 'Playlist Browsing Polish',
-    desc: 'Refined playlist browsing with Grid/List views, a filter toolbar that stays available while scrolling, and two-way sorting for title, artist, and duration.',
-  },
-  'Bidirectional Playlist Sorting': null,
-  'Direct Audio Stream Download Engine': {
-    title: 'Clearer Download Feedback',
-    desc: 'Track download confirmations now clearly show where the saved file was placed.',
-  },
-  'Playlist Management & Drag-and-Drop Polish': {
-    title: 'Playlist Editing',
-    desc: 'Edit playlists with clearer Done and Cancel actions, and reorder tracks with responsive drag-and-drop feedback.',
-  },
-  'Playlist Drag-and-Drop Reordering Fix': {
-    title: 'Playlist Track Reordering',
-    desc: 'Fixed playlist edit reordering/DnD so it is now actually functional and tracks can now be dragged from the handle, move visibly while dragging, and save in the intended order.',
-  },
-  'UI Layout & Visualizer Polish': {
-    title: 'Navigation & Player Polish',
-    desc: 'Open creator names from track lists, enjoy cleaner page spacing, and see more consistent playback indicators.',
-  },
-  'Clickable Creator & Artist Names Everywhere': {
-    title: 'Dedicated YouTube Channel',
-    desc: 'YouTube tracks now have clickable channel names, just like Spotify tracks have clickable artist names. Open a dedicated channel view powered by bundled yt-dlp to browse uploads, artwork, and public playlists on Windows or Linux.',
-  },
-  'Channel Navigation Fallbacks': null,
-  'Channel & Playlist Navigation History': null,
-  'Channel Extraction Reliability': null,
-  'Local Library Folder Navigation History': {
-    title: 'Local Library Mouse Back',
-    desc: 'Mouse back from an open local folder now returns to the folder list instead of leaving Local Library.',
-  },
-  'Immediate History Recording': {
-    title: 'Recently Played on Home',
-    desc: 'View Full History now opens the real History view, and Home Recently Played updates immediately when a track is clicked.',
-  },
-  'Recently Played History Routing': {
-    title: 'Recently Played on Home',
-    desc: 'View Full History now opens the real History view, and Home Recently Played updates immediately when a track is clicked.',
-  },
-  'In Rotation Recommendation Logic': {
-    title: 'In Rotation Smart Playlist',
-    desc: 'Renamed Smart Playlist Recently Played to In Rotation so it no longer conflicts with Home’s Recently Played section, and replaced the duplicate History contents with a distinct recommendation mix.',
-  },
-  'External Playlist Loading Feedback': null,
-  'Dynamic Download Toast Positioning': null,
-  'Custom Confirmation Modals': {
-    title: 'Confirmation Dialogs',
-    desc: 'Settings actions that need confirmation now use Noctune’s existing themed modal instead of an unavailable native dialog.',
-  },
-  'Visualizer Rhythm Refinement': {
-    title: 'Visualizer Pulse Refinement',
-    desc: 'Increased the existing bass-pulse intensity so the visualizer response is easier to see.',
-  },
-  'Version-Aware Changelog Modal Subtitle': {
-    title: 'Version-Aware Changelog Modal',
-    desc: 'Derived the release subtitle dynamically based on SemVer changes (Major, Minor Feature, Patch/Fix).',
-  },
-  'Changelog Settings Button Polish': {
-    title: 'Settings Changelog Button',
-    desc: 'Renamed the "What\'s New" button in Settings to "Changelog" with a clean document icon and standard button styling.',
-  },
-  'Local Library Header Gradient Consistency': {
-    title: 'Local Library Header Glow',
-    desc: 'Aligned Local Library header styling with other views so Noctune’s ambient gold top radial gradient shines through consistently.',
-  },
-  'Artwork Lightbox 50% Zoom Out & Draggable Support': {
-    title: 'Artwork 50% Zoom & Pan',
-    desc: 'Expanded cover artwork lightbox controls down to 50% (0.5x) and enabled dragging/panning on all zoomed levels.',
-  },
-  'Artwork Lightbox 50% Zoom Out Support': {
-    title: 'Artwork 50% Zoom & Pan',
-    desc: 'Expanded cover artwork lightbox controls down to 50% (0.5x) and enabled dragging/panning on all zoomed levels.',
-  },
-  'Native Rust YouTube Channel Resolver (Roadmap Track 2)': {
-    title: 'Native Rust Channel Resolver',
-    desc: 'Accelerated YouTube Channel loading by 5x–6x (~350ms) using a native Rust Tauri Command instead of yt-dlp.',
-  },
-  'Native Rust YouTube Playlist Resolver & Instant Playlist Loading': {
-    title: 'Native Rust Playlist Resolver',
-    desc: 'Accelerated YouTube Playlist loading to ~200ms using a native Rust Tauri Command instead of yt-dlp.',
-  },
-};
-
-export function toPresentationHighlights(items: Array<{ title: string; desc: string }>) {
-  const seen = new Set<string>();
-  const highlights = items.reduce<Array<{ title: string; desc: string }>>((result, item) => {
-    const mapped = Object.prototype.hasOwnProperty.call(PRESENTATION_HIGHLIGHTS, item.title)
-      ? PRESENTATION_HIGHLIGHTS[item.title]
-      : item;
-    if (!mapped || seen.has(mapped.title)) return result;
-    seen.add(mapped.title);
-    result.push(mapped);
-    return result;
-  }, []);
-
-  const artworkDownloadIndex = highlights.findIndex((item) => item.title === 'Direct Cover Downloads');
-  const artworkIndex = artworkDownloadIndex >= 0
-    ? artworkDownloadIndex
-    : highlights.findIndex((item) => item.title === 'Interactive Artwork Viewer');
-  const playlistIndex = highlights.findIndex((item) => item.title === 'Playlist Browsing Controls');
-  if (artworkIndex >= 0 && playlistIndex > artworkIndex + 1) {
-    const [playlistHighlight] = highlights.splice(playlistIndex, 1);
-    highlights.splice(artworkIndex + 1, 0, playlistHighlight);
-  }
-  return highlights;
-}
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
