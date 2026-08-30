@@ -10,6 +10,9 @@ export interface SmartPlaylist {
   tracks: Track[];
 }
 
+const SMART_PLAYLIST_STALE_TIME_MS = 1000 * 60 * 60 * 12; // 12 hours
+const DISCOVER_WEEKLY_STALE_TIME_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
 // Helper function to get stable cover from tracks (first track with thumbnail)
 function getStableCover(tracks: Track[]): string {
   if (tracks.length === 0) return '';
@@ -55,7 +58,8 @@ export function useSmartPlaylists() {
           .slice(0, 20);
       }
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: SMART_PLAYLIST_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
   });
 
   // In Rotation — fresh recommendations seeded from the most recent play.
@@ -73,7 +77,8 @@ export function useSmartPlaylists() {
         return [];
       }
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: SMART_PLAYLIST_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
   });
 
   // Short Tracks — tracks under 3 minutes from history
@@ -89,7 +94,8 @@ export function useSmartPlaylists() {
         return [];
       }
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: SMART_PLAYLIST_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
   });
 
   // Discover Weekly — 7-day persistent cached recommendations from backend
@@ -103,7 +109,7 @@ export function useSmartPlaylists() {
         return [];
       }
     },
-    staleTime: 1000 * 60 * 60 * 24 * 7, // 7 days
+    staleTime: DISCOVER_WEEKLY_STALE_TIME_MS,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });

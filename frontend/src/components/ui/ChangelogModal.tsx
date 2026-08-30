@@ -39,8 +39,16 @@ const V410_HIGHLIGHTS = [
     desc: 'Upgraded the core YouTube audio streaming resolver to pure Rust innertube-rs with embedded QuickJS deciphering, slashing startup latency and resource overhead.',
   },
   {
-    title: '20-Track Nightly Mixes & Smart Playlists',
-    desc: 'Expanded default track count to 20 tracks across all Nightly Mixes and Smart Playlists, with strict genre and artist coherence to prevent disjointed track recommendations.',
+    title: '20-Track Full Length Nightly Mixes & Smart Playlists',
+    desc: 'Expanded default track count to 20 tracks across all Nightly Mixes and Smart Playlists, with strict genre and artist coherence to prevent disjointed recommendations.',
+  },
+  {
+    title: '12-Hour Smart Playlist Stability',
+    desc: 'Extended smart playlist cache duration from 5 minutes to 12 hours (and 7 days for Discover Weekly) to prevent continuous re-generation while browsing.',
+  },
+  {
+    title: 'Distinct Artist Clusters in Nightly Mixes',
+    desc: 'Enforced temporal clustering across personal mixes (Top Artist Drift, Recent Drift, Deep Rotation, Nightly Discovery) with guaranteed unique artist seeds.',
   },
   {
     title: 'Adaptive Shuffle Mode AutoQueue Top-Up',

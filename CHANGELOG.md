@@ -9,7 +9,10 @@ All notable Noctune changes are documented here.
 
 ### Recommendation & Playlist Improvements
 - **20-Track Full Length Nightly Mixes & Smart Playlists**: Expanded default track generation count across all Nightly Mixes and Smart Playlists from 8 to 20 tracks.
-- **Strict Genre & Artist Coherence in Nightly Mixes**: Refined the personal mix generator to prioritize contextually coherent live recommendations from seed tracks, limiting local history dumps to high-affinity matches to prevent jarring genre mashups.
+- **12-Hour Smart Playlist Stability**: Extended smart playlist expiry (`staleTime`) from 5 minutes to 12 hours (and 7 days for Discover Weekly) with `refetchOnWindowFocus: false` to prevent unwanted continuous re-generation.
+- **Distinct Artist Clusters in Nightly Mixes**: Enforced temporal clustering across all 4 personal mixes (Top Artist Drift, Recent Playback Drift, Deep Rotation, and Nightly Discovery) with guaranteed unique artist seeds.
+- **Strict Genre & Artist Coherence**: Refined the personal mix generator to prioritize contextually coherent live recommendations from seed tracks, limiting local history dumps to high-affinity matches to prevent jarring genre mashups.
+- **Single-Mix Targeted Refresh**: Enabled independent single-mix regeneration when clicking "Refresh mix", preserving cached tracks and states across all other personal mixes.
 - **Adaptive Shuffle Mode AutoQueue Top-Up**: Implemented an adaptive background playback counter that automatically triggers autoqueue recommendations once the current queue cycle completes, correctly accounting for repeated tracks.
 - **Dynamic AutoQueue Entropy Scoring**: Injected bounded score variance into candidate selection to ensure fresh, distinct recommendations on every playback session without genre drift.
 - **Single Track Queue Seeding**: Refined search view playback to seed individual selected tracks directly into dynamic autoqueue generation instead of appending the entire search results table.
@@ -19,6 +22,7 @@ All notable Noctune changes are documented here.
 - **Queue View & Settings Alignment**: Polished QueueView header baseline alignment (`sm:translate-y-2`), eliminated horizontal legend scrollbars, and cleaned up Settings diagnostic controls.
 
 ### Bug Fixes
+- **Player Loading Animation on Manual Clicks**: Ensured overlay spinner and "Resolving audio..." feedback on the album disc display reliably on manual track clicks until the stream actually begins playback.
 - **Nightly Mix Action Controls**: Fixed an issue where the "Refresh mix" button was disabled in PlaylistView.
 - **Recommendation Engine Selection**: Fixed an issue where non-Last.fm recommendation engines fell back to generic search candidates instead of querying the selected engine.
 - **Channel Playlist Track Hydration**: Fixed an issue where YouTube channel playlist tracks failed to map and appeared empty in PlaylistView.
