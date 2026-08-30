@@ -6,11 +6,6 @@ All notable Noctune changes are documented here.
 
 ### Core Performance & YouTube Engine Overhaul
 - **Pure Rust `innertube-rs` YouTube Audio Resolver**: Upgraded the core YouTube audio streaming resolver to native Rust [`innertube-rs`](https://github.com/caya8205-2/innertube-rs) with embedded QuickJS (`rquickjs`) deciphering, slashing stream startup latency and memory overhead.
-- **Adaptive Shuffle Mode AutoQueue Top-Up**: Implemented an adaptive background playback counter that automatically triggers autoqueue recommendations once the current queue cycle completes, correctly accounting for repeated tracks.
-- **Dynamic AutoQueue Entropy Scoring**: Injected bounded score variance into candidate selection to ensure fresh, distinct recommendations on every playback session without genre drift.
-- **Single Track Queue Seeding**: Refined search view playback to seed individual selected tracks directly into dynamic autoqueue generation instead of appending the entire search results table.
-- **YouTube Channel Playlist & Navigation Enhancements**: Added dedicated Back button navigation to YouTube Channel Playlist views, streamlined multi-byte Japanese/Unicode avatar handling, and fixed double-click browser history navigation.
-- **Queue View & Settings Alignment**: Polished QueueView header baseline alignment (`sm:translate-y-2`), eliminated horizontal legend scrollbars, and cleaned up Settings diagnostic controls.
 
 ### Bug Fixes
 - **Recommendation Engine Selection**: Fixed an issue where non-Last.fm recommendation engines fell back to generic search candidates instead of querying the selected engine.

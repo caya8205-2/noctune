@@ -308,12 +308,19 @@ function getLocalPersonalCandidates(seed: Track, excludeIds: Set<string>, limit:
     })
     .map((track, index) => {
       const playback = track as TrackWithPlayback;
+      const isSameArtist = artistKey(track) === seedArtist;
       let score = Math.max(1, pool.length - index);
-      if (artistKey(track) === seedArtist) score += 90;
-      if (playback.playCount) score += playback.playCount * 8;
+      if (isSameArtist) {
+        score += 120;
+      }
+      if (playback.playCount) score += playback.playCount * 6;
       if (playback.lastPlayed) {
         const ageHours = (Date.now() - playback.lastPlayed) / (1000 * 60 * 60);
         score += Math.max(0, 48 - ageHours);
+      }
+      // Strongly prefer tracks from the same artist or close affinity to maintain genre theme
+      if (!isSameArtist) {
+        score = Math.floor(score * 0.3);
       }
       return { track, score };
     })
@@ -714,21 +721,26 @@ export async function getPersonalMixes(
       .filter(Boolean);
 
     try {
-      const localCandidates = getLocalPersonalCandidates(seedInfo.seed, new Set(excludeIds), tracksPerMix);
+      // 1. Generate live contextually-coherent recommendations from the seed track
+      const onlineTracks = await getRecommendations(seedInfo.seed, {
+        excludeIds,
+        limit: tracksPerMix * 2,
+      });
+
+      // 2. Select strictly matching local tracks from history (same artist or closely scored)
+      const localCandidates = getLocalPersonalCandidates(seedInfo.seed, new Set(excludeIds), Math.floor(tracksPerMix / 3));
       const localTracks = selectRecommendations(
         localCandidates.map((item, index) => ({
           item,
           score: scoreRecommendation(seedInfo.seed, item, index),
         })),
         seedInfo.seed,
-        tracksPerMix,
+        Math.floor(tracksPerMix / 3),
         true
       );
-      const tracks = await getRecommendations(seedInfo.seed, {
-        excludeIds,
-        limit: tracksPerMix * 2,
-      });
-      const unique = diversifyPersonalMixTracks([...localTracks, ...tracks], tracksPerMix);
+
+      // Prioritize online recommendations so each Nightly Mix maintains strong genre & artist theme coherence
+      const unique = diversifyPersonalMixTracks([...onlineTracks, ...localTracks], tracksPerMix);
       if (unique.length === 0) continue;
 
       unique.forEach((track) => {
