@@ -18,7 +18,7 @@ import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 
-const NIGHTLY_MIX_CACHE_KEY = 'noctune:nightly-mix:v2';
+const NIGHTLY_MIX_CACHE_KEY = 'noctune:nightly-mix:v3';
 const NIGHTLY_MIX_REFRESH_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const NIGHTLY_MIX_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 3; // 3 hours max localStorage cache age
 const NIGHTLY_MIX_LIMIT = 4;
