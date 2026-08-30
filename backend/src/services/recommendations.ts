@@ -254,10 +254,11 @@ function pickArtistSeed(tracks: Track[], usedSeedIds: Set<string>): Track | null
 }
 
 function buildPersonalMixSeeds(): Array<{ id: string; name: string; description: string; seed: Track }> {
-  const recent = uniqueTracks(getRecentTracks(30));
-  const top = uniqueTracks(getTopTracks(24).filter((track) => (track.playCount ?? 0) > 0));
-  const pool = uniqueTracks([...recent, ...top]);
+  const allHistory = uniqueTracks(getRecentTracks(100));
+  const topTracks = uniqueTracks(getTopTracks(50).filter((track) => (track.playCount ?? 0) > 0));
+
   const usedSeedIds = new Set<string>();
+  const usedArtists = new Set<string>();
   const seeds: Array<{ id: string; name: string; description: string; seed: Track }> = [];
 
   const addSeed = (name: string, description: string, seed?: Track | null) => {
@@ -265,32 +266,44 @@ function buildPersonalMixSeeds(): Array<{ id: string; name: string; description:
     const key = uniqueKey(seed);
     if (!key || usedSeedIds.has(key)) return;
     usedSeedIds.add(key);
+    usedArtists.add(artistKey(seed));
     seeds.push({ id: mixId(name), name, description, seed });
   };
 
-  // Pick a random seed from a candidate pool to add variety
-  const pickRandom = (candidates: Track[]): Track | undefined => {
-    const available = candidates.filter((t) => !usedSeedIds.has(uniqueKey(t)));
-    if (available.length === 0) return undefined;
-    // Weighted random — favor top items but allow variance
-    const poolSize = Math.min(available.length, 8);
-    return available[Math.floor(Math.random() * poolSize)];
-  };
-
-  const artistSeed = pickArtistSeed(pool, usedSeedIds);
+  // 1. Top Artist Drift (Artist paling sering diputar)
+  const artistSeed = pickArtistSeed(allHistory, usedSeedIds);
   if (artistSeed) {
     addSeed(
       `${titleCase(primaryArtist(artistSeed.artist))} Drift`,
-      `A nearby path from your ${primaryArtist(artistSeed.artist)} plays.`,
+      `A curated path around your ${primaryArtist(artistSeed.artist)} favorites.`,
       artistSeed
     );
   }
 
-  addSeed('Recent Drift', 'A fresh drift from what has been looping lately.', pickRandom(recent));
-  addSeed('Deep Rotation', 'Built from tracks that keep coming back.', pickRandom(top));
+  // 2. Recent Drift (Lagu baru / sesi hari ini, ambil dari 5 teratas)
+  const recentCandidates = allHistory.filter((t) => !usedArtists.has(artistKey(t)));
+  const recentSeed = recentCandidates[0] ?? allHistory[0];
+  if (recentSeed) {
+    addSeed('Recent Drift', 'A fresh drift from what you listened to recently.', recentSeed);
+  }
 
-  const alternateSeed = pickRandom(pool);
-  addSeed('Nightly Drift', 'A wider mix from your local listening pattern.', alternateSeed);
+  // 3. Deep Rotation (Lagu all-time / bulan lalu dari top favorites yang artisnya berbeda)
+  const topCandidates = topTracks.filter((t) => !usedArtists.has(artistKey(t)));
+  const topSeed = topCandidates[Math.floor(Math.random() * Math.min(topCandidates.length, 5))] ?? topTracks[0];
+  if (topSeed) {
+    addSeed('Deep Rotation', 'Built from your all-time favorite heavy rotation.', topSeed);
+  }
+
+  // 4. Nightly Discovery / Throwback Drift (Lagu dari bagian tengah history / minggu lalu dengan artis unik)
+  const midHistory = allHistory.slice(10);
+  const midCandidates = midHistory.filter((t) => !usedArtists.has(artistKey(t)));
+  const throwbackSeed = midCandidates[Math.floor(Math.random() * Math.min(midCandidates.length, 10))]
+    ?? allHistory.find((t) => !usedArtists.has(artistKey(t)))
+    ?? allHistory[Math.min(allHistory.length - 1, 15)];
+
+  if (throwbackSeed) {
+    addSeed('Nightly Discovery', 'Rediscover gems from earlier listening sessions.', throwbackSeed);
+  }
 
   return seeds.slice(0, 4);
 }
