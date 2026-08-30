@@ -394,7 +394,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({
         currentTrack: playableTrack,
         isPlaying: true,
-        isLoading: false,
         progress: 0,
         queue: playbackQueue,
         queueIndex: playbackIndex,
