@@ -33,18 +33,18 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
   return items;
 }
 
-const V411_HIGHLIGHTS = [
+const V412_HIGHLIGHTS = [
   {
-    title: 'Bundled innertube-rs Engine',
-    desc: 'Fixed an issue in v4.1.0 where the missing bundled innertube-rs CLI caused audio resolving to fall back to yt-dlp. The standalone v0.8.0 binary is now bundled directly in resources, restoring instant deciphering and streaming.',
+    title: 'Production Sidecar Startup Fix',
+    desc: 'Fixed a startup crash in the packaged production backend binary on port 3131, resolving connection refused errors.',
   },
   {
-    title: 'Purged Legacy youtubei.js',
-    desc: 'Completely removed deprecated youtubei.js from backend pipelines, routing all stream resolving through native innertube-rs.',
+    title: 'New Full-Black Branding & Installer Graphics',
+    desc: 'Updated application icons and NSIS installer graphics with the new clean full-black background logo.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V411_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V412_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
