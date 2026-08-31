@@ -15,9 +15,11 @@
     "build:sidecar": "npm run build --workspace=backend && npm run build:binary --workspace=backend",
     "build:sidecar:linux": "npm run build --workspace=backend && npm run build:binary:linux --workspace=backend",
     "prepare:ytdlp": "node scripts/prepare-ytdlp.mjs",
+    "prepare:innertube": "node scripts/prepare-innertube.mjs",
+    "prepare:binaries": "node scripts/prepare-ytdlp.mjs && node scripts/prepare-innertube.mjs",
     "tauri": "node scripts/tauri-dev.mjs",
-    "tauri:build": "npm run prepare:ytdlp && npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
-    "tauri:build:linux": "npm run prepare:ytdlp && npm run build:sidecar:linux && npm run build --workspace=frontend && tauri build --bundles deb,appimage",
+    "tauri:build": "npm run prepare:binaries && npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
+    "tauri:build:linux": "npm run prepare:binaries && npm run build:sidecar:linux && npm run build --workspace=frontend && tauri build --bundles deb,appimage",
     "version:sync": "node scripts/sync-version.js",
     "sign": "powershell -ExecutionPolicy Bypass -File ./scripts/noctune-signing.ps1"
   },

@@ -73,13 +73,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Cache bundled yt-dlp (Windows)
+      - name: Cache bundled binaries (Windows)
         uses: actions/cache@v4
         with:
           path: |
             src-tauri/resources/yt-dlp.exe
+            src-tauri/resources/innertube.exe
             src-tauri/resources/.yt-dlp-platform
-          key: ${{ runner.os }}-yt-dlp-${{ hashFiles('scripts/prepare-ytdlp.mjs') }}
+            src-tauri/resources/.innertube-platform
+          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
 
       - name: Build Tauri (Windows)
         env:
@@ -139,13 +141,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Cache bundled yt-dlp (Linux)
+      - name: Cache bundled binaries (Linux)
         uses: actions/cache@v4
         with:
           path: |
             src-tauri/resources/yt-dlp.exe
+            src-tauri/resources/innertube.exe
             src-tauri/resources/.yt-dlp-platform
-          key: ${{ runner.os }}-yt-dlp-${{ hashFiles('scripts/prepare-ytdlp.mjs') }}
+            src-tauri/resources/.innertube-platform
+          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
 
       - name: Build Tauri (Linux)
         env:

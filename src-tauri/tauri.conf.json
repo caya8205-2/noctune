@@ -45,7 +45,8 @@
     "resources": [
       "../CHANGELOG.md",
       "../backend/src/data/seed-model.json",
-      "resources/yt-dlp.exe"
+      "resources/yt-dlp.exe",
+      "resources/innertube.exe"
     ],
     "windows": {
       "nsis": {

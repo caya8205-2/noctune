@@ -30,7 +30,7 @@ export interface CachedTrack extends Track {
   audioQualityPreference?: AudioQualityPreference;
   audioFormat?: string;
   audioQuality?: string;
-  resolverSource?: 'youtubei' | 'ytdlp' | 'local';
+  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local';
   localAudioPath?: string;  // if downloaded locally
   cachedAt: number;
   playCount: number;
@@ -80,7 +80,7 @@ export interface AudioStreamInfo {
   format: string;
   quality: string;
   qualityPreference: AudioQualityPreference;
-  resolverSource?: 'youtubei' | 'ytdlp' | 'local';
+  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local';
 }
 
 export interface LyricLine {

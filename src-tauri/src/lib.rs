@@ -96,6 +96,10 @@ pub fn run() {
                     .path()
                     .resolve("resources/yt-dlp.exe", BaseDirectory::Resource)
                     .expect("failed to resolve bundled yt-dlp path");
+                let innertube_path = _app
+                    .path()
+                    .resolve("resources/innertube.exe", BaseDirectory::Resource)
+                    .expect("failed to resolve bundled innertube path");
 
                 let (mut rx, child) = _app
                     .shell()
@@ -103,6 +107,7 @@ pub fn run() {
                     .expect("failed to create sidecar command")
                     .env("APP_DATA_DIR", app_data_dir.to_string_lossy().to_string())
                     .env("YT_DLP_PATH", ytdlp_path.to_string_lossy().to_string())
+                    .env("INNERTUBE_PATH", innertube_path.to_string_lossy().to_string())
                     .env("DISCORD_CLIENT_ID", option_env!("DISCORD_CLIENT_ID").unwrap_or(""))
                     .env("DISCORD_RPC_ENABLED", option_env!("DISCORD_RPC_ENABLED").unwrap_or("true"))
                     .env(
