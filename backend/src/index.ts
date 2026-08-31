@@ -30,7 +30,16 @@ import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
 import { getMatchCacheStats } from './services/youtubeMatcher.js';
 import { isDemoMode, scheduleDemoStateReset } from './services/demoMode.js';
 import { getDiscordRpcStatus } from './services/discordRpc.js';
-const rootPkg = require('../../package.json');
+let rootPkg: { version: string };
+try {
+  rootPkg = require('../../package.json');
+} catch {
+  try {
+    rootPkg = require('../package.json');
+  } catch {
+    rootPkg = { version: '4.1.1' };
+  }
+}
 export const APP_VERSION: string = rootPkg.version;
 
 for (const envPath of [

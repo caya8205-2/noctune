@@ -1,4 +1,13 @@
-const rootPkg = require('../../../package.json') as { version: string };
+let rootPkg: { version: string };
+try {
+  rootPkg = require('../../../package.json');
+} catch {
+  try {
+    rootPkg = require('../../package.json');
+  } catch {
+    rootPkg = { version: '4.1.1' };
+  }
+}
 
 const UPDATE_REPO = process.env.NOCTUNE_UPDATE_REPO ?? 'caya8205-2/noctune';
 const RELEASE_API_URL = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`;
