@@ -33,42 +33,18 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
   return items;
 }
 
-const V410_HIGHLIGHTS = [
+const V411_HIGHLIGHTS = [
   {
-    title: 'Native YouTube Engine (innertube-rs)',
-    desc: 'Upgraded the core YouTube audio streaming resolver to pure Rust innertube-rs with embedded QuickJS deciphering, slashing startup latency and resource overhead.',
+    title: 'Bundled innertube-rs Engine',
+    desc: 'Fixed an issue in v4.1.0 where the missing bundled innertube-rs CLI caused audio resolving to fall back to yt-dlp. The standalone binary is now bundled directly in resources, restoring instant deciphering and streaming.',
   },
   {
-    title: 'Nightly Mixes Rework & Temporal Clusters',
-    desc: 'Overhauled personal mixes with 4 distinct temporal clusters (Top Artist Drift, Recent Drift, Deep Rotation, and Nightly Discovery), ensuring unique artist diversity, 20 tracks per mix, and strict genre coherence.',
-  },
-  {
-    title: '12-Hour Smart Playlist Stability',
-    desc: 'Extended smart playlist cache duration from 5 minutes to 12 hours (and 7 days for Discover Weekly) to prevent continuous re-generation while browsing.',
-  },
-  {
-    title: 'Adaptive Shuffle Mode AutoQueue Top-Up',
-    desc: 'Automatically tracks played songs in shuffle mode based on your current queue length and tops up fresh recommendations seamlessly.',
-  },
-  {
-    title: 'Dynamic AutoQueue Entropy Scoring',
-    desc: 'Injected bounded score variance into recommendation selection so replaying tracks generates fresh, non-deterministic queues without genre drift.',
-  },
-  {
-    title: 'Single Track Queue Seeding',
-    desc: 'Playing from search results now seeds the chosen track directly into dynamic autoqueue instead of queuing the entire search results list.',
-  },
-  {
-    title: 'Channel Playlist Navigation & Back Button',
-    desc: 'Added dedicated back button navigation to YouTube playlist views, fixed MB4 mouse history navigation, and improved Japanese avatar parsing.',
-  },
-  {
-    title: 'Queue View & Settings Alignment',
-    desc: 'Refined QueueView header layout with baseline button alignment, removed horizontal legend scrollbars, and cleaned up Settings diagnostics.',
+    title: 'Purged Legacy youtubei.js',
+    desc: 'Completely removed deprecated youtubei.js from backend pipelines, routing all stream resolving through native innertube-rs.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V410_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V411_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
