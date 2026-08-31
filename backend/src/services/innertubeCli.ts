@@ -163,9 +163,12 @@ export async function searchTracksWithInnertube(query: string, limit = 10): Prom
   interface SearchItemCli {
     id: string;
     title: string;
-    author: string;
+    artist?: string;
+    author?: string;
     channelId?: string;
+    duration?: number;
     durationSeconds?: number;
+    thumbnail?: string;
     thumbnailUrl?: string;
   }
 
@@ -174,14 +177,14 @@ export async function searchTracksWithInnertube(query: string, limit = 10): Prom
   return (results || []).map((v) => ({
     id: v.id,
     title: v.title,
-    artist: v.author,
+    artist: v.artist || v.author || 'Unknown Artist',
     artistId: v.channelId,
     album: '',
-    duration: v.durationSeconds || 0,
-    thumbnail: v.thumbnailUrl || '',
+    duration: v.duration || v.durationSeconds || 0,
+    thumbnail: v.thumbnail || v.thumbnailUrl || '',
     query,
     youtubeId: v.id,
     youtubeTitle: v.title,
-    youtubeArtist: v.author,
+    youtubeArtist: v.artist || v.author,
   }));
 }

@@ -26,7 +26,7 @@ if (!assetInfo) {
   throw new Error(`Bundled innertube is not configured for platform: ${process.platform}`);
 }
 
-const INNERTUBE_VERSION = 'v0.7.0';
+const INNERTUBE_VERSION = 'v0.8.0';
 const url = process.env.INNERTUBE_DOWNLOAD_URL
   ?? `https://github.com/caya8205-2/innertube-rs/releases/download/${INNERTUBE_VERSION}/${assetInfo.name}`;
 

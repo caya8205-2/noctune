@@ -36,7 +36,7 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
 const V411_HIGHLIGHTS = [
   {
     title: 'Bundled innertube-rs Engine',
-    desc: 'Fixed an issue in v4.1.0 where the missing bundled innertube-rs CLI caused audio resolving to fall back to yt-dlp. The standalone binary is now bundled directly in resources, restoring instant deciphering and streaming.',
+    desc: 'Fixed an issue in v4.1.0 where the missing bundled innertube-rs CLI caused audio resolving to fall back to yt-dlp. The standalone v0.8.0 binary is now bundled directly in resources, restoring instant deciphering and streaming.',
   },
   {
     title: 'Purged Legacy youtubei.js',

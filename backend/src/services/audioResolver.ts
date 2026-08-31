@@ -37,7 +37,13 @@ export interface AudioResolver {
 
 const innertubeResolver: AudioResolver = {
   name: 'innertube',
-  searchTracks: searchTracksWithInnertube,
+  searchTracks: async (query, limit) => {
+    try {
+      return await searchTracksWithInnertube(query, limit);
+    } catch {
+      return await ytdlpSearchTracks(query, limit);
+    }
+  },
   getYoutubeTrack: async (urlOrVideoId, originalQuery) => {
     const { track } = await resolveTrackWithInnertube(urlOrVideoId, originalQuery || urlOrVideoId);
     return track;

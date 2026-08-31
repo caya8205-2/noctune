@@ -5,7 +5,8 @@ All notable Noctune changes are documented here.
 ## v4.1.1 - 2026-08-31
 
 ### Bug Fixes & Binary Bundling
-- **Bundled `innertube-rs` CLI Adapter**: Bundled the standalone `innertube-rs` v0.7.0 binary into app resources (`%LOCALAPPDATA%\Noctune\resources\`) and integrated `innertubeCli.ts` into the backend streaming pipeline. Fixes an issue in v4.1.0 where the missing bundled CLI caused audio stream resolving to fall back to yt-dlp.
+- **Bundled `innertube-rs` CLI Adapter**: Bundled the standalone `innertube-rs` v0.8.0 binary into app resources (`%LOCALAPPDATA%\Noctune
+esources\`) and integrated `innertubeCli.ts` into the backend streaming pipeline. Fixes an issue in v4.1.0 where the missing bundled CLI caused audio stream resolving to fall back to yt-dlp.
 - **Removed Legacy `youtubei.js`**: Completely purged deprecated `youtubei.js` dependency from backend resolution paths.
 
 ## v4.1.0 - 2026-08-29

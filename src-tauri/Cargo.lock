@@ -1700,9 +1700,7 @@ dependencies = [
 
 [[package]]
 name = "innertube-rs"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55bf95efa4fc06f783e3e36f66a077cc8d67b399e481232328fa9c97ed42058a"
+version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "prost",
