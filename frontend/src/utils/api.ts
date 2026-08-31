@@ -50,7 +50,7 @@ let apiBasePromise: Promise<string | null> | null = null;
 
 async function canReachBackend(base: string): Promise<boolean> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 450);
+  const timeout = window.setTimeout(() => controller.abort(), 600);
   try {
     const res = await fetch(`${base}/status`, {
       cache: 'no-store',
@@ -58,13 +58,10 @@ async function canReachBackend(base: string): Promise<boolean> {
     });
     if (!res.ok) return false;
     const status = (await res.json()) as {
+      status?: string;
       features?: { updates?: boolean; lyricsRomanization?: boolean; audioQualityPreference?: boolean };
     };
-    return (
-      status.features?.updates === true &&
-      status.features?.lyricsRomanization === true &&
-      status.features?.audioQualityPreference === true
-    );
+    return status.status === 'ok' || Boolean(status.features);
   } catch {
     return false;
   } finally {
@@ -73,24 +70,34 @@ async function canReachBackend(base: string): Promise<boolean> {
 }
 
 export async function getApiBase(): Promise<string> {
-  // In Tauri dev mode or web mode, use the static API_BASE (Vite proxy)
-  // Only in Tauri production, try to find backend on port range
-  if (!IS_TAURI_PROD) return API_BASE;
+  // In pure web mode, use the static API_BASE (Vite proxy)
+  if (!detectTauriEnvironment()) return API_BASE;
 
   if (!apiBasePromise) {
     apiBasePromise = (async () => {
-      // First try preferred port with retries to give backend sidecar time to bind on startup
-      const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
-      for (let retry = 0; retry < 4; retry++) {
-        if (await canReachBackend(preferredBase)) return preferredBase;
-        if (retry < 3) await new Promise((resolve) => setTimeout(resolve, 250));
+      // In dev mode (Vite running on port 3132), try dev port first
+      const devPort = 3132;
+      const devBase = normalizeBase(tauriBaseForPort(devPort));
+      if (!import.meta.env.PROD && await canReachBackend(devBase)) {
+        return devBase;
       }
 
-      // If preferred port is occupied by another app, scan remaining ports
-      for (let attempt = 1; attempt < TAURI_BACKEND_PORT_ATTEMPTS; attempt++) {
+      // Try preferred production port 3131 with startup retries
+      const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
+      for (let retry = 0; retry < 5; retry++) {
+        if (await canReachBackend(preferredBase)) return preferredBase;
+        if (retry < 4) await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      // If occupied, scan ports 3131..3140
+      for (let attempt = 0; attempt < TAURI_BACKEND_PORT_ATTEMPTS; attempt++) {
         const base = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT + attempt));
         if (await canReachBackend(base)) return base;
       }
+
+      // Fallback: check dev port 3132 if all else fails
+      if (await canReachBackend(devBase)) return devBase;
+
       return null;
     })();
   }
