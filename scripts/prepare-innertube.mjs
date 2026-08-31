@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +64,19 @@ if (assetInfo.type === 'zip') {
 } else {
   await new Promise((resolve, reject) => {
     const proc = spawn('tar', ['-xzf', tempArchive, '-C', resourceDir], { stdio: 'inherit' });
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tar exited with ${code}`)));
+    proc.on('close', async (code) => {
+      if (code !== 0) return reject(new Error(`tar exited with ${code}`));
+      try {
+        // tar extracts as 'innertube' on Linux/macOS. Ensure consistent 'innertube.exe' name
+        const extractedBinary = path.join(resourceDir, 'innertube');
+        if (outputPath !== extractedBinary) {
+          await rename(extractedBinary, outputPath).catch(() => {});
+        }
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
   });
 }
 
