@@ -1,26 +1,33 @@
+let isTauriCached: boolean | null = null;
+
 // Enhanced Tauri detection with multiple fallback checks
 function detectTauriEnvironment(): boolean {
   if (typeof window === 'undefined') return false;
+  if (isTauriCached !== null) return isTauriCached;
   
   // Primary check: __TAURI_INTERNALS__
   if ('__TAURI_INTERNALS__' in window) {
     console.log('[env] Tauri detected via __TAURI_INTERNALS__');
+    isTauriCached = true;
     return true;
   }
   
   // Secondary check: __TAURI__ namespace (older versions)
   if ('__TAURI__' in window) {
     console.log('[env] Tauri detected via __TAURI__');
+    isTauriCached = true;
     return true;
   }
   
   // Tertiary check: Tauri-specific user agent
   if (navigator.userAgent.includes('Tauri')) {
     console.log('[env] Tauri detected via user agent');
+    isTauriCached = true;
     return true;
   }
   
   console.log('[env] Tauri NOT detected - running in web mode');
+  isTauriCached = false;
   return false;
 }
 
