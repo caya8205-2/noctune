@@ -35,12 +35,20 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
 
 const V412_HIGHLIGHTS = [
   {
-    title: 'Production Sidecar Startup Fix',
-    desc: 'Fixed a startup crash in the packaged production backend binary on port 3131, resolving connection refused errors.',
-  },
-  {
     title: 'New Full-Black Branding & Installer Graphics',
     desc: 'Updated application icons and NSIS installer graphics with the new clean full-black background logo.',
+  },
+  {
+    title: 'Production Sidecar Playback Stability Fix',
+    desc: 'Resolved an issue where the background sidecar process abruptly terminated during track playback due to child process signal propagation, eliminating sudden connection refused errors.',
+  },
+  {
+    title: 'Silent Application Exit on Windows',
+    desc: 'Prevented the brief empty terminal window flash that previously appeared when closing the application on Windows.',
+  },
+  {
+    title: 'Cold-Start Startup Connection Resilience',
+    desc: 'Enhanced initial connection retry handling to ensure smooth startup without early connection refused errors while the backend initializes.',
   },
 ];
 

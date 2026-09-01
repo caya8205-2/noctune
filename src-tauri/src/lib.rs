@@ -57,8 +57,11 @@ fn kill_backend_sidecar(app: &tauri::Window) {
             let _ = child.kill();
             #[cfg(target_os = "windows")]
             {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
                 let _ = Command::new("taskkill")
                     .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .spawn();
             }
         }

@@ -63,6 +63,10 @@ async function execInnertubeCli<T>(args: string[]): Promise<T> {
     let stdout = '';
     let stderr = '';
 
+    // Prevent unhandled stream errors from crashing the parent process
+    proc.stdout.on('error', () => {});
+    proc.stderr.on('error', () => {});
+
     proc.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
     });

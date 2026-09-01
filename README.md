@@ -13,7 +13,7 @@
 [![Fastify](https://img.shields.io/badge/Fastify-4-000000?style=for-the-badge&logo=fastify&logoColor=white)](https://fastify.dev/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)\
 [![Rust](https://img.shields.io/badge/Rust-2021-730039?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![innertube-rs](https://img.shields.io/badge/innertube--rs-0.8.0-dea584?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/caya8205-2/innertube-rs)
+[![innertube-rs](https://img.shields.io/crates/v/innertube-rs?style=for-the-badge&logo=rust&logoColor=white&color=dea584&label=innertube-rs)](https://crates.io/crates/innertube-rs)
 [![MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 [![GitHub All Releases](https://img.shields.io/github/downloads/caya8205-2/noctune/total?style=for-the-badge&logo=github)](https://github.com)
 

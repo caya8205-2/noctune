@@ -83,10 +83,11 @@ export async function getApiBase(): Promise<string> {
       }
 
       // Try preferred production port 3131 with startup retries
+      // pkg binary cold-start can take 3-5 seconds, so retry for ~6 seconds
       const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
-      for (let retry = 0; retry < 5; retry++) {
+      for (let retry = 0; retry < 15; retry++) {
         if (await canReachBackend(preferredBase)) return preferredBase;
-        if (retry < 4) await new Promise((resolve) => setTimeout(resolve, 200));
+        if (retry < 14) await new Promise((resolve) => setTimeout(resolve, 400));
       }
 
       // If occupied, scan ports 3131..3140

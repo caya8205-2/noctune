@@ -5,7 +5,10 @@ All notable Noctune changes are documented here.
 ## v4.1.2 - 2026-09-01
 
 ### Bug Fixes & Visual Polish
-- **Production Sidecar Startup Fix**: Fixed a critical startup crash in the packaged backend binary (`pkg`) caused by missing `package.json` assets in the virtual snapshot, eliminating `ERR_CONNECTION_REFUSED` on port 3131.
+- **Production Sidecar Playback Stability Fix**: Fixed a critical issue where child processes (such as `innertube.exe` and `yt-dlp.exe`) exiting after audio stream resolution triggered signal propagation to Discord RPC handlers in the backend sidecar, prematurely invoking `process.exit(0)`. Removed premature exit calls from signal handlers and attached defensive stream error handlers in `innertubeCli.ts`.
+- **Silent Application Shutdown (Windows)**: Added `CREATE_NO_WINDOW` execution flag (`0x08000000`) to `taskkill` in `kill_backend_sidecar`, preventing a brief empty CMD console window from flashing when closing Noctune on Windows.
+- **Frontend Startup Connection Retries**: Increased initial connection attempt window in `api.ts` from 1s (5 retries) to ~6s (15 retries × 400ms) to ensure smooth communication during cold-start sidecar initialization.
+- **Removed Deprecated `youtubei.js` from Sidecar Build**: Completely purged `youtubei.js` from `backend/package.json` dependencies, eliminating `pkg` packaging warnings during sidecar compilation.
 - **Installer & Icon Branding Refresh**: Updated NSIS installer graphics (`nsis-sidebar.bmp`, `nsis-header.bmp`) and desktop application icons (`icon.ico`, `icon.png`, `icon.icns`) with the new sleek full-black background logo.
 
 ## v4.1.1 - 2026-08-31

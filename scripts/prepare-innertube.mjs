@@ -26,65 +26,93 @@ if (!assetInfo) {
   throw new Error(`Bundled innertube is not configured for platform: ${process.platform}`);
 }
 
-const INNERTUBE_VERSION = 'v0.8.0';
+async function resolveLatestVersion() {
+  if (process.env.INNERTUBE_VERSION) {
+    const v = process.env.INNERTUBE_VERSION.trim();
+    return v.startsWith('v') ? v : `v${v}`;
+  }
+
+  try {
+    const res = await fetch('https://crates.io/api/v1/crates/innertube-rs', {
+      headers: { 'User-Agent': 'Noctune-Build-Script (github.com/caya8205-2/noctune)' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const latest = data?.crate?.max_version || data?.crate?.newest_version;
+      if (latest) {
+        return `v${latest}`;
+      }
+    }
+  } catch (err) {
+    console.warn(`[prepare:innertube] unable to fetch latest version from crates.io (${err.message}), falling back`);
+  }
+
+  return 'v0.8.0';
+}
+
+const INNERTUBE_VERSION = await resolveLatestVersion();
 const url = process.env.INNERTUBE_DOWNLOAD_URL
   ?? `https://github.com/caya8205-2/innertube-rs/releases/download/${INNERTUBE_VERSION}/${assetInfo.name}`;
 
 await mkdir(resourceDir, { recursive: true });
 
+let alreadyPrepared = false;
 try {
   const preparedFor = (await readFile(platformMarkerPath, 'utf8')).trim();
   if (preparedFor === `${process.platform}-${INNERTUBE_VERSION}`) {
-    console.log(`[prepare:innertube] reusing bundled ${outputBinaryName}`);
-    process.exit(0);
+    console.log(`[prepare:innertube] reusing bundled ${outputBinaryName} (${INNERTUBE_VERSION})`);
+    alreadyPrepared = true;
   }
 } catch {
   // A clean checkout has no prepared binary yet.
 }
 
-console.log(`[prepare:innertube] downloading ${assetInfo.name} from ${url}`);
-const response = await fetch(url);
-if (!response.ok || !response.body) {
-  throw new Error(`Failed to download innertube (${response.status} ${response.statusText})`);
-}
+if (!alreadyPrepared) {
+  console.log(`[prepare:innertube] downloading ${assetInfo.name} from ${url}`);
+  const response = await fetch(url);
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download innertube (${response.status} ${response.statusText})`);
+  }
 
-const tempArchive = path.join(resourceDir, `downloaded-innertube.${assetInfo.type === 'zip' ? 'zip' : 'tar.gz'}`);
-await pipeline(Readable.fromWeb(response.body), createWriteStream(tempArchive));
+  const tempArchive = path.join(resourceDir, `downloaded-innertube.${assetInfo.type === 'zip' ? 'zip' : 'tar.gz'}`);
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(tempArchive));
 
-// Extract without extra external npm dependencies using native tools (tar / powershell Expand-Archive)
-if (assetInfo.type === 'zip') {
-  await new Promise((resolve, reject) => {
-    const ps = spawn('powershell', [
-      '-NoProfile',
-      '-Command',
-      `Expand-Archive -Path "${tempArchive}" -DestinationPath "${resourceDir}" -Force`,
-    ], { stdio: 'inherit' });
-    ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive exited with ${code}`)));
-  });
-} else {
-  await new Promise((resolve, reject) => {
-    const proc = spawn('tar', ['-xzf', tempArchive, '-C', resourceDir], { stdio: 'inherit' });
-    proc.on('close', async (code) => {
-      if (code !== 0) return reject(new Error(`tar exited with ${code}`));
-      try {
-        // tar extracts as 'innertube' on Linux/macOS. Ensure consistent 'innertube.exe' name
-        const extractedBinary = path.join(resourceDir, 'innertube');
-        if (outputPath !== extractedBinary) {
-          await rename(extractedBinary, outputPath).catch(() => {});
-        }
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
+  // Extract without extra external npm dependencies using native tools (tar / powershell Expand-Archive)
+  if (assetInfo.type === 'zip') {
+    await new Promise((resolve, reject) => {
+      const ps = spawn('powershell', [
+        '-NoProfile',
+        '-Command',
+        `Expand-Archive -Path "${tempArchive}" -DestinationPath "${resourceDir}" -Force`,
+      ], { stdio: 'inherit' });
+      ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive exited with ${code}`)));
     });
-  });
+  } else {
+    await new Promise((resolve, reject) => {
+      const proc = spawn('tar', ['-xzf', tempArchive, '-C', resourceDir], { stdio: 'inherit' });
+      proc.on('close', async (code) => {
+        if (code !== 0) return reject(new Error(`tar exited with ${code}`));
+        try {
+          // tar extracts as 'innertube' on Linux/macOS. Ensure consistent 'innertube.exe' name
+          const extractedBinary = path.join(resourceDir, 'innertube');
+          if (outputPath !== extractedBinary) {
+            await rename(extractedBinary, outputPath).catch(() => {});
+          }
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  }
+
+  await rm(tempArchive, { force: true });
+
+  if (process.platform !== 'win32') {
+    await chmod(outputPath, 0o755);
+  }
+
+  await writeFile(platformMarkerPath, `${process.platform}-${INNERTUBE_VERSION}\n`);
+  console.log(`[prepare:innertube] bundled ${outputPath}`);
 }
-
-await rm(tempArchive, { force: true });
-
-if (process.platform !== 'win32') {
-  await chmod(outputPath, 0o755);
-}
-
-await writeFile(platformMarkerPath, `${process.platform}-${INNERTUBE_VERSION}\n`);
-console.log(`[prepare:innertube] bundled ${outputPath}`);

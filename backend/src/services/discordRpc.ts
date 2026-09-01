@@ -169,8 +169,12 @@ async function destroyClient() {
 }
 
 process.on('exit', () => { if (client) try { client.destroy(); } catch {} });
-process.on('SIGINT', () => { destroyClient().finally(() => process.exit(0)); });
-process.on('SIGTERM', () => { destroyClient().finally(() => process.exit(0)); });
+// Do NOT call process.exit() here — when running as a Tauri sidecar, the
+// process lifecycle is managed by Tauri.  Calling exit on SIGINT/SIGTERM
+// causes the backend to die prematurely when child processes (innertube.exe,
+// yt-dlp.exe) terminate and propagate signals to the parent.
+process.on('SIGINT', () => { destroyClient(); });
+process.on('SIGTERM', () => { destroyClient(); });
 
 export async function clearDiscordActivity() {
   await destroyClient();
