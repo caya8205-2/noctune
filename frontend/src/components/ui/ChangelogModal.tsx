@@ -36,23 +36,23 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
 const V420_HIGHLIGHTS = [
   {
     title: 'YouTube Channel Community Posts & Gallery Viewer',
-    desc: 'Browse YouTube channel posts, text updates, and photo collages directly inside Noctune under the channel page. View high-resolution artwork, zoom in to inspect details, and download images directly to your machine.',
+    desc: 'Browse YouTube channel posts, text updates, and photo collages directly inside Noctune under the channel page. Click any post image to inspect original, uncropped full-resolution artwork (including landscape and portrait shots) and save them directly to your machine.',
   },
   {
     title: 'Seamless Post Pagination & Lightbox Dismissal',
     desc: 'Load more community posts effortlessly with robust pagination, and enjoy instant one-click dismissal when clicking anywhere outside the lightbox image viewer.',
   },
   {
-    title: 'User-Controlled Telemetry Privacy & Data Retraction',
-    desc: 'You now have full control over your contributed listening data. When submitting telemetry to help train Noctune\'s recommendation model, a private delete token is securely saved on your device, allowing you to withdraw or delete your upload at any time.',
+    title: 'User-Controlled Telemetry Privacy & SHA-256 Token Retraction',
+    desc: 'You now have full control over your contributed listening data. When submitting telemetry to help train Noctune\'s recommendation model, a private delete token is securely generated and stored locally, while the server only verifies its SHA-256 hash to let you withdraw or delete your upload at any time.',
   },
   {
-    title: 'In-App Telemetry Management & Instant Cloud Sync',
-    desc: 'Easily manage your telemetry contribution directly inside Noctune under Debug Dashboard > Tools. Delete your upload with one click, copy your secret delete token, and enjoy instant synchronization whenever contributions are removed.',
+    title: 'In-App Telemetry Management & Cloud Sync',
+    desc: 'Easily manage your telemetry contribution directly inside Noctune under Debug Dashboard > Tools. Delete your upload with one click, or copy your secret delete token and delete manually at the collector web dashboard. Noctune automatically checks remote status in the background and purges your local record if deleted externally.',
   },
   {
-    title: 'Modernized Dataset Collector & Secure Token Verification',
-    desc: 'Upgraded the Cloudflare dataset collector backend with SHA-256 cryptographic token verification, enabling seamless self-service data deletion from both the desktop app and the web collector dashboard.',
+    title: 'Collector Web Dashboard Shortcut',
+    desc: 'Added a direct shortcut button next to Trained Dataset in the Debug Dashboard header, allowing you to open the Cloudflare Dataset Collector web interface in your browser with a single click.',
   },
 ];
 
