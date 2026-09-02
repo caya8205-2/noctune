@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Copy, RotateCw, Music2, Ban, Save, FileText,
-  Wifi, HardDrive, List, X, Brain, UploadCloud
+  Wifi, HardDrive, List, X, Brain, UploadCloud, ExternalLink
 } from 'lucide-react';
 import {
   debugApi, discoverBackend,
@@ -12,6 +12,7 @@ import {
 } from './api';
 import { usePlayerStore } from '../store/player';
 import type { CachedTrack } from '../utils/api';
+import { openExternalUrl } from '../hooks/useUpdateChecker';
 
 type Tab = 'resolver' | 'lyrics' | 'status' | 'tools';
 
@@ -2361,6 +2362,15 @@ function MlModelPanel() {
               Trained Dataset ({stats.seedTrackCount.toLocaleString()} tracks)
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => openExternalUrl('https://noctune-dataset-collector.caya8205.workers.dev').catch(console.error)}
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-base-900/60 px-2 py-0.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors"
+            title="Open Cloudflare Dataset Collector Web Dashboard"
+          >
+            <ExternalLink size={11} className="text-muted" />
+            <span>Collector Dashboard</span>
+          </button>
         </div>
         <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh ML Status">
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
