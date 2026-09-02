@@ -53,6 +53,9 @@ export function ArtworkLightboxModal({
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const clickedOnImageRef = useRef(false);
   const panStartRef = useRef<{ pointerX: number; pointerY: number; panX: number; panY: number } | null>(null);
   const panMovedRef = useRef(false);
 
@@ -220,51 +223,75 @@ export function ArtworkLightboxModal({
 
         {/* High-Res Image Viewport */}
         <div
-          className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden p-4 sm:p-8"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              if (panMovedRef.current) {
-                panMovedRef.current = false;
-                return;
-              }
-              onClose();
+          className={clsx(
+            'relative flex h-full w-full touch-none items-center justify-center overflow-hidden p-4 sm:p-8',
+            isDragging && '!cursor-grabbing'
+          )}
+          style={isDragging ? { cursor: 'grabbing' } : undefined}
+          onClick={() => {
+            const wasOnImage = clickedOnImageRef.current;
+            const hadMoved = panMovedRef.current;
+            clickedOnImageRef.current = false;
+            panMovedRef.current = false;
+
+            if (hadMoved) {
+              return;
             }
+
+            if (wasOnImage) {
+              setZoomLevel(zoom >= 3 ? 1 : zoom + 0.5);
+              return;
+            }
+
+            onClose();
           }}
           onPointerDown={(event) => {
-            if (zoom === 1) return;
+            const isTargetImage = imageRef.current && (
+              event.target === imageRef.current || imageRef.current.contains(event.target as Node)
+            );
+            clickedOnImageRef.current = !!isTargetImage;
+
+            if (zoom === 1 || !isTargetImage) return;
+
             event.currentTarget.setPointerCapture(event.pointerId);
             panMovedRef.current = false;
+            setIsDragging(true);
             panStartRef.current = { pointerX: event.clientX, pointerY: event.clientY, panX: pan.x, panY: pan.y };
           }}
           onPointerMove={(event) => {
             const start = panStartRef.current;
             if (!start) return;
-            if (Math.abs(event.clientX - start.pointerX) > 3 || Math.abs(event.clientY - start.pointerY) > 3) {
+            const dx = event.clientX - start.pointerX;
+            const dy = event.clientY - start.pointerY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
               panMovedRef.current = true;
             }
-            setPan({ x: start.panX + event.clientX - start.pointerX, y: start.panY + event.clientY - start.pointerY });
+            setPan({ x: start.panX + dx, y: start.panY + dy });
           }}
           onPointerUp={(event) => {
             panStartRef.current = null;
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+            setIsDragging(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
           }}
-          onPointerCancel={() => { panStartRef.current = null; }}
+          onPointerCancel={() => {
+            panStartRef.current = null;
+            setIsDragging(false);
+          }}
           onWheel={(event) => {
             setZoomLevel(zoom - event.deltaY * 0.001);
           }}
         >
           <img
+            ref={imageRef}
             src={displayImageUrl}
             alt={title}
-            className={clsx('max-h-[58vh] max-w-[62vw] select-none object-contain shadow-2xl transition-none sm:max-h-[64vh] sm:max-w-[68vw]', zoom !== 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in')}
+            className={clsx(
+              'max-h-[58vh] max-w-[62vw] select-none object-contain shadow-2xl transition-none sm:max-h-[64vh] sm:max-w-[68vw]',
+              isDragging ? '!cursor-grabbing' : zoom !== 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'
+            )}
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-            onClick={() => {
-              if (panMovedRef.current) {
-                panMovedRef.current = false;
-                return;
-              }
-              setZoomLevel(zoom >= 3 ? 1 : zoom + 0.5);
-            }}
             draggable={false}
             onError={() => {
               if (displayImageUrl !== imageUrl) setDisplayImageUrl(imageUrl);
