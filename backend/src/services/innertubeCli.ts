@@ -126,40 +126,81 @@ export async function resolveAudioUrlWithInnertube(
   };
 }
 
+interface RawInnertubeVideoDetails {
+  videoId?: string;
+  title?: string;
+  author?: string;
+  channelId?: string;
+  lengthSeconds?: string | number;
+  thumbnail?: {
+    thumbnails?: Array<{ url: string; width?: number; height?: number }>;
+  };
+}
+
+interface RawInnertubeVideoInfo {
+  videoDetails?: RawInnertubeVideoDetails;
+  id?: string;
+  title?: string;
+  author?: string;
+  channelId?: string;
+  durationSeconds?: number;
+  thumbnailUrl?: string;
+}
+
+function parseInnertubeTrack(
+  rawInfo: RawInnertubeVideoInfo | null | undefined,
+  cleanId: string,
+  originalQuery: string
+): Track {
+  const details = rawInfo?.videoDetails;
+  const channelCandidate = (details?.channelId || rawInfo?.channelId)?.trim();
+  const artistId = channelCandidate
+    ? (channelCandidate.startsWith('ytchannel:') ? channelCandidate : `ytchannel:${channelCandidate}`)
+    : undefined;
+
+  const thumbs = details?.thumbnail?.thumbnails;
+  const lastThumb = Array.isArray(thumbs) && thumbs.length > 0 ? thumbs[thumbs.length - 1]?.url : undefined;
+  const thumbnail = lastThumb || rawInfo?.thumbnailUrl || '';
+  const title = details?.title || rawInfo?.title || originalQuery || 'Unknown Title';
+  const author = details?.author || rawInfo?.author || 'Unknown Artist';
+  const duration = Number(details?.lengthSeconds ?? rawInfo?.durationSeconds ?? 0);
+
+  return {
+    id: cleanId,
+    title,
+    artist: author,
+    artistId,
+    album: '',
+    duration: Number.isFinite(duration) ? duration : 0,
+    thumbnail,
+    query: originalQuery || cleanId,
+    youtubeId: cleanId,
+    youtubeTitle: title,
+    youtubeArtist: author,
+  };
+}
+
+export async function getYoutubeTrackWithInnertube(
+  videoId: string,
+  originalQuery = videoId
+): Promise<Track> {
+  const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  const rawInfo = await execInnertubeCli<RawInnertubeVideoInfo>(['info', cleanId]).catch(() => null);
+  return parseInnertubeTrack(rawInfo, cleanId, originalQuery);
+}
+
 export async function resolveTrackWithInnertube(
   videoId: string,
   originalQuery: string,
   preference: AudioQualityPreference = 'high'
 ): Promise<{ track: Track; audio: AudioStreamInfo }> {
-  interface InfoCliOutput {
-    id: string;
-    title: string;
-    author: string;
-    channelId?: string;
-    durationSeconds: number;
-    thumbnailUrl?: string;
-  }
-
   const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
-  const [audio, info] = await Promise.all([
+  const [audio, rawInfo] = await Promise.all([
     resolveAudioUrlWithInnertube(cleanId, preference),
-    execInnertubeCli<InfoCliOutput>(['info', cleanId]).catch(() => null),
+    execInnertubeCli<RawInnertubeVideoInfo>(['info', cleanId]).catch(() => null),
   ]);
 
-  const track: Track = {
-    id: cleanId,
-    title: info?.title || originalQuery || 'Unknown Title',
-    artist: info?.author || 'Unknown Artist',
-    artistId: info?.channelId,
-    album: '',
-    duration: info?.durationSeconds || 0,
-    thumbnail: info?.thumbnailUrl || '',
-    query: originalQuery || cleanId,
-    youtubeId: cleanId,
-    youtubeTitle: info?.title,
-    youtubeArtist: info?.author,
-  };
-
+  const track = parseInnertubeTrack(rawInfo, cleanId, originalQuery);
   return { track, audio };
 }
 
@@ -178,17 +219,24 @@ export async function searchTracksWithInnertube(query: string, limit = 10): Prom
 
   const results = await execInnertubeCli<SearchItemCli[]>(['search', query, '--limit', String(limit)]);
 
-  return (results || []).map((v) => ({
-    id: v.id,
-    title: v.title,
-    artist: v.artist || v.author || 'Unknown Artist',
-    artistId: v.channelId,
-    album: '',
-    duration: v.duration || v.durationSeconds || 0,
-    thumbnail: v.thumbnail || v.thumbnailUrl || '',
-    query,
-    youtubeId: v.id,
-    youtubeTitle: v.title,
-    youtubeArtist: v.artist || v.author,
-  }));
+  return (results || []).map((v) => {
+    const channelCandidate = v.channelId?.trim();
+    const artistId = channelCandidate
+      ? (channelCandidate.startsWith('ytchannel:') ? channelCandidate : `ytchannel:${channelCandidate}`)
+      : undefined;
+
+    return {
+      id: v.id,
+      title: v.title,
+      artist: v.artist || v.author || 'Unknown Artist',
+      artistId,
+      album: '',
+      duration: v.duration || v.durationSeconds || 0,
+      thumbnail: v.thumbnail || v.thumbnailUrl || '',
+      query,
+      youtubeId: v.id,
+      youtubeTitle: v.title,
+      youtubeArtist: v.artist || v.author,
+    };
+  });
 }

@@ -34,7 +34,7 @@ const qc = new QueryClient({
 
 function viewRouteId(
   view: ReturnType<typeof usePlayerStore.getState>['activeView'],
-  ids: { playlistId: string | null; artistId: string | null; albumId: string | null; channelTab?: 'videos' | 'playlists' }
+  ids: { playlistId: string | null; artistId: string | null; albumId: string | null; channelTab?: 'videos' | 'playlists' | 'posts' }
 ): string {
   if (view === 'playlist') return ids.playlistId || 'playlist';
   if (view === 'artist') return `${ids.artistId || 'artist'}:${ids.channelTab ?? 'videos'}`;

@@ -4,6 +4,12 @@ All notable Noctune changes are documented here.
 
 ## v4.2.0 - 2026-09-02
 
+### YouTube Channel Community Posts & Artwork Viewer
+- **YouTube Channel Posts Tab Support**: Added native channel Community Posts view in `ArtistView`, exposing posts, announcements, multi-image collages, video links, like counts, and published timestamps with automated poll filtering.
+- **Paginated Posts Loading via InnerTube**: Integrated native `/browse` endpoint routing (`params: "EgVwb3N0c_IGBAoCSgA%3D"`) in `youtube_channel.rs` with robust recursive parsing across initial browse trees and `appendContinuationItemsAction.continuationItems` for smooth "Load More" pagination.
+- **Interactive Artwork Lightbox for Community Posts**: Connected post images to `ArtworkLightboxModal`, allowing high-resolution inspection, panning, zooming, and direct image downloading with quick backdrop/outside-click dismissal.
+- **Channel Navigation & In-Process Resolution**: Updated YouTube metadata and channel resolution in `api.ts` and `innertubeCli.ts` to directly recognize `@handle` and `UC...` identifiers, resolving channels in-process via Tauri without redundant HTTP requests.
+
 ### Features & Privacy Controls
 - **User Telemetry Management & Token-Based Retraction**: Introduced user data privacy controls for anonymous ML listening telemetry submissions. When contributing listening data via "Help Improve ML Model", a unique device delete token is securely generated and persisted locally in `telemetry-submission.json` within AppData Roaming.
 - **In-App Telemetry Deletion & Token Export**: Added dedicated "Delete My Upload" and "Copy Delete Token" actions directly within the ML Recommendation Sandbox in Debug Dashboard (Tools tab), allowing users to retract submitted datasets at any time without admin intervention.

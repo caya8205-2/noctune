@@ -56,7 +56,7 @@ interface PlayerState {
   personalMixesMap: Record<string, PersonalMix>;
   activeArtistId: string | null;
   activeAlbumId: string | null;
-  activeChannelTab: 'videos' | 'playlists';
+  activeChannelTab: 'videos' | 'playlists' | 'posts';
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   sidebarCompact: boolean;
@@ -95,7 +95,7 @@ interface PlayerState {
   setPlaybackRate: (rate: number) => void;
   setSleepTimer: (minutes: number | null) => void;
   setCrossfadeDuration: (seconds: number) => void;
-  setView: (view: PlayerState['activeView'], id?: string, channelTab?: 'videos' | 'playlists') => void;
+  setView: (view: PlayerState['activeView'], id?: string, channelTab?: 'videos' | 'playlists' | 'posts') => void;
   openPersonalMix: (mix: PersonalMix) => void;
   setLoading: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;

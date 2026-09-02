@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, ListMusic, Maximize2, Music2, Users } from 'lucide-react';
-import { useState } from 'react';
-import { api, isTrackActive, type Track } from '../../utils/api';
+import { ArrowLeft, ExternalLink, ListMusic, Maximize2, MessageSquare, Music2, ThumbsUp, Users } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { api, isTrackActive, type ChannelPost, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -13,7 +13,7 @@ function compactNumber(n: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { notation: 'compact' }).format(n);
 }
 
-export const channelTabByArtist = new Map<string, 'videos' | 'playlists'>();
+export const channelTabByArtist = new Map<string, 'videos' | 'playlists' | 'posts'>();
 
 function ArtistTrackText({
   track,
@@ -77,9 +77,14 @@ function ArtistTrackText({
 }
 
 export function ArtistView({ artistId }: { artistId: string }) {
-  const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{
+    url: string;
+    title: string;
+    artist: string;
+    album?: string;
+  } | null>(null);
   const { playTrack, currentTrack, isPlaying, setView, activeChannelTab } = usePlayerStore();
-  const cleanArtistId = artistId.replace(/:(videos|playlists)$/, '');
+  const cleanArtistId = artistId.replace(/:(videos|playlists|posts)$/, '');
   const channelTab = activeChannelTab ?? 'videos';
   const isYouTubeChannelId = cleanArtistId.startsWith('ytchannel:') || cleanArtistId.startsWith('UC') || cleanArtistId.startsWith('@');
 
@@ -90,7 +95,46 @@ export function ArtistView({ artistId }: { artistId: string }) {
     refetchOnMount: true,
   });
 
-  function changeChannelTab(tab: 'videos' | 'playlists') {
+  // ── Posts lazy-fetch state ──
+  const [posts, setPosts] = useState<ChannelPost[]>([]);
+  const [postsContinuation, setPostsContinuation] = useState<string | null>(null);
+  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+
+  const { isLoading: postsLoading } = useQuery({
+    queryKey: ['channel-posts', cleanArtistId],
+    queryFn: async () => {
+      const result = await api.getChannelPosts(cleanArtistId);
+      setPosts(result.posts);
+      setPostsContinuation(result.continuationToken);
+      return result;
+    },
+    enabled: isYouTubeChannelId && channelTab === 'posts',
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Reset posts state when channel changes
+  useEffect(() => {
+    setPosts([]);
+    setPostsContinuation(null);
+  }, [cleanArtistId]);
+
+  const handleLoadMorePosts = useCallback(async () => {
+    if (!postsContinuation || postsLoadingMore) return;
+    setPostsLoadingMore(true);
+    try {
+      const result = await api.getChannelPosts(cleanArtistId, postsContinuation);
+      setPosts((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const newPosts = result.posts.filter((p) => !existingIds.has(p.id));
+        return [...prev, ...newPosts];
+      });
+      setPostsContinuation(result.continuationToken);
+    } finally {
+      setPostsLoadingMore(false);
+    }
+  }, [cleanArtistId, postsContinuation, postsLoadingMore]);
+
+  function changeChannelTab(tab: 'videos' | 'playlists' | 'posts') {
     if (!isYouTubeChannelId || tab === channelTab) return;
     setView('artist', cleanArtistId, tab);
   }
@@ -123,12 +167,13 @@ export function ArtistView({ artistId }: { artistId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {showLightbox && data.image && (
+      {lightboxImage && (
         <ArtworkLightboxModal
-          imageUrl={data.image}
-          title={data.name}
-          artist={isYouTubeChannel ? 'Channel Avatar' : 'Artist Profile'}
-          onClose={() => setShowLightbox(false)}
+          imageUrl={lightboxImage.url}
+          title={lightboxImage.title}
+          artist={lightboxImage.artist}
+          album={lightboxImage.album}
+          onClose={() => setLightboxImage(null)}
         />
       )}
       {/* Header */}
@@ -155,7 +200,11 @@ export function ArtistView({ artistId }: { artistId: string }) {
           {data.image ? (
             <button
               type="button"
-              onClick={() => setShowLightbox(true)}
+              onClick={() => setLightboxImage({
+                url: data.image!,
+                title: data.name,
+                artist: isYouTubeChannel ? 'Channel Avatar' : 'Artist Profile',
+              })}
               className="group relative h-28 w-28 flex-shrink-0 self-start rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
               title="Click to view artwork"
             >
@@ -251,6 +300,18 @@ export function ArtistView({ artistId }: { artistId: string }) {
               <span className={clsx('font-mono text-[10px] tabular-nums', channelTab === 'playlists' ? 'text-accent' : 'text-base-500')}>
                 {data.channelPlaylists?.length ?? 0}
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => changeChannelTab('posts')}
+              className={clsx(
+                '-mb-px inline-flex items-center gap-2 border-b-2 px-0.5 py-2.5 text-xs font-semibold uppercase tracking-[0.13em] transition-colors',
+                channelTab === 'posts'
+                  ? 'border-accent text-white'
+                  : 'border-transparent text-muted hover:border-white/20 hover:text-soft'
+              )}
+            >
+              Posts
             </button>
           </div>
         )}
@@ -382,6 +443,159 @@ export function ArtistView({ artistId }: { artistId: string }) {
                 <ListMusic size={27} strokeWidth={1.3} />
               </div>
               <p className="text-center text-sm">No public playlists found on this YouTube channel.</p>
+            </div>
+          )
+        )}
+
+        {isYouTubeChannel && channelTab === 'posts' && (
+          postsLoading ? (
+            <div className="flex min-h-[18rem] items-center justify-center">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            </div>
+          ) : posts.length > 0 ? (
+            <section className="space-y-4">
+              {posts.map((post) => (
+                <article
+                  key={post.id}
+                  className="rounded-xl border border-white/[0.06] bg-base-800/50 p-4"
+                >
+                  {/* Author + time */}
+                  <div className="mb-2.5 flex items-center gap-2.5">
+                    {post.authorAvatar ? (
+                      <img
+                        src={post.authorAvatar}
+                        alt=""
+                        className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    ) : (
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-base-700">
+                        <Users size={14} className="text-muted" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {post.authorName && (
+                        <p className="truncate text-sm font-medium text-white">{post.authorName}</p>
+                      )}
+                      {post.publishedTime && (
+                        <p className="text-[11px] text-muted">{post.publishedTime}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Content text */}
+                  {post.contentText && (
+                    <p className="mb-3 whitespace-pre-line text-sm leading-relaxed text-soft">
+                      {post.contentText}
+                    </p>
+                  )}
+
+                  {/* Images */}
+                  {post.images.length > 0 && (
+                    <div
+                      className={clsx(
+                        'mb-3 gap-1.5 overflow-hidden rounded-lg',
+                        post.images.length === 1 ? 'grid grid-cols-1' : 'grid grid-cols-2',
+                      )}
+                    >
+                      {post.images.map((url, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setLightboxImage({
+                            url,
+                            title: post.contentText
+                              ? (post.contentText.length > 60 ? `${post.contentText.slice(0, 60)}…` : post.contentText)
+                              : (post.authorName ? `${post.authorName} Post` : 'Community Post'),
+                            artist: post.authorName ?? data.name,
+                            album: 'YouTube Community',
+                          })}
+                          className="group relative block w-full overflow-hidden bg-base-700 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+                          title="Click to view artwork"
+                        >
+                          <img
+                            src={url}
+                            alt=""
+                            className={clsx(
+                              'w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]',
+                              post.images.length === 1 ? 'max-h-96' : 'aspect-square',
+                            )}
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 text-xs font-medium">
+                            <Maximize2 size={16} />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Video embed thumbnail */}
+                  {post.videoId && (
+                    <div className="mb-3 overflow-hidden rounded-lg bg-base-700">
+                      <div className="relative aspect-video">
+                        <img
+                          src={`https://i.ytimg.com/vi/${post.videoId}/hqdefault.jpg`}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => (e.currentTarget.style.display = 'none')}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+                            <div className="ml-0.5 h-0 w-0 border-l-[10px] border-t-[6px] border-b-[6px] border-l-white border-t-transparent border-b-transparent" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Counts */}
+                  {(post.voteCount || post.commentCount) && (
+                    <div className="flex items-center gap-4 text-[11px] text-muted">
+                      {post.voteCount && (
+                        <span className="flex items-center gap-1">
+                          <ThumbsUp size={12} />
+                          {post.voteCount}
+                        </span>
+                      )}
+                      {post.commentCount && (
+                        <span className="flex items-center gap-1">
+                          <MessageSquare size={12} />
+                          {post.commentCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </article>
+              ))}
+
+              {/* Load More */}
+              {postsContinuation && (
+                <div className="flex justify-center pt-2 pb-4">
+                  <button
+                    type="button"
+                    onClick={handleLoadMorePosts}
+                    disabled={postsLoadingMore}
+                    className="btn-ghost gap-2 rounded-lg border border-white/10 px-5 py-2 text-xs font-medium text-soft transition-colors hover:border-white/20 hover:text-white disabled:opacity-50"
+                  >
+                    {postsLoadingMore ? (
+                      <>
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                        Loading…
+                      </>
+                    ) : (
+                      'Load More'
+                    )}
+                  </button>
+                </div>
+              )}
+            </section>
+          ) : (
+            <div className="flex min-h-[18rem] flex-col items-center justify-center gap-3 text-muted">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-base-600/30 bg-base-800">
+                <MessageSquare size={27} strokeWidth={1.3} />
+              </div>
+              <p className="text-center text-sm">No community posts found on this YouTube channel.</p>
             </div>
           )
         )}

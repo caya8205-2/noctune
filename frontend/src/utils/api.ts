@@ -190,8 +190,41 @@ export const api = {
     request<{ ok: boolean }>('/rpc/activity', { method: 'DELETE' }),
   spotifyMetadata: (spotifyId: string) =>
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
-  youtubeMetadata: (videoId: string) =>
-    request<Track>(`/metadata/youtube/${encodeURIComponent(videoId.replace(/^(youtube|ytdlp):/, ''))}`),
+  youtubeMetadata: async (videoId: string) => {
+    const cleanId = videoId.replace(/^(youtube|ytdlp):/, '');
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const info = await invoke<{
+          id: string;
+          title: string;
+          artist: string;
+          artistId?: string;
+          duration: number;
+          thumbnail: string;
+          youtubeId: string;
+        }>('get_video_metadata', { videoId: cleanId });
+        const channelCandidate = info.artistId?.trim();
+        const artistId = channelCandidate
+          ? (channelCandidate.startsWith('ytchannel:') ? channelCandidate : `ytchannel:${channelCandidate}`)
+          : undefined;
+        return {
+          id: info.id,
+          title: info.title,
+          artist: info.artist,
+          artistId,
+          album: '',
+          duration: info.duration,
+          thumbnail: info.thumbnail,
+          query: cleanId,
+          youtubeId: info.youtubeId,
+        } as Track;
+      } catch (err) {
+        console.warn('[api] Tauri get_video_metadata failed, falling back to server:', err);
+      }
+    }
+    return request<Track>(`/metadata/youtube/${encodeURIComponent(cleanId)}`);
+  },
 
   resolve: (videoId: string, query?: string, youtubeId?: string) => {
     const params = new URLSearchParams();
@@ -266,6 +299,20 @@ export const api = {
       }
     }
     return request<ArtistView>(`/browse/artist/${encodeURIComponent(cleanId)}`);
+  },
+  getChannelPosts: async (channelId: string, continuationToken?: string): Promise<ChannelPostsResult> => {
+    if (detectTauriEnvironment()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<ChannelPostsResult>('get_channel_posts', {
+          channelId,
+          continuationToken: continuationToken ?? null,
+        });
+      } catch (err) {
+        console.warn('[api] Tauri get_channel_posts failed:', err);
+      }
+    }
+    return { posts: [], continuationToken: null };
   },
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
@@ -411,10 +458,10 @@ export const api = {
 export async function resolveYouTubeChannelId(track: Track): Promise<string | undefined> {
   const isYouTubeTrack = Boolean(track.youtubeId || track.id.startsWith('youtube:') || track.id.startsWith('ytdlp:'));
   if (track.artistId && !track.artistId.startsWith('ytchannel:') && !isYouTubeTrack) return track.artistId;
-  if (track.artistId?.startsWith('ytchannel:')) {
+  if (track.artistId) {
     const channelRef = track.artistId.replace(/^ytchannel:/, '').trim();
     if (/^UC[A-Za-z0-9_-]{22}$/.test(channelRef) || /^@[A-Za-z0-9._-]+$/.test(channelRef)) {
-      return track.artistId;
+      return `ytchannel:${channelRef}`;
     }
   }
   if (track.spotifyId) {
@@ -427,7 +474,12 @@ export async function resolveYouTubeChannelId(track: Track): Promise<string | un
   }
   try {
     const youtubeId = track.youtubeId ?? track.id.replace(/^(youtube|ytdlp):/, '');
-    return (await api.youtubeMetadata(youtubeId)).artistId;
+    const meta = await api.youtubeMetadata(youtubeId);
+    if (!meta?.artistId) return undefined;
+    const channelRef = meta.artistId.replace(/^ytchannel:/, '').trim();
+    return (/^UC[A-Za-z0-9_-]{22}$/.test(channelRef) || /^@[A-Za-z0-9._-]+$/.test(channelRef))
+      ? `ytchannel:${channelRef}`
+      : meta.artistId;
   } catch (error) {
     console.warn('YouTube channel metadata unavailable:', error);
     return undefined;
@@ -616,6 +668,23 @@ export interface ArtistView {
   topTracks: Track[];
   albums: ArtistAlbum[];
   channelPlaylists?: Array<{ id: string; name: string; totalTracks: number; image: string | null; url: string }>;
+}
+
+export interface ChannelPost {
+  id: string;
+  authorName: string | null;
+  authorAvatar: string | null;
+  contentText: string;
+  publishedTime: string | null;
+  voteCount: string | null;
+  commentCount: string | null;
+  images: string[];
+  videoId: string | null;
+}
+
+export interface ChannelPostsResult {
+  posts: ChannelPost[];
+  continuationToken: string | null;
 }
 
 export interface AlbumTrack extends Track {

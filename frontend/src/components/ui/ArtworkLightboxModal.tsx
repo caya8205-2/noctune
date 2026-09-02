@@ -138,7 +138,12 @@ export function ArtworkLightboxModal({
     <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md animate-fade-in" onClick={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <div className="relative flex h-full w-full flex-col overflow-hidden">
+      <div
+        className="relative flex h-full w-full flex-col overflow-hidden"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
         {/* Header Controls */}
         <div className="absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-3 sm:left-6 sm:right-6 sm:top-6">
           <div className="rounded-xl border border-white/10 bg-base-950/75 px-3 py-2 text-xs font-semibold text-accent shadow-xl backdrop-blur-md">
@@ -192,6 +197,15 @@ export function ArtworkLightboxModal({
         {/* High-Res Image Viewport */}
         <div
           className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden p-4 sm:p-8"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              if (panMovedRef.current) {
+                panMovedRef.current = false;
+                return;
+              }
+              onClose();
+            }
+          }}
           onPointerDown={(event) => {
             if (zoom === 1) return;
             event.currentTarget.setPointerCapture(event.pointerId);

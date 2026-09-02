@@ -1,6 +1,7 @@
 import type { AudioQualityPreference, AudioStreamInfo, Track } from '../types/index.js';
 import {
   isInnertubeCliAvailable,
+  getYoutubeTrackWithInnertube,
   resolveAudioUrlWithInnertube,
   resolveTrackWithInnertube,
   searchTracksWithInnertube,
@@ -45,8 +46,7 @@ const innertubeResolver: AudioResolver = {
     }
   },
   getYoutubeTrack: async (urlOrVideoId, originalQuery) => {
-    const { track } = await resolveTrackWithInnertube(urlOrVideoId, originalQuery || urlOrVideoId);
-    return track;
+    return await getYoutubeTrackWithInnertube(urlOrVideoId, originalQuery || urlOrVideoId);
   },
   getYoutubePlaylistTracks: ytdlpGetYoutubePlaylistTracks,
   resolveAudioUrl: resolveAudioUrlWithInnertube,
@@ -112,8 +112,7 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
 export async function getYoutubeTrack(urlOrVideoId: string, originalQuery?: string): Promise<Track> {
   try {
     if (isInnertubeCliAvailable()) {
-      const { track } = await resolveTrackWithInnertube(urlOrVideoId, originalQuery || urlOrVideoId);
-      return track;
+      return await getYoutubeTrackWithInnertube(urlOrVideoId, originalQuery || urlOrVideoId);
     }
     return await ytdlpGetYoutubeTrack(urlOrVideoId, originalQuery);
   } catch (err) {

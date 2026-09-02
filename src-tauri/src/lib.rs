@@ -5,7 +5,7 @@ use innertube_service::{
     get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
     InnertubeState,
 };
-use youtube_channel::{get_youtube_channel, get_youtube_playlist};
+use youtube_channel::{get_youtube_channel, get_youtube_playlist, get_channel_posts};
 
 use std::process::Command;
 #[cfg(not(debug_assertions))]
@@ -78,6 +78,7 @@ pub fn run() {
             open_external_url,
             get_youtube_channel,
             get_youtube_playlist,
+            get_channel_posts,
             resolve_audio_stream,
             get_video_metadata,
             search_youtube_tracks,

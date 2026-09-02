@@ -2,6 +2,9 @@ use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_LANGUAGE, CONTENT_TYPE, USE
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashSet;
+use tauri::State;
+
+use crate::innertube_service::InnertubeState;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +51,27 @@ pub struct YouTubePlaylistView {
     pub name: String,
     pub image: Option<String>,
     pub tracks: Vec<ChannelTrack>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPost {
+    pub id: String,
+    pub author_name: Option<String>,
+    pub author_avatar: Option<String>,
+    pub content_text: String,
+    pub published_time: Option<String>,
+    pub vote_count: Option<String>,
+    pub comment_count: Option<String>,
+    pub images: Vec<String>,
+    pub video_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPostsResult {
+    pub posts: Vec<ChannelPost>,
+    pub continuation_token: Option<String>,
 }
 
 fn clean_url(url_str: &str) -> String {
@@ -709,5 +733,239 @@ pub async fn get_youtube_playlist(playlist_id: String) -> Result<YouTubePlaylist
         name: playlist_name,
         image: cover_image,
         tracks,
+    })
+}
+
+// ── Channel Community Posts (via innertube-rs InnerTube API) ──────────────────
+
+/// Resolve a channel handle or bare name to its UC… channel ID.
+/// If the input already starts with "UC", it is returned as-is.
+async fn resolve_to_uc_id(clean_id: &str) -> Result<String, String> {
+    if clean_id.starts_with("UC") {
+        return Ok(clean_id.to_string());
+    }
+
+    let url = if clean_id.starts_with('@') {
+        format!("https://www.youtube.com/{}", clean_id)
+    } else {
+        format!("https://www.youtube.com/@{}", clean_id)
+    };
+
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        ),
+    );
+
+    let resp = client
+        .get(&url)
+        .headers(headers)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch channel page: {}", e))?;
+    let html = resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read channel page: {}", e))?;
+
+    if let Some(json_val) = extract_yt_initial_data(&html) {
+        if let Some(external_id) = json_val
+            .pointer("/metadata/channelMetadataRenderer/externalId")
+            .and_then(|v| v.as_str())
+        {
+            if external_id.starts_with("UC") {
+                return Ok(external_id.to_string());
+            }
+        }
+    }
+
+    Err("Could not resolve channel ID".to_string())
+}
+
+fn extract_channel_posts(
+    val: &Value,
+    posts: &mut Vec<ChannelPost>,
+    continuation_token: &mut Option<String>,
+) {
+    // Skip headers and engagement panels so we do not accidentally extract unrelated tokens
+    if val.get("engagementPanelSectionListRenderer").is_some() {
+        return;
+    }
+
+    if let Some(obj) = val.as_object() {
+        // 1. Look for continuationItemRenderer
+        if continuation_token.is_none() {
+            if let Some(c) = obj.get("continuationItemRenderer") {
+                if let Some(token) = c
+                    .pointer("/continuationEndpoint/continuationCommand/token")
+                    .and_then(|t| t.as_str())
+                {
+                    *continuation_token = Some(token.to_string());
+                }
+            }
+        }
+
+        // 2. Look for post renderers
+        let post_node = obj
+            .get("backstagePostRenderer")
+            .or_else(|| obj.get("postRenderer"))
+            .or_else(|| obj.get("sharedPostRenderer"))
+            .or_else(|| obj.get("backstagePostThreadRenderer").and_then(|t| t.pointer("/post/backstagePostRenderer")));
+
+        if let Some(p) = post_node {
+            if let Some(id) = p.get("postId").or_else(|| p.get("id")).and_then(|v| v.as_str()) {
+                let has_poll = p.pointer("/backstageAttachment/pollRenderer").is_some();
+                if !has_poll {
+                    let author_name = p
+                        .pointer("/authorText/runs/0/text")
+                        .or_else(|| p.pointer("/authorText/simpleText"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let author_avatar = p
+                        .pointer("/authorThumbnail/thumbnails")
+                        .and_then(|t| t.as_array())
+                        .and_then(|arr| arr.last())
+                        .and_then(|t| t.get("url"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let content_text = if let Some(runs) = p.pointer("/contentText/runs").and_then(|r| r.as_array()) {
+                        runs.iter()
+                            .filter_map(|r| r.get("text").and_then(|t| t.as_str()))
+                            .collect::<Vec<_>>()
+                            .join("")
+                    } else {
+                        p.pointer("/contentText/simpleText")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string()
+                    };
+
+                    let published_time = p
+                        .pointer("/publishedTimeText/runs/0/text")
+                        .or_else(|| p.pointer("/publishedTimeText/simpleText"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let vote_count = p
+                        .pointer("/voteCount/simpleText")
+                        .or_else(|| p.pointer("/voteCount/runs/0/text"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let comment_count = p
+                        .pointer("/actionButtons/commentActionButtonsRenderer/replyButton/buttonRenderer/text/simpleText")
+                        .or_else(|| p.pointer("/actionButtons/commentActionButtonsRenderer/replyButton/buttonRenderer/text/runs/0/text"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let mut images = Vec::new();
+                    if let Some(bi) = p.pointer("/backstageAttachment/backstageImageRenderer") {
+                        if let Some(url) = bi
+                            .pointer("/image/thumbnails")
+                            .and_then(|t| t.as_array())
+                            .and_then(|arr| arr.last())
+                            .and_then(|t| t.get("url"))
+                            .and_then(|v| v.as_str())
+                        {
+                            images.push(url.to_string());
+                        }
+                    } else if let Some(pmi) = p
+                        .pointer("/backstageAttachment/postMultiImageRenderer/images")
+                        .and_then(|i| i.as_array())
+                    {
+                        for img in pmi {
+                            if let Some(url) = img
+                                .pointer("/backstageImageRenderer/image/thumbnails")
+                                .and_then(|t| t.as_array())
+                                .and_then(|arr| arr.last())
+                                .and_then(|t| t.get("url"))
+                                .and_then(|v| v.as_str())
+                            {
+                                images.push(url.to_string());
+                            }
+                        }
+                    }
+
+                    let video_id = p
+                        .pointer("/backstageAttachment/videoRenderer/videoId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    posts.push(ChannelPost {
+                        id: id.to_string(),
+                        author_name,
+                        author_avatar,
+                        content_text,
+                        published_time,
+                        vote_count,
+                        comment_count,
+                        images,
+                        video_id,
+                    });
+                }
+            }
+        }
+
+        for (_, v) in obj {
+            extract_channel_posts(v, posts, continuation_token);
+        }
+    } else if let Some(arr) = val.as_array() {
+        for v in arr {
+            extract_channel_posts(v, posts, continuation_token);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_channel_posts(
+    channel_id: String,
+    continuation_token: Option<String>,
+    state: State<'_, InnertubeState>,
+) -> Result<ChannelPostsResult, String> {
+    let client = state.get_or_init().await?;
+
+    let payload = if let Some(ref token) = continuation_token {
+        json!({
+            "continuation": token,
+        })
+    } else {
+        let clean_id = channel_id
+            .trim_start_matches("ytchannel:")
+            .trim_start_matches("youtube:")
+            .trim_start_matches("channel:")
+            .to_string();
+
+        let uc_id = resolve_to_uc_id(&clean_id).await?;
+
+        json!({
+            "browseId": uc_id,
+            "params": "EgVwb3N0c_IGBAoCSgA%3D", // YouTube Posts tab params
+        })
+    };
+
+    let resp = client
+        .session
+        .post_innertube("/browse", payload)
+        .await
+        .map_err(|e| format!("Failed to fetch community posts: {}", e))?;
+
+    let raw: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse community posts response: {}", e))?;
+
+    let mut posts = Vec::new();
+    let mut next_continuation_token = None;
+    extract_channel_posts(&raw, &mut posts, &mut next_continuation_token);
+
+    Ok(ChannelPostsResult {
+        posts,
+        continuation_token: next_continuation_token,
     })
 }

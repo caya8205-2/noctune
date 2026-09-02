@@ -35,6 +35,14 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
 
 const V420_HIGHLIGHTS = [
   {
+    title: 'YouTube Channel Community Posts & Gallery Viewer',
+    desc: 'Browse YouTube channel posts, text updates, and photo collages directly inside Noctune under the channel page. View high-resolution artwork, zoom in to inspect details, and download images directly to your machine.',
+  },
+  {
+    title: 'Seamless Post Pagination & Lightbox Dismissal',
+    desc: 'Load more community posts effortlessly with robust pagination, and enjoy instant one-click dismissal when clicking anywhere outside the lightbox image viewer.',
+  },
+  {
     title: 'User-Controlled Telemetry Privacy & Data Retraction',
     desc: 'You now have full control over your contributed listening data. When submitting telemetry to help train Noctune\'s recommendation model, a private delete token is securely saved on your device, allowing you to withdraw or delete your upload at any time.',
   },
