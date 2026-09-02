@@ -2165,23 +2165,41 @@ function QueueInspector() {
 function MlModelPanel() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const [stats, setStats] = useState<{ playLogCount: number; uniqueTracksCount: number; transitionPairsCount: number; lastTrainedAt: number; isReady: boolean; hasSeedModel: boolean; seedTrackCount: number } | null>(null);
+  const [telemetrySubmission, setTelemetrySubmission] = useState<{ key: string; deleteToken: string; submittedAt: number; tracksCount: number; transitionsCount: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingTelemetry, setDeletingTelemetry] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [predictions, setPredictions] = useState<Array<{ track: any; transitionScore: number; metadataScore: number; playCountScore: number; recencyScore: number; nightBonus: number; totalScore: number }>>([]);
 
+  const fetchTelemetryStatus = useCallback(async () => {
+    try {
+      const res = await debugApi.getMlTelemetryStatus();
+      if (res.hasSubmission && res.submission) {
+        setTelemetrySubmission(res.submission);
+      } else {
+        setTelemetrySubmission(null);
+      }
+    } catch {}
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await debugApi.getMlStatus();
-      setStats(res.stats);
+      const [mlRes] = await Promise.all([
+        debugApi.getMlStatus(),
+        fetchTelemetryStatus(),
+      ]);
+      setStats(mlRes.stats);
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchTelemetryStatus]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -2209,7 +2227,6 @@ function MlModelPanel() {
     });
   };
 
-  const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleImportTelemetryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2241,7 +2258,7 @@ function MlModelPanel() {
   const handleContributeDataset = () => {
     confirmAction({
       title: 'Submit Telemetry Contribution',
-      message: "Submit anonymous listening dataset contribution to Cloudflare worker to help train Noctune's base recommendation model? No personal data or IP is collected.",
+      message: "Submit anonymous listening dataset contribution to Cloudflare worker to help train Noctune's base recommendation model? A unique delete token will be saved locally so you can retract or delete your submission anytime.",
       confirmText: 'Submit Telemetry',
       variant: 'emerald',
       onConfirm: async () => {
@@ -2250,6 +2267,7 @@ function MlModelPanel() {
         try {
           const res = await debugApi.submitMlTelemetry();
           setMsg({ ok: true, text: `Thank you! Successfully submitted ${res.tracksCount} tracks and ${res.transitionsCount} transition pairs to Cloudflare Worker!` });
+          await fetchTelemetryStatus();
         } catch (err) {
           setMsg({ ok: false, text: (err as Error).message });
         } finally {
@@ -2257,6 +2275,36 @@ function MlModelPanel() {
         }
       },
     });
+  };
+
+  const handleDeleteTelemetry = () => {
+    if (!telemetrySubmission) return;
+    confirmAction({
+      title: 'Delete Uploaded Telemetry',
+      message: `Are you sure you want to permanently delete your telemetry contribution (${telemetrySubmission.key}) from the Cloudflare dataset collector? This uses your device's private delete token.`,
+      confirmText: 'Delete Upload',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingTelemetry(true);
+        setMsg(null);
+        try {
+          await debugApi.deleteMlTelemetry();
+          setMsg({ ok: true, text: 'Successfully deleted your telemetry submission from Cloudflare dataset collector.' });
+          setTelemetrySubmission(null);
+        } catch (err) {
+          setMsg({ ok: false, text: (err as Error).message });
+        } finally {
+          setDeletingTelemetry(false);
+        }
+      },
+    });
+  };
+
+  const handleCopyDeleteToken = () => {
+    if (!telemetrySubmission?.deleteToken) return;
+    navigator.clipboard.writeText(telemetrySubmission.deleteToken);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
   };
 
   const handleClearDataset = () => {
@@ -2410,6 +2458,42 @@ function MlModelPanel() {
           <p><strong className="text-blue-300">• Import Telemetry JSON:</strong> Accepts telemetry export files (e.g., <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">telemetry_xxx_xxx.json</code>) or full <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>. Merges transitions & saves directly to persistent Roaming <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>.</p>
           <p><strong className="text-purple-300">• Import Prod Dataset:</strong> Extracts track history & play counts from local <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">songs.json</code> into <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">play-log.json</code> in Roaming (does not generate or alter <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">seed-model.json</code>).</p>
         </div>
+
+        {telemetrySubmission && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <UploadCloud size={16} className="text-emerald-400 shrink-0" />
+              <div className="min-w-0 text-soft">
+                <div>
+                  <span className="font-semibold text-white">Your Uploaded Telemetry:</span>{' '}
+                  <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-emerald-300 border border-emerald-500/20">
+                    {telemetrySubmission.key}
+                  </code>
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted">
+                  {telemetrySubmission.tracksCount.toLocaleString()} tracks · {telemetrySubmission.transitionsCount.toLocaleString()} transitions · Submitted {new Date(telemetrySubmission.submittedAt).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyDeleteToken}
+                className="flex items-center gap-1 rounded-md border border-white/10 bg-base-900/60 px-2.5 py-1.5 text-xs font-medium text-soft hover:text-white transition-colors"
+                title="Copy secret delete token for this submission"
+              >
+                <Copy size={12} /> {copiedToken ? 'Copied Token!' : 'Copy Delete Token'}
+              </button>
+              <button
+                onClick={handleDeleteTelemetry}
+                disabled={deletingTelemetry}
+                className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+                title="Delete this submission from Cloudflare dataset collector using your device delete token"
+              >
+                <Trash2 size={12} /> {deletingTelemetry ? 'Deleting...' : 'Delete My Upload'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {currentTrack && (
           <div className="mb-3 text-xs text-soft">

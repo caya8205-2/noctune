@@ -542,8 +542,63 @@ export function clearMlDataset(): { cleared: boolean; playLogCount: number } {
 }
 
 const DEFAULT_TELEMETRY_URL = 'https://noctune-dataset-collector.caya8205.workers.dev';
+const TELEMETRY_STATE_FILE = path.join(getDataDir(), 'telemetry-submission.json');
 
-export async function submitMlTelemetry(customUrl?: string): Promise<{ ok: boolean; id?: string; tracksCount: number; transitionsCount: number }> {
+export interface TelemetrySubmissionState {
+  key: string;
+  deleteToken: string;
+  submittedAt: number;
+  tracksCount: number;
+  transitionsCount: number;
+}
+
+export async function getTelemetryStatus(validateRemote = true): Promise<{ hasSubmission: boolean; submission?: TelemetrySubmissionState }> {
+  ensureDataDir();
+  if (!fs.existsSync(TELEMETRY_STATE_FILE)) {
+    return { hasSubmission: false };
+  }
+  let data: TelemetrySubmissionState | null = null;
+  try {
+    const raw = fs.readFileSync(TELEMETRY_STATE_FILE, 'utf-8');
+    data = JSON.parse(raw) as TelemetrySubmissionState;
+  } catch {}
+
+  if (!data?.key || !data?.deleteToken) {
+    return { hasSubmission: false };
+  }
+
+  if (validateRemote) {
+    try {
+      const targetUrl = DEFAULT_TELEMETRY_URL;
+      const checkUrl = `${targetUrl.replace(/\/+$/, '')}/export/${encodeURIComponent(data.key)}`;
+      const res = await fetch(checkUrl, { method: 'GET', signal: AbortSignal.timeout(3000) });
+      if (res.status === 404) {
+        clearTelemetryState();
+        return { hasSubmission: false };
+      }
+    } catch {
+      // If offline or network timeout, keep local state
+    }
+  }
+
+  return { hasSubmission: true, submission: data };
+}
+
+export function saveTelemetryState(state: TelemetrySubmissionState) {
+  ensureDataDir();
+  fs.writeFileSync(TELEMETRY_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+}
+
+export function clearTelemetryState() {
+  ensureDataDir();
+  if (fs.existsSync(TELEMETRY_STATE_FILE)) {
+    try {
+      fs.unlinkSync(TELEMETRY_STATE_FILE);
+    } catch {}
+  }
+}
+
+export async function submitMlTelemetry(customUrl?: string): Promise<{ ok: boolean; id?: string; key?: string; deleteToken?: string; tracksCount: number; transitionsCount: number }> {
   const store = getStore();
   const log = loadPlayLog();
   const matrix = buildTransitionMatrix();
@@ -603,13 +658,55 @@ export async function submitMlTelemetry(customUrl?: string): Promise<{ ok: boole
     throw new Error(`Telemetry submission failed (${res.status} ${res.statusText})`);
   }
 
-  const data = (await res.json()) as { ok: boolean; id?: string };
+  const data = (await res.json()) as { ok: boolean; id?: string; key?: string; deleteToken?: string };
+  if (data.ok && data.key && data.deleteToken) {
+    saveTelemetryState({
+      key: data.key,
+      deleteToken: data.deleteToken,
+      submittedAt: payload.submittedAt,
+      tracksCount: payload.tracksCount,
+      transitionsCount: transitionCount,
+    });
+  }
+
   return {
     ok: Boolean(data.ok),
     id: data.id,
+    key: data.key,
+    deleteToken: data.deleteToken,
     tracksCount: payload.tracksCount,
     transitionsCount: transitionCount,
   };
+}
+
+export async function deleteMlTelemetry(customUrl?: string): Promise<{ ok: boolean; key?: string }> {
+  const status = await getTelemetryStatus(false);
+  if (!status.hasSubmission || !status.submission) {
+    throw new Error('No telemetry upload found on this device to delete.');
+  }
+
+  const { key, deleteToken } = status.submission;
+  const targetUrl = customUrl || DEFAULT_TELEMETRY_URL;
+  const deleteUrl = `${targetUrl.replace(/\/+$/, '')}/entry/${encodeURIComponent(key)}`;
+
+  const res = await fetch(deleteUrl, {
+    method: 'DELETE',
+    headers: {
+      'X-Delete-Token': deleteToken,
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) {
+      clearTelemetryState();
+      return { ok: true, key };
+    }
+    const errData = (await res.json().catch(() => ({ error: 'Delete request failed' }))) as { error?: string };
+    throw new Error(errData.error || `Failed to delete submission (${res.status} ${res.statusText})`);
+  }
+
+  clearTelemetryState();
+  return { ok: true, key };
 }
 
 export interface TelemetryImportPayload {

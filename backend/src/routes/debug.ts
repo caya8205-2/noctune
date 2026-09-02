@@ -38,7 +38,16 @@ import { getPlaybackBlacklist } from '../services/playbackBlacklist.js';
 import { getDiscordRpcStatus } from '../services/discordRpc.js';
 import { getRequestLog, clearRequestLog } from '../services/requestLog.js';
 import { isDemoMode } from '../services/demoMode.js';
-import { getMlModelStats, importProdDataset, clearMlDataset, submitMlTelemetry, importMlTelemetry, predictMlRecommendationsWithScores } from '../services/mlRecommendation.js';
+import {
+  getMlModelStats,
+  importProdDataset,
+  clearMlDataset,
+  submitMlTelemetry,
+  deleteMlTelemetry,
+  getTelemetryStatus,
+  importMlTelemetry,
+  predictMlRecommendationsWithScores,
+} from '../services/mlRecommendation.js';
 import type { Track } from '../types/index.js';
 
 const MatcherQuery = z.object({
@@ -467,6 +476,20 @@ export async function debugRoutes(app: FastifyInstance) {
     const { customUrl } = req.body || {};
     const result = await submitMlTelemetry(customUrl);
     return result;
+  });
+
+  app.get('/debug/ml/telemetry-status', async () => {
+    return await getTelemetryStatus();
+  });
+
+  app.delete<{ Body?: { customUrl?: string } }>('/debug/ml/telemetry', async (req, reply) => {
+    try {
+      const { customUrl } = req.body || {};
+      const result = await deleteMlTelemetry(customUrl);
+      return result;
+    } catch (err) {
+      return reply.status(400).send({ ok: false, error: (err as Error).message });
+    }
   });
 
   app.post<{ Body: { payload: unknown } }>('/debug/ml/import-telemetry', async (req, reply) => {

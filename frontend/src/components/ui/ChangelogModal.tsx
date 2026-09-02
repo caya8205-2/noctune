@@ -33,26 +33,22 @@ export function parseLatestHighlights(fullText: string | null): Array<{ title: s
   return items;
 }
 
-const V412_HIGHLIGHTS = [
+const V420_HIGHLIGHTS = [
   {
-    title: 'New Full-Black Branding & Installer Graphics',
-    desc: 'Updated application icons and NSIS installer graphics with the new clean full-black background logo.',
+    title: 'User-Controlled Telemetry Privacy & Data Retraction',
+    desc: 'You now have full control over your contributed listening data. When submitting telemetry to help train Noctune\'s recommendation model, a private delete token is securely saved on your device, allowing you to withdraw or delete your upload at any time.',
   },
   {
-    title: 'Production Sidecar Playback Stability Fix',
-    desc: 'Resolved an issue where the background sidecar process abruptly terminated during track playback due to child process signal propagation, eliminating sudden connection refused errors.',
+    title: 'In-App Telemetry Management & Instant Cloud Sync',
+    desc: 'Easily manage your telemetry contribution directly inside Noctune under Debug Dashboard > Tools. Delete your upload with one click, copy your secret delete token, and enjoy instant synchronization whenever contributions are removed.',
   },
   {
-    title: 'Silent Application Exit on Windows',
-    desc: 'Prevented the brief empty terminal window flash that previously appeared when closing the application on Windows.',
-  },
-  {
-    title: 'Cold-Start Startup Connection Resilience',
-    desc: 'Enhanced initial connection retry handling to ensure smooth startup without early connection refused errors while the backend initializes.',
+    title: 'Modernized Dataset Collector & Secure Token Verification',
+    desc: 'Upgraded the Cloudflare dataset collector backend with SHA-256 cryptographic token verification, enabling seamless self-service data deletion from both the desktop app and the web collector dashboard.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V412_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V420_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();

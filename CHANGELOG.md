@@ -2,6 +2,17 @@
 
 All notable Noctune changes are documented here.
 
+## v4.2.0 - 2026-09-02
+
+### Features & Privacy Controls
+- **User Telemetry Management & Token-Based Retraction**: Introduced user data privacy controls for anonymous ML listening telemetry submissions. When contributing listening data via "Help Improve ML Model", a unique device delete token is securely generated and persisted locally in `telemetry-submission.json` within AppData Roaming.
+- **In-App Telemetry Deletion & Token Export**: Added dedicated "Delete My Upload" and "Copy Delete Token" actions directly within the ML Recommendation Sandbox in Debug Dashboard (Tools tab), allowing users to retract submitted datasets at any time without admin intervention.
+- **Automated Cloudflare Telemetry Sync**: Implemented background remote status verification in `getTelemetryStatus()`. When opening the dashboard or refreshing, Noctune checks if the recorded key exists on Cloudflare Worker; if deleted externally (e.g. via dashboard or token), Noctune purges the local record automatically and syncs the UI instantly.
+
+### Cloudflare Worker & Collector Architecture
+- **Dual-Path Dataset Collector Authorization**: Updated Cloudflare Worker collector (`worker.js`) to support both master administrative keys (`X-Admin-Secret`) and hashed user delete tokens (`X-Delete-Token`) using Web Crypto SHA-256 (`clientTokenHash`).
+- **Dashboard Collector UI Refactoring**: Rebuilt the embedded Cloudflare Worker dashboard HTML, CSS, and client-side JavaScript into a structured, readable multi-line layout with clean DOM nesting.
+
 ## v4.1.2 - 2026-09-01
 
 ### Bug Fixes & Visual Polish

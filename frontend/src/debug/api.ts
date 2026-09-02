@@ -266,8 +266,16 @@ export const debugApi = {
     req<{ ok: boolean; importedTracks: number; totalPlays: number; pathUsed: string }>('/debug/ml/import-prod', { method: 'POST' }),
   clearMlDataset: () =>
     req<{ ok: boolean; cleared: boolean; playLogCount: number }>('/debug/ml/dataset', { method: 'DELETE' }),
+  getMlTelemetryStatus: () =>
+    req<{ hasSubmission: boolean; submission?: { key: string; deleteToken: string; submittedAt: number; tracksCount: number; transitionsCount: number } }>('/debug/ml/telemetry-status'),
+  deleteMlTelemetry: (customUrl?: string) =>
+    req<{ ok: boolean; key?: string; error?: string }>('/debug/ml/telemetry', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customUrl }),
+    }),
   submitMlTelemetry: (customUrl?: string) =>
-    req<{ ok: boolean; id?: string; tracksCount: number; transitionsCount: number }>('/debug/ml/submit-telemetry', {
+    req<{ ok: boolean; id?: string; key?: string; deleteToken?: string; tracksCount: number; transitionsCount: number }>('/debug/ml/submit-telemetry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customUrl }),
