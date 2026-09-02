@@ -12,6 +12,32 @@ interface ArtworkLightboxProps {
   onClose: () => void;
 }
 
+export function getHighResolutionArtworkUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  const url = rawUrl.startsWith('//') ? `https:${rawUrl}` : rawUrl;
+
+  // 1. YouTube video thumbnails -> maxresdefault.jpg
+  if (url.includes('ytimg.com') || url.includes('youtube.com')) {
+    const upgraded = url.replace(
+      /\/((?:default|mqdefault|hqdefault|sddefault|maxresdefault))\.jpg(?:\?.*)?$/,
+      '/maxresdefault.jpg'
+    );
+    if (upgraded !== url) return upgraded;
+  }
+
+  // 2. Google / YouTube usercontent CDN (Community posts, channel avatars, etc.)
+  // Strips cropping (-c, -fcrop64) and dimension restrictions, requesting original uncropped full-resolution asset (=s0)
+  if (url.includes('ggpht.com') || url.includes('googleusercontent.com')) {
+    if (url.includes('=')) {
+      return url.replace(/=[^/]+$/, '=s0');
+    }
+    return `${url}=s0`;
+  }
+
+  // 3. Spotify / generic dimension replacements
+  return url.replace(/\/\d+x\d+\//, '/1200x1200/');
+}
+
 export function ArtworkLightboxModal({
   imageUrl,
   title,
@@ -20,9 +46,7 @@ export function ArtworkLightboxModal({
   onClose,
 }: ArtworkLightboxProps) {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
-  const highResolutionUrl = imageUrl
-    .replace(/\/\d+x\d+\//, '/1200x1200/')
-    .replace(/\/((?:default|mqdefault|hqdefault|maxresdefault))\.jpg(?:\?.*)?$/, '/maxresdefault.jpg');
+  const highResolutionUrl = getHighResolutionArtworkUrl(imageUrl);
   const [displayImageUrl, setDisplayImageUrl] = useState(highResolutionUrl);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
