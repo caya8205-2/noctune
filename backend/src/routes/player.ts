@@ -1299,8 +1299,18 @@ export async function playerRoutes(app: FastifyInstance) {
       fs.mkdirSync(downloadDir, { recursive: true });
     }
 
-    const cleanArtist = artist.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'Artist';
-    const cleanTitle = title.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'Artwork';
+    const cleanArtist = artist
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/[/\\?%*:|"<>]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 50) || 'Artist';
+    const cleanTitle = title
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/[/\\?%*:|"<>]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60) || 'Artwork';
     const filename = `${cleanArtist} - ${cleanTitle} (Artwork).jpg`;
     const targetPath = path.join(downloadDir, filename);
 
@@ -1310,7 +1320,12 @@ export async function playerRoutes(app: FastifyInstance) {
         const base64Data = imageUrl.replace(/^data:image\/\w+;base64,/, '');
         buffer = Buffer.from(base64Data, 'base64');
       } else {
-        const response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
+        const response = await fetch(imageUrl, {
+          signal: AbortSignal.timeout(15000),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
         buffer = Buffer.from(arrayBuffer);

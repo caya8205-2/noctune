@@ -97,8 +97,18 @@ export function ArtworkLightboxModal({
         console.warn('Backend downloadArtwork API failed, using browser blob fallback:', err);
       }
 
-      const safeArtist = artist.replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artist';
-      const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artwork';
+      const safeArtist = artist
+        .replace(/[\r\n\t]/g, ' ')
+        .replace(/[/\\?%*:|"<>]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 50) || 'Artist';
+      const safeTitle = title
+        .replace(/[\r\n\t]/g, ' ')
+        .replace(/[/\\?%*:|"<>]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60) || 'Artwork';
       const filename = `${safeArtist} - ${safeTitle} (Artwork).jpg`;
       setSavedPath('Downloads');
 
@@ -239,7 +249,6 @@ export function ArtworkLightboxModal({
             }
 
             if (wasOnImage) {
-              setZoomLevel(zoom >= 3 ? 1 : zoom + 0.5);
               return;
             }
 
@@ -251,7 +260,7 @@ export function ArtworkLightboxModal({
             );
             clickedOnImageRef.current = !!isTargetImage;
 
-            if (zoom === 1 || !isTargetImage) return;
+            if (!isTargetImage) return;
 
             event.currentTarget.setPointerCapture(event.pointerId);
             panMovedRef.current = false;
@@ -289,7 +298,7 @@ export function ArtworkLightboxModal({
             alt={title}
             className={clsx(
               'max-h-[58vh] max-w-[62vw] select-none object-contain shadow-2xl transition-none sm:max-h-[64vh] sm:max-w-[68vw]',
-              isDragging ? '!cursor-grabbing' : zoom !== 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'
+              isDragging ? '!cursor-grabbing' : 'cursor-grab active:cursor-grabbing'
             )}
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             draggable={false}
@@ -328,10 +337,13 @@ export function ArtworkLightboxModal({
             </button>
             <button
               type="button"
-              onClick={() => setZoomLevel(1)}
-              disabled={zoom === 1}
+              onClick={() => {
+                setZoomLevel(1);
+                setPan({ x: 0, y: 0 });
+              }}
+              disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
               className="btn-ghost p-2 disabled:opacity-30"
-              title="Reset zoom"
+              title="Reset zoom and position"
             >
               <RotateCcw size={14} />
             </button>

@@ -5,7 +5,7 @@ import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 import type { LyricsCacheStore, LyricsResult } from '../types/index.js';
 
 const LRCLIB_BASE = 'https://lrclib.net/api';
-const USER_AGENT = 'Noctune/1.0.0-beta.2 (https://github.com/caya/noctune)';
+const USER_AGENT = 'Noctune (https://github.com/caya8205-2/Noctune)';
 const CACHE_VERSION = 3;
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
