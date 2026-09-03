@@ -80,7 +80,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const { data: playlists = [] } = useQuery({
+  const { data: playlists = [], isLoading: playlistsLoading } = useQuery({
     queryKey: ['playlists'],
     queryFn: api.getPlaylists,
   });
@@ -382,6 +382,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
 
           <div className="flex flex-col gap-1">
+            {playlistsLoading && playlists.length === 0 && (
+              <div className="flex flex-col gap-2 py-1">
+                {sidebarCompact ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-6 w-6 rounded-lg bg-white/[0.06] animate-pulse" />
+                    <div className="h-6 w-6 rounded-lg bg-white/[0.06] animate-pulse" />
+                    <div className="h-6 w-6 rounded-lg bg-white/[0.06] animate-pulse" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 px-3">
+                    <div className="h-3.5 w-3/4 rounded bg-white/[0.06] animate-pulse" />
+                    <div className="h-3.5 w-1/2 rounded bg-white/[0.06] animate-pulse" />
+                    <div className="h-3.5 w-2/3 rounded bg-white/[0.06] animate-pulse" />
+                  </div>
+                )}
+              </div>
+            )}
             {userPlaylists.map((pl) => {
               const active = activeView === 'playlist' && activePlaylistId === pl.id;
               return (

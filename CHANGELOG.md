@@ -2,6 +2,17 @@
 
 All notable Noctune changes are documented here.
 
+## v4.3.0 - 2026-09-03
+
+### Startup & Connection Reliability
+- **In-App Startup Gate**: Added a dedicated startup gateway component that verifies backend engine health via `/status` before mounting application views and queries. This completely eliminates cold-start race conditions and empty interface states where UI loaded before the sidecar finished initializing.
+- **Understated Startup Surface**: Designed a clean, distraction-free startup screen matching Noctune's native `#08090d` surface with a centered logo, functional draggable titlebar with window controls, and quiet progressive status indicators if initialization takes longer than expected.
+- **Fast Port Discovery & Resilient Retries**: Optimized backend connection discovery in `api.ts` to check development and production ports concurrently with low-latency polling (250ms), and configured query retry policies to gracefully await the audio engine without user disruption.
+
+### Release Notes & UI Polishing
+- **Rendered Markdown Changelog Viewer**: Replaced the raw monospace `<pre>` block in the `View Full CHANGELOG.md` dropdown with a lightweight built-in inline markdown parser. Supports version dividers, category headings, bold text, inline code backticks, and external links rendered with native Noctune theme typography.
+- **Markdown Formatting in Release Highlights**: Integrated the inline markdown renderer directly into modal release highlight titles and descriptions, enabling rich inline code, bold accents, and links across release notes.
+
 ## v4.2.0 - 2026-09-02
 
 ### YouTube Channel Community Posts & Artwork Viewer

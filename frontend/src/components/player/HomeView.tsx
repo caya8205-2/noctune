@@ -521,7 +521,7 @@ export function HomeView() {
     return queue.slice(startIndex, startIndex + 8);
   }, [queue, queueIndex]);
 
-  const { data: homeLocalData } = useQuery({
+  const { data: homeLocalData, isLoading: homeLocalLoading } = useQuery({
     queryKey: ['home'],
     queryFn: api.home,
     staleTime: HOME_REFRESH_MS,
@@ -715,11 +715,23 @@ export function HomeView() {
               <span className="text-xs text-muted">Tuning mixes...</span>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {nightlyMixes.map((mix) => (
-              <CleanMixCard key={mix.id} mix={mix} onPlay={openPersonalMix} />
-            ))}
-          </div>
+          {nightlyMixes.length > 0 ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {nightlyMixes.map((mix) => (
+                <CleanMixCard key={mix.id} mix={mix} onPlay={openPersonalMix} />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex flex-col gap-2">
+                  <div className="aspect-square w-full rounded-2xl bg-white/[0.05] animate-pulse" />
+                  <div className="mt-1 h-4 w-3/4 rounded bg-white/[0.05] animate-pulse" />
+                  <div className="h-3 w-1/2 rounded bg-white/[0.05] animate-pulse" />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -743,6 +755,18 @@ export function HomeView() {
           <div className="flex flex-col gap-0.5">
             {recentTracks.slice(0, 6).map((track, idx) => (
               <OpenTrackRow key={track.id} track={track} index={idx} onPlay={handleRecentlyPlayedPlay} />
+            ))}
+          </div>
+        ) : homeLocalLoading ? (
+          <div className="flex flex-col gap-2 py-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg px-2 py-2">
+                <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-white/[0.05] animate-pulse" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <div className="h-3.5 w-1/3 rounded bg-white/[0.05] animate-pulse" />
+                  <div className="h-3 w-1/5 rounded bg-white/[0.05] animate-pulse" />
+                </div>
+              </div>
             ))}
           </div>
         ) : (

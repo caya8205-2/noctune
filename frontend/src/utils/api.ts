@@ -55,7 +55,7 @@ export const API_BASE = normalizeBase(IS_TAURI_PROD ? tauriBaseForPort(TAURI_BAC
 
 let apiBasePromise: Promise<string | null> | null = null;
 
-async function canReachBackend(base: string): Promise<boolean> {
+export async function canReachBackend(base: string): Promise<boolean> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 600);
   try {
@@ -82,16 +82,21 @@ export async function getApiBase(): Promise<string> {
 
   if (!apiBasePromise) {
     apiBasePromise = (async () => {
-      // In dev mode (Vite running on port 3132), try dev port first
+      const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
       const devPort = 3132;
       const devBase = normalizeBase(tauriBaseForPort(devPort));
-      if (!import.meta.env.PROD && await canReachBackend(devBase)) {
-        return devBase;
+
+      // In dev mode (Vite running on port 3132), try dev port and preferred port with retries
+      if (!import.meta.env.PROD) {
+        for (let retry = 0; retry < 8; retry++) {
+          if (await canReachBackend(devBase)) return devBase;
+          if (await canReachBackend(preferredBase)) return preferredBase;
+          if (retry < 7) await new Promise((resolve) => setTimeout(resolve, 250));
+        }
       }
 
       // Try preferred production port 3131 with startup retries
       // pkg binary cold-start can take 3-5 seconds, so retry for ~6 seconds
-      const preferredBase = normalizeBase(tauriBaseForPort(TAURI_BACKEND_PORT));
       for (let retry = 0; retry < 15; retry++) {
         if (await canReachBackend(preferredBase)) return preferredBase;
         if (retry < 14) await new Promise((resolve) => setTimeout(resolve, 400));
@@ -117,6 +122,11 @@ export async function getApiBase(): Promise<string> {
   }
 
   return resolvedBase;
+}
+
+export async function checkBackendStatus(): Promise<boolean> {
+  const base = await getApiBase();
+  return canReachBackend(base);
 }
 
 export async function apiUrl(path: string): Promise<string> {

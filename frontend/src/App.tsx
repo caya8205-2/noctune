@@ -27,9 +27,16 @@ import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { DownloadProvider } from './hooks/useDownloadTrack';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ChangelogModal } from './components/ui/ChangelogModal';
+import { StartupGate } from './components/ui/StartupGate';
 
 const qc = new QueryClient({
-  defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
+    },
+  },
 });
 
 function viewRouteId(
@@ -404,11 +411,13 @@ function AppInner() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={qc}>
-        <DownloadProvider>
-          <AppInner />
-        </DownloadProvider>
-      </QueryClientProvider>
+      <StartupGate>
+        <QueryClientProvider client={qc}>
+          <DownloadProvider>
+            <AppInner />
+          </DownloadProvider>
+        </QueryClientProvider>
+      </StartupGate>
     </ErrorBoundary>
   );
 }
