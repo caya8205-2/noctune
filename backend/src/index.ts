@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import pretty from 'pino-pretty';
@@ -50,6 +50,24 @@ for (const envPath of [
   if (existsSync(envPath)) {
     loadEnv({ path: envPath, override: true });
   }
+}
+
+const PID_FILE = process.env.APP_DATA_DIR
+  ? path.join(path.resolve(process.env.APP_DATA_DIR), 'noctune-backend.pid')
+  : null;
+
+function writePidFile() {
+  if (!PID_FILE) return;
+  try {
+    writeFileSync(PID_FILE, String(process.pid), 'utf-8');
+  } catch {}
+}
+
+function cleanupPidFile() {
+  if (!PID_FILE) return;
+  try {
+    rmSync(PID_FILE, { force: true });
+  } catch {}
 }
 
 const PREFERRED_PORT = Number(process.env.PORT ?? 3131);
@@ -209,6 +227,7 @@ async function bootstrap() {
         console.warn(`\n Port ${PREFERRED_PORT} was busy, using port ${port} instead.`);
       }
       console.log(`\n Noctune backend running at http://${HOST}:${port}\n`);
+      writePidFile();
       return;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
@@ -221,6 +240,10 @@ async function bootstrap() {
 
   throw new Error(`Could not find an available port in range ${PREFERRED_PORT}-${PREFERRED_PORT + MAX_PORT_ATTEMPTS - 1}`);
 }
+
+process.on('exit', cleanupPidFile);
+process.on('SIGINT', () => { cleanupPidFile(); process.exit(0); });
+process.on('SIGTERM', () => { cleanupPidFile(); process.exit(0); });
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal:uncaughtException]', err);

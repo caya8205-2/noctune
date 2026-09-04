@@ -48,6 +48,38 @@ fn open_external_url(url: String) -> Result<(), String> {
 #[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
+// Kill any orphaned backend from a previous session (crash / updater restart)
+// before spawning a fresh sidecar, so the old process can't hold port 3131.
+#[cfg(not(debug_assertions))]
+fn kill_stale_backend(app_data_dir: &std::path::Path) {
+    let pid_file = app_data_dir.join("noctune-backend.pid");
+    let Ok(contents) = std::fs::read_to_string(&pid_file) else { return };
+    let Ok(pid) = contents.trim().parse::<u32>() else { return };
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        // Verify the PID still belongs to our backend (guard against PID reuse).
+        let matches = Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/FI", "IMAGENAME eq noctune-backend.exe", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("noctune-backend"))
+            .unwrap_or(false);
+        if matches {
+            let _ = Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).spawn();
+    }
+    let _ = std::fs::remove_file(&pid_file);
+}
+
 #[cfg(not(debug_assertions))]
 fn kill_backend_sidecar(app: &tauri::Window) {
     if let Some(state) = app.try_state::<BackendProcess>() {
@@ -96,6 +128,7 @@ pub fn run() {
                     .path()
                     .app_data_dir()
                     .expect("failed to resolve app data dir");
+                kill_stale_backend(&app_data_dir);
                 let ytdlp_path = _app
                     .path()
                     .resolve("resources/yt-dlp.exe", BaseDirectory::Resource)
