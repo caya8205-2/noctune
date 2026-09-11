@@ -2,6 +2,13 @@
 
 All notable Noctune changes are documented here.
 
+## v4.3.1 - 2026-09-11
+
+### Backend Process Lifecycle & Stability Hardening
+- **Discord RPC Signal Handler Fix**: Restored explicit `process.exit(0)` calls in `SIGINT`/`SIGTERM` handlers after `destroyClient()` completes. In v4.2.0, removing these exit calls caused the backend to enter a limbo state when child processes (innertube.exe, yt-dlp.exe) propagated termination signals to the parent, resulting in silent backend crashes after successful startup.
+- **Child Process Signal Isolation**: Added `detached: true` and `proc.unref()` to `innertube.exe` spawn configuration in `innertubeCli.ts`. This isolates child processes into their own process group, preventing console signals (CTRL_CLOSE_EVENT, SIGTERM) from propagating upward and killing the parent backend process during audio resolution and prefetch operations.
+- **Root Cause Resolution**: Fixes the "backend dies after startup gate" issue introduced in v4.2.0 where the sidecar would successfully respond to `/status` (allowing frontend to proceed to Home) but then silently terminate seconds later when startup prefetch spawned innertube.exe for the first time.
+
 ## v4.3.0 - 2026-09-03
 
 ### Startup & Connection Reliability

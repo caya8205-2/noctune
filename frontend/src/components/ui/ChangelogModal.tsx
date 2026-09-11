@@ -121,22 +121,22 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V430_HIGHLIGHTS = [
+const V431_HIGHLIGHTS = [
   {
-    title: 'In-App Startup Gate & Cold-Start Resilience',
-    desc: 'Eliminated the long-standing connection race condition where Noctune could open to an empty interface before the audio engine finished booting. The application now seamlessly verifies engine readiness before loading your library and feeds, complete with a clean, minimal startup screen.',
+    title: 'Backend Stability Hardening',
+    desc: 'Fixed a critical issue where the audio engine would successfully start and pass the startup gate, then silently terminate seconds later when resolving audio streams or prefetching tracks. The backend now properly isolates child processes and handles shutdown signals gracefully.',
   },
   {
-    title: 'Instant Engine Discovery & Resilient Background Retries',
-    desc: 'Optimized internal connection checks to detect available backend instances immediately and retry smoothly in the background, ensuring your playlists, listening history, and recommendations load reliably without manual restarts.',
+    title: 'Child Process Signal Isolation',
+    desc: 'Audio resolution tools (innertube.exe, yt-dlp.exe) now run in isolated process groups, preventing their termination signals from propagating to and killing the parent backend process during normal operation.',
   },
   {
-    title: 'Formatted Markdown Changelog Viewer',
-    desc: 'The `View Full CHANGELOG.md` dropdown now renders clean, formatted markdown with styled version dividers, category headings, inline code highlighting, and links instead of plain unstyled text.',
+    title: 'Graceful Shutdown Restoration',
+    desc: 'Restored proper process termination in Discord RPC handlers, ensuring the backend exits cleanly when requested rather than entering an unresponsive limbo state.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V430_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V431_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();

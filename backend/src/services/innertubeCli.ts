@@ -58,7 +58,14 @@ async function execInnertubeCli<T>(args: string[]): Promise<T> {
     const proc = spawn(binaryPath, args, {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Detach into its own process group so console signals (CTRL_CLOSE_EVENT,
+      // SIGTERM) from the child cannot propagate to and kill the parent backend.
+      detached: true,
     });
+
+    // Unref the child so it doesn't keep the parent event loop alive, and
+    // prevent signal propagation from killing the parent backend process.
+    proc.unref();
 
     let stdout = '';
     let stderr = '';
