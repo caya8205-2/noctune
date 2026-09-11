@@ -121,22 +121,26 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V431_HIGHLIGHTS = [
+const V440_HIGHLIGHTS = [
   {
-    title: 'Backend Stability Hardening',
-    desc: 'Fixed a critical issue where the audio engine would successfully start and pass the startup gate, then silently terminate seconds later when resolving audio streams or prefetching tracks. The backend now properly isolates child processes and handles shutdown signals gracefully.',
+    title: 'Cleaner, Icon-Free Section Headers',
+    desc: 'Section titles across Home and Stats no longer carry decorative icons. Headers now rely on clean typographic hierarchy alone, giving every view a calmer, more deliberate look.',
   },
   {
-    title: 'Child Process Signal Isolation',
-    desc: 'Audio resolution tools (innertube.exe, yt-dlp.exe) now run in isolated process groups, preventing their termination signals from propagating to and killing the parent backend process during normal operation.',
+    title: 'Unified Home Header',
+    desc: 'The old "Welcome" block is gone. Home now uses the same header pattern as every other view: a small accent label with a bold page title, so navigating between views feels consistent.',
   },
   {
-    title: 'Graceful Shutdown Restoration',
-    desc: 'Restored proper process termination in Discord RPC handlers, ensuring the backend exits cleanly when requested rather than entering an unresponsive limbo state.',
+    title: 'Simplified Quick Shortcuts',
+    desc: 'Home shortcuts (Liked Songs, Discover Weekly, and friends) are now quiet text-only chips instead of a row of multi-colored icon pills.',
+  },
+  {
+    title: 'Fixed Queue Drag & Drop',
+    desc: 'Reordering tracks in the Queue finally works properly. Drag the grip handle and tracks smoothly reshuffle in real time as you move — the same reliable dragging behavior already used when editing playlists.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V431_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V440_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();

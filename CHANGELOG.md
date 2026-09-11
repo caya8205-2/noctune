@@ -2,6 +2,18 @@
 
 All notable Noctune changes are documented here.
 
+## v4.4.0 - 2026-09-11
+
+### Home & Visual Design Rework
+- **Icon-Free Section Headers**: Removed decorative Lucide icons from all Home section headers (Continue Listening, Nightly Mix, Recently Played, Your Playlists, New Releases) and Stats panel headers (Top Tracks, Top Artists). Section titles now rely purely on typographic hierarchy, eliminating the repetitive icon-per-section pattern across the interface.
+- **Unified Home Header**: Replaced the bespoke "Welcome" hero block with the standard view header pattern used across History, Queue, Stats, and Search — a small uppercase accent section label (`HOME`) paired with a large bold page title (`Your library.`).
+- **Text-First Quick Shortcuts**: Rebuilt the Home shortcut pills as neutral text-only chips. The previous design paired every shortcut with its own Lucide icon and a distinct accent color per pill (rose, amber, indigo, emerald, cyan), which produced an unmotivated rainbow accent row; shortcuts now share a single neutral bordered style with a subtle hover state.
+- **Typographic Cover Fallbacks**: Replaced oversized Lucide placeholder icons (Sparkles, ListOrdered) on empty mix/playlist covers with a large serif initial letter derived from the item name, keeping cover placeholders quiet and content-aware.
+- **Simplified Empty States**: Removed the decorative icon from the Recently Played empty state.
+
+### Queue Drag & Drop Fix
+- **Pointer-Based Queue Reordering**: Replaced the broken HTML5 drag-and-drop (`draggable`/`onDragStart`/`onDrop`) in QueueView with the pointer-event-based reordering system already proven in PlaylistView edit mode. Dragging the grip handle now live-reorders the queue as the pointer hovers over target rows via `elementFromPoint` hit-testing against `data-queue-track-index` rows, with incremental `reorderQueue` commits that correctly adjust the active `queueIndex`. Includes visual drag feedback: the dragged row scales down and dims, and the drop target row highlights with an accent border.
+
 ## v4.3.1 - 2026-09-11
 
 ### Backend Process Lifecycle & Stability Hardening

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, Search, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
@@ -48,6 +48,10 @@ export function QueueView() {
     setView,
   } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragFromIndexRef = useRef<number | null>(null);
+  const dragCurrentIndexRef = useRef<number | null>(null);
+  const dragLastHoverIndexRef = useRef<number | null>(null);
   const [hideFailed, setHideFailed] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const { data: audioCache } = useQuery({
@@ -59,6 +63,50 @@ export function QueueView() {
     refetchOnWindowFocus: false,
   });
   const cacheByTrackId = new Map((audioCache?.tracks ?? []).map((status) => [status.id, status]));
+
+  // Pointer-based drag-to-reorder (same approach as PlaylistView edit mode):
+  // live-reorders the queue as the pointer hovers over target rows, then the
+  // final order is already committed on pointerup — no HTML5 drag API needed.
+  useEffect(() => {
+    if (dragIndex === null) return;
+
+    function getIndexAtPointer(event: PointerEvent): number | null {
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      const row = target?.closest<HTMLElement>('[data-queue-track-index]');
+      const index = row?.dataset.queueTrackIndex === undefined
+        ? NaN
+        : Number(row.dataset.queueTrackIndex);
+      return Number.isInteger(index) ? index : null;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const targetIndex = getIndexAtPointer(event);
+      setDragOverIndex(targetIndex);
+      const currentIndex = dragCurrentIndexRef.current;
+      if (targetIndex === null || currentIndex === null || targetIndex === dragLastHoverIndexRef.current) return;
+
+      dragLastHoverIndexRef.current = targetIndex;
+      if (targetIndex !== currentIndex) {
+        reorderQueue(currentIndex, targetIndex);
+        dragCurrentIndexRef.current = targetIndex;
+      }
+    }
+
+    function handlePointerUp() {
+      dragFromIndexRef.current = null;
+      dragCurrentIndexRef.current = null;
+      dragLastHoverIndexRef.current = null;
+      setDragIndex(null);
+      setDragOverIndex(null);
+    }
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [dragIndex, reorderQueue]);
 
 
   if (queue.length === 0) {
@@ -152,26 +200,28 @@ export function QueueView() {
           return (
             <div
               key={`${track.id}-${track.spotifyId ?? 'yt'}-${i}`}
-              draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragIndex !== null) reorderQueue(dragIndex, i);
-                setDragIndex(null);
-              }}
-              onDragEnd={() => setDragIndex(null)}
+              data-queue-track-index={i}
               className={clsx(
                 'group flex items-center px-4 py-2.5 rounded-lg border border-transparent hover:bg-base-800 hover:border-base-600/60 cursor-pointer transition-colors duration-100',
                 isActive && 'bg-accent/10',
                 track.playbackError && 'border-red-500/20 bg-red-500/5',
                 isPast && 'opacity-40',
-                dragIndex === i && 'opacity-50'
+                dragIndex === i && 'opacity-50 scale-[0.98]',
+                dragOverIndex === i && dragIndex !== i && 'border-accent/70 bg-accent/10'
               )}
               onClick={() => playTrack(track, queue)}
             >
               <div
-                className="w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted cursor-grab"
+                className="w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted cursor-grab active:cursor-grabbing"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  dragFromIndexRef.current = i;
+                  dragCurrentIndexRef.current = i;
+                  dragLastHoverIndexRef.current = i;
+                  setDragIndex(i);
+                  setDragOverIndex(i);
+                }}
                 title="Drag to reorder"
               >
                 <GripVertical size={14} />

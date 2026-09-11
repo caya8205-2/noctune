@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LucideIcon } from 'lucide-react';
 import {
-  Clock,
-  Compass,
-  Disc3,
   Heart,
-  ListMusic,
-  ListOrdered,
   Music2,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api, isTrackActive, resolveYouTubeChannelId, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
@@ -107,26 +99,21 @@ function writeNewReleasesCache(data: NewReleasesCache['data'], updatedAt: number
   }
 }
 
-// ── Minimalist Quick Shortcut Pill ──────────────────────────────────────────
-function ShortcutPill({
+// ── Minimalist Quick Shortcut (text-first, single accent) ───────────────────
+function ShortcutLink({
   title,
-  icon: Icon,
-  accentColor = 'text-accent',
   onClick,
 }: {
   title: string;
-  icon: LucideIcon;
-  accentColor?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-base-900/60 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:border-accent/40 hover:bg-base-800 hover:text-accent"
+      className="rounded-md border border-white/[0.08] bg-base-900/60 px-3.5 py-1.5 text-xs font-medium text-soft transition-colors duration-150 hover:border-white/[0.16] hover:text-white"
     >
-      <Icon size={14} className={clsx(accentColor, 'transition-transform group-hover:scale-110')} />
-      <span>{title}</span>
+      {title}
     </button>
   );
 }
@@ -259,8 +246,10 @@ function CleanMixCard({
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-accent">
-            <Sparkles size={32} strokeWidth={1.4} />
+          <div className="flex h-full w-full items-center justify-center bg-base-800">
+            <span className="font-display text-4xl text-muted/60 select-none">
+              {mix.name.charAt(0).toUpperCase()}
+            </span>
           </div>
         )}
       </div>
@@ -279,7 +268,6 @@ function CleanCoverCard({
   title,
   subtitle,
   cover,
-  icon: Icon,
   isLiked,
   track,
   onClick,
@@ -287,7 +275,6 @@ function CleanCoverCard({
   title: string;
   subtitle: string;
   cover?: string;
-  icon?: LucideIcon;
   isLiked?: boolean;
   track?: Track;
   onClick: () => void;
@@ -341,10 +328,10 @@ function CleanCoverCard({
           />
         ) : isLiked ? (
           <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
-        ) : Icon ? (
-          <Icon size={32} strokeWidth={1.4} className="text-accent" />
         ) : (
-          <ListOrdered size={32} strokeWidth={1.4} className="text-accent" />
+          <span className="font-display text-4xl text-muted/60 select-none">
+            {title.charAt(0).toUpperCase()}
+          </span>
         )}
       </div>
 
@@ -634,48 +621,33 @@ export function HomeView() {
 
   return (
     <div className="flex h-full flex-col gap-9 overflow-y-auto px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5">
-      {/* Home Header + Minimalist Shortcut Pills */}
+      {/* Home Header + Quick Shortcuts */}
       <section className="flex flex-col gap-4">
         <div>
-          <p className="text-xs font-semibold tracking-wider text-accent uppercase">Home</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-1">
-            Welcome
-          </h1>
-          <p className="text-xs text-muted mt-1.5">
-            Your personal music hub — recommendations, history & playlists.
-          </p>
+          <p className="section-label text-accent">Home</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">Your library.</h1>
         </div>
 
-        {/* Minimalist Shortcut Pills */}
-        <div className="flex items-center gap-2 flex-wrap pt-1">
-          <ShortcutPill
+        {/* Quick shortcuts — text-first, single accent */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <ShortcutLink
             title="Liked Songs"
-            icon={Heart}
-            accentColor="text-rose-400"
             onClick={() => setView('playlist', 'system-liked-songs')}
           />
-          <ShortcutPill
+          <ShortcutLink
             title="Top Favorites"
-            icon={Zap}
-            accentColor="text-amber-400"
             onClick={() => setView('playlist', 'smart:most-played')}
           />
-          <ShortcutPill
+          <ShortcutLink
             title="Discover Weekly"
-            icon={Compass}
-            accentColor="text-indigo-400"
             onClick={() => setView('playlist', 'smart:discover-weekly')}
           />
-          <ShortcutPill
+          <ShortcutLink
             title="Recently Played"
-            icon={Clock}
-            accentColor="text-emerald-400"
             onClick={() => setView('history')}
           />
-          <ShortcutPill
+          <ShortcutLink
             title="Short Tracks"
-            icon={Disc3}
-            accentColor="text-cyan-400"
             onClick={() => setView('playlist', 'smart:short-tracks')}
           />
         </div>
@@ -685,13 +657,10 @@ export function HomeView() {
       {upcomingQueue.length > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ListOrdered size={16} className="text-accent" />
-              <h2 className="text-base font-semibold text-white">Continue Listening</h2>
-            </div>
+            <h2 className="text-base font-semibold text-white">Continue Listening</h2>
             <button
               onClick={() => setView('queue')}
-              className="text-xs text-muted transition-colors hover:text-accent font-medium"
+              className="text-xs text-muted transition-colors hover:text-white font-medium"
             >
               View queue ({queue.length}) →
             </button>
@@ -707,10 +676,7 @@ export function HomeView() {
       {(nightlyMixLoading || nightlyMixes.length > 0) && (
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-accent" />
-              <h2 className="text-base font-semibold text-white">Nightly Mix</h2>
-            </div>
+            <h2 className="text-base font-semibold text-white">Nightly Mix</h2>
             {(nightlyMixLoading || (nightlyMixFetching && nightlyMixes.length === 0)) && (
               <span className="text-xs text-muted">Tuning mixes...</span>
             )}
@@ -738,14 +704,11 @@ export function HomeView() {
       {/* Recently Played Section (Clear Cache Enabled) */}
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock size={16} className="text-accent" />
-            <h2 className="text-base font-semibold text-white">Recently Played</h2>
-          </div>
+          <h2 className="text-base font-semibold text-white">Recently Played</h2>
           {recentTracks.length > 0 && (
             <button
               onClick={() => setView('history')}
-              className="text-xs text-muted transition-colors hover:text-accent font-medium"
+              className="text-xs text-muted transition-colors hover:text-white font-medium"
             >
               See full history →
             </button>
@@ -771,7 +734,6 @@ export function HomeView() {
           </div>
         ) : (
           <div className="flex items-center gap-3 py-4 text-muted">
-            <Music2 size={18} />
             <p className="text-sm">Your played tracks will appear here.</p>
           </div>
         )}
@@ -781,10 +743,7 @@ export function HomeView() {
       {playlists.length > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ListMusic size={16} className="text-accent" />
-              <h2 className="text-base font-semibold text-white">Your Playlists</h2>
-            </div>
+            <h2 className="text-base font-semibold text-white">Your Playlists</h2>
             <span className="text-xs text-muted font-medium">
               {playlists.length} {playlists.length === 1 ? 'playlist' : 'playlists'}
             </span>
@@ -808,10 +767,7 @@ export function HomeView() {
       {/* New Releases Section (Horizontal Autoscroll) */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-accent" />
-            <h2 className="text-base font-semibold text-white">New Releases</h2>
-          </div>
+          <h2 className="text-base font-semibold text-white">New Releases</h2>
           {newReleasesLoading && newReleases.length === 0 && <span className="text-xs text-muted">Loading...</span>}
         </div>
         {newReleases.length > 0 ? (

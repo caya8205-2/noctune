@@ -422,10 +422,7 @@ export function StatsView() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="surface-panel">
           <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-            <div className="flex items-center gap-2">
-              <Music2 size={16} className="text-accent" />
-              <h2 className="text-sm font-semibold text-white">Top tracks</h2>
-            </div>
+            <h2 className="text-sm font-semibold text-white">Top tracks</h2>
             {tracksLoading && <span className="text-[11px] text-muted">Loading…</span>}
           </div>
           <div className="max-h-96 overflow-y-auto py-2">
@@ -440,10 +437,7 @@ export function StatsView() {
 
         <div className="surface-panel">
           <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-            <div className="flex items-center gap-2">
-              <User size={16} className="text-accent" />
-              <h2 className="text-sm font-semibold text-white">Top artists</h2>
-            </div>
+            <h2 className="text-sm font-semibold text-white">Top artists</h2>
             {artistsLoading && <span className="text-[11px] text-muted">Loading…</span>}
           </div>
           <div className="max-h-96 overflow-y-auto py-2">
