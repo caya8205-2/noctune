@@ -2,6 +2,25 @@
 
 All notable Noctune changes are documented here.
 
+## v4.4.1 - 2026-09-12
+
+### Audio Streaming & Zero-Latency Transitions
+- **1MB Bounded Range for GoogleVideo Streams**: Fixed an issue where open-ended HTTP `Range: bytes=0-` requests forwarded to YouTube GoogleVideo iOS audio streams triggered an immediate `HTTP 403 Forbidden` response. The 403 forced the backend into an on-the-fly error recovery path that re-resolved audio via `innertube-rs`, causing an unexpected 1.2–1.5s delay and spinner on track transitions. Initial range requests are now safely clamped to 1MB (`STREAM_CHUNK_SIZE`), returning `HTTP 206 Partial Content` in ~50ms without re-resolving.
+- **Fixed Stream Quality Matching Logic**: Corrected an evaluation flaw in `cacheMatchesAudioQuality` where `auto` preference failed strict equality checks against `high` streams produced natively by `innertube-rs`. This previously caused fresh prefetched and cached streams to be rejected as quality mismatches, forcing redundant live refreshes and erroneously flipping track badges to blue (`Refreshed`).
+- **Removed Legacy iOS Stream Invalidation**: Removed the obsolete `isLimitedIosStream` check in `fetchAudioStream` from the `youtubei.js` era that aborted valid iOS streams and fell back to `yt-dlp` or returned HTTP 502, which caused browser HTML5 audio elements to throw `MEDIA_ELEMENT_ERROR: Format error (code 4)`.
+- **In-Memory Prefetch Retained Across Handoff**: Prevented `consumePrefetch` from immediately evicting resolved tracks from the in-memory prefetch map during `/player/resolve`, allowing the subsequent `/player/stream` proxy request and queue status polling to hit RAM cache instantly. Entries are now pruned cleanly via URL expiration and a 50-item LRU cap.
+- **Clean Spotify URI Prefix Parsing**: Fixed Spotify track resolution regex (`replace(/^spotify:(track:)?/, '')`) in `resolvePlayableVideoId` and `/player/stream` so that Spotify URI tracks (such as `spotify:track:<id>`) directly match stored cache entries without leaving residual `track:` prefixes that triggered live matching searches.
+
+### Queue & Status Badge Alignment
+- **Prioritize Cached over Refreshed in QueueView**: Fixed badge rendering precedence in QueueView where `cacheStatus.refreshed` was evaluated before `cacheStatus.cached`. Because backend status marked any track with a valid URL as `refreshed`, cached queue tracks mistakenly displayed sky-blue `Refreshed` badges instead of emerald-green `Cached` badges. QueueView now matches the Full Player view.
+
+### Installer & Sidecar Reliability
+- **NSIS Backend Lifecycle Hooks**: Added `PREINSTALL` and `PREUNINSTALL` hooks to `installer-hooks.nsh` to automatically terminate windowless `noctune-backend.exe` sidecar instances before file copy or removal. This eliminates installation failures caused by locked binaries and prevents orphaned processes from occupying port 3131 across updates.
+- **Persistent Sidecar Logging**: Configured Tauri sidecar process runner in `lib.rs` to persist stdout/stderr and termination exit codes/signals into `backend.log` within the user's application data directory for post-mortem diagnostics.
+
+### Dependency Hardening
+- **Pruned Unused Fastify Static**: Removed unused `@fastify/static` dependency and resolved 18 transitive vulnerabilities across `fast-uri`, `browserslist`, and build tooling.
+
 ## v4.4.0 - 2026-09-11
 
 ### Home & Visual Design Rework

@@ -121,26 +121,26 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V440_HIGHLIGHTS = [
+const V441_HIGHLIGHTS = [
   {
-    title: 'Cleaner, Icon-Free Section Headers',
-    desc: 'Section titles across Home and Stats no longer carry decorative icons. Headers now rely on clean typographic hierarchy alone, giving every view a calmer, more deliberate look.',
+    title: 'Instant Track Transitions',
+    desc: 'Audio playback now transitions instantly when skipping or advancing to the next song. Resolved an issue where initial audio stream requests were rejected by upstream servers, eliminating the 1.5-second loading delay and preventing premature stream format errors.',
   },
   {
-    title: 'Unified Home Header',
-    desc: 'The old "Welcome" block is gone. Home now uses the same header pattern as every other view: a small accent label with a bold page title, so navigating between views feels consistent.',
+    title: 'Consistent In-Memory Prefetching',
+    desc: 'Pre-resolved stream URLs are now preserved in memory across track handoffs. Fixed an issue where high-quality streams were mistakenly flagged as quality mismatches and resolved a second time on playback.',
   },
   {
-    title: 'Simplified Quick Shortcuts',
-    desc: 'Home shortcuts (Liked Songs, Discover Weekly, and friends) are now quiet text-only chips instead of a row of multi-colored icon pills.',
+    title: 'Accurate Queue Status Badges',
+    desc: 'Tracks stored in your offline match cache now correctly display the emerald-green **Cached** badge in QueueView instead of erroneously showing the sky-blue **Refreshed** indicator, matching the Full Player display.',
   },
   {
-    title: 'Fixed Queue Drag & Drop',
-    desc: 'Reordering tracks in the Queue finally works properly. Drag the grip handle and tracks smoothly reshuffle in real time as you move — the same reliable dragging behavior already used when editing playlists.',
+    title: 'Reliable App Updates & Process Cleanup',
+    desc: 'The Windows installer now cleanly terminates background audio engine sidecars before updating or uninstalling, preventing locked file conflicts and eliminating orphaned backend processes after updating.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V440_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V441_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
