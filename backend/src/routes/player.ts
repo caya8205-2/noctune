@@ -134,7 +134,7 @@ async function resolvePlayableVideoId(videoId: string, query: string, youtubeId?
     }
     return null;
   }
-  const spotifyId = videoId.replace(/^spotify:/, '');
+  const spotifyId = videoId.replace(/^spotify:(track:)?/, '');
   const cleanYtId = youtubeId ? youtubeId.replace(/^(youtube|ytdlp):/, '').trim() : undefined;
   if (cleanYtId && isYoutubeVideoId(cleanYtId) && !isPlaybackBlacklisted(cleanYtId)) return cleanYtId;
   if (cleanYtId && isPlaybackBlacklisted(cleanYtId)) {
@@ -234,10 +234,12 @@ const STREAM_CHUNK_SIZE = 1024 * 1024;
 function normalizeUpstreamRange(range: string | undefined, chunkSize = STREAM_CHUNK_SIZE): string {
   if (!range) return `bytes=0-${chunkSize - 1}`;
 
-  const openEnded = range.match(/^bytes=(\d+)-$/i);
-  if (openEnded) {
-    const start = Number(openEnded[1]);
-    return `bytes=${start}-${start + chunkSize - 1}`;
+  const match = range.match(/^bytes=(\d+)-(\d*)$/i);
+  if (match) {
+    const start = Number(match[1]);
+    const reqEnd = match[2] ? Number(match[2]) : Infinity;
+    const end = Math.min(reqEnd, start + chunkSize - 1);
+    return `bytes=${start}-${end}`;
   }
 
   return range;
@@ -248,7 +250,7 @@ async function fetchAudioStream(
   audioUrl: string,
   range: string | undefined,
   _refreshIfWebm = false,
-  boundedRange = false
+  boundedRange = true
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
   const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
   const headers: Record<string, string> = {};
@@ -805,7 +807,7 @@ export async function playerRoutes(app: FastifyInstance) {
     const preference = getEnvConfig().audioQualityPreference;
     let cleanStreamId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
     if (cleanStreamId.startsWith('spotify:')) {
-      const spotifyId = cleanStreamId.replace(/^spotify:/, '');
+      const spotifyId = cleanStreamId.replace(/^spotify:(track:)?/, '');
       const match = getCachedBySpotifyId(spotifyId) || getMatchCacheEntry(spotifyId);
       if (match?.youtubeId) {
         cleanStreamId = match.youtubeId.replace(/^(youtube|ytdlp):/, '').trim();
