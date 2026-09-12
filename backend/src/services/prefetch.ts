@@ -4,8 +4,9 @@ import { resolveAudioUrl, resolveTrack } from './audioResolver.js';
 import { getEnvConfig } from './env.js';
 import type { CachedTrack } from '../types/index.js';
 
-const prefetchQueue = new PQueue({ concurrency: 3 });
+const prefetchQueue = new PQueue({ concurrency: 2 });
 const inFlight = new Set<string>();
+const inFlightPromises = new Map<string, Promise<CachedTrack | undefined>>();
 const prefetched = new Map<string, CachedTrack>();
 const MAX_PREFETCH_ENTRIES = 50;
 
@@ -49,10 +50,22 @@ export function isPrefetching(videoId: string): boolean {
   return inFlight.has(videoId);
 }
 
+export function waitForInFlightPrefetch(videoId: string): Promise<CachedTrack | undefined> | undefined {
+  const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  return inFlightPromises.get(videoId) ?? inFlightPromises.get(cleanId);
+}
+
 export async function schedulePrefetch(videoIds: string[]): Promise<void> {
   prunePrefetchMap();
-  const targets = videoIds.slice(0, 10);
+  const targets = videoIds.slice(0, 5);
   const preference = getEnvConfig().audioQualityPreference;
+
+  // Evict unstarted queue items from past sliding windows so workers
+  // immediately focus on the current upcoming window without backlog lag
+  if (prefetchQueue.size > 0) {
+    prefetchQueue.clear();
+  }
+
   logPrefetch('schedule requested', {
     requested: videoIds.length,
     targets,
@@ -92,6 +105,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
     }
 
     inFlight.add(videoId);
+    inFlight.add(cleanId);
     logPrefetch('enqueue job', {
       videoId,
       mode: cached ? 'refresh-url' : 'full-resolve',
@@ -99,7 +113,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
       pending: prefetchQueue.pending,
     });
 
-    prefetchQueue.add(async () => {
+    const task = async (): Promise<CachedTrack | undefined> => {
       const startedAt = Date.now();
       const mode = cached ? 'refresh-url' : 'full-resolve';
       logPrefetch('job start', { videoId, mode });
@@ -128,6 +142,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             quality: refreshed.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
+          return refreshed;
         } else {
           const { track, audio } = await resolveTrack(videoId, videoId);
           const saved = upsertTrack(
@@ -151,6 +166,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             quality: saved.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
+          return saved;
         }
       } catch (err) {
         console.warn(
@@ -161,8 +177,12 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             message: (err as Error).message,
           })}`
         );
+        return undefined;
       } finally {
         inFlight.delete(videoId);
+        inFlight.delete(cleanId);
+        inFlightPromises.delete(videoId);
+        inFlightPromises.delete(cleanId);
         logPrefetch('job settled', {
           videoId,
           queueSize: prefetchQueue.size,
@@ -171,7 +191,11 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
           prefetched: [...prefetched.keys()],
         });
       }
-    });
+    };
+
+    const jobPromise = prefetchQueue.add(task) as Promise<CachedTrack | undefined>;
+    inFlightPromises.set(videoId, jobPromise);
+    inFlightPromises.set(cleanId, jobPromise);
   }
 }
 

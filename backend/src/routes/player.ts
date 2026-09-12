@@ -28,6 +28,7 @@ import {
   isPrefetching,
   clearPrefetchForId,
   schedulePrefetch,
+  waitForInFlightPrefetch,
 } from '../services/prefetch.js';
 import {
   clearAudioCacheForId,
@@ -536,7 +537,14 @@ export async function playerRoutes(app: FastifyInstance) {
         app.log.info({ videoId, playableVideoId, query }, '[player] spotify mapped to youtube');
       }
 
-      const prefetched = getPrefetched(playableVideoId);
+      let prefetched = getPrefetched(playableVideoId);
+      if (!prefetched) {
+        const inFlight = waitForInFlightPrefetch(playableVideoId);
+        if (inFlight) {
+          app.log.info({ videoId: playableVideoId }, '[player] awaiting in-flight prefetch job');
+          prefetched = await inFlight;
+        }
+      }
       if (prefetched && isUrlFresh(prefetched) && cacheMatchesAudioQuality(prefetched, preference)) {
         const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, prefetched.title);
         if (replacementId !== playableVideoId) {
@@ -1043,7 +1051,7 @@ export async function playerRoutes(app: FastifyInstance) {
     schedulePrefetch(playableIds).catch((err) =>
       app.log.warn(err, '[player] prefetch scheduling error')
     );
-    return reply.send({ scheduled: playableIds.slice(0, 10), message: 'Prefetch queued' });
+    return reply.send({ scheduled: playableIds.slice(0, 5), message: 'Prefetch queued' });
   });
 
   app.post('/player/cache-audio/status', async (req, reply) => {
