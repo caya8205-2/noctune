@@ -265,10 +265,10 @@ export function QueueView() {
                           ? 'border-yellow-400/80 bg-yellow-400/20 text-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.3)]'
                           : cacheStatus?.prefetching
                             ? 'border-lime-400/70 bg-lime-400/20 text-lime-400 animate-pulse'
-                            : cacheStatus?.refreshed
-                              ? 'border-sky-400/70 bg-sky-400/20 text-sky-300'
-                              : cacheStatus?.cached
-                                ? 'border-emerald-500/70 bg-emerald-500/20 text-emerald-400'
+                            : cacheStatus?.cached
+                              ? 'border-emerald-500/70 bg-emerald-500/20 text-emerald-400'
+                              : cacheStatus?.refreshed
+                                ? 'border-sky-400/70 bg-sky-400/20 text-sky-300'
                                 : cacheStatus?.resolved
                                   ? 'border-red-500/70 bg-red-500/20 text-red-400'
                                   : 'border-base-600/60 text-muted'
