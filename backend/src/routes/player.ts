@@ -250,7 +250,7 @@ async function fetchAudioStream(
   audioUrl: string,
   range: string | undefined,
   _refreshIfWebm = false,
-  boundedRange = true
+  boundedRange = false
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
   const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
   const headers: Record<string, string> = {};
@@ -811,6 +811,13 @@ export async function playerRoutes(app: FastifyInstance) {
       const match = getCachedBySpotifyId(spotifyId) || getMatchCacheEntry(spotifyId);
       if (match?.youtubeId) {
         cleanStreamId = match.youtubeId.replace(/^(youtube|ytdlp):/, '').trim();
+      } else {
+        const resolvedId = await resolvePlayableVideoId(videoId, spotifyId);
+        if (resolvedId) {
+          cleanStreamId = resolvedId;
+        } else {
+          return reply.status(404).send({ error: 'No playable YouTube match found for Spotify track' });
+        }
       }
     }
     if (isPlaybackBlacklisted(cleanStreamId)) {

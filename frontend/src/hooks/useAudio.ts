@@ -146,6 +146,7 @@ export function useAudio() {
       if (
         suppressNextErrorRef.current ||
         !target.currentSrc ||
+        error?.code === 1 || // MediaError.MEDIA_ERR_ABORTED: intentional src change or abort
         error?.message?.toLowerCase().includes('empty src')
       ) {
         suppressNextErrorRef.current = false;
@@ -241,6 +242,7 @@ export function useAudio() {
     if (prebufferedAudio && prebufferedAudio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       delete recoveryAttemptsRef.current[currentTrack.id];
       if (audio.src !== prebufferedAudio.src) {
+        suppressNextErrorRef.current = true;
         audio.crossOrigin = prebufferedAudio.crossOrigin;
         audio.src = prebufferedAudio.src;
       }
@@ -258,6 +260,7 @@ export function useAudio() {
         if (cancelled || !audioRef.current) return;
         delete recoveryAttemptsRef.current[currentTrack.id];
         if (audio.src !== src) {
+          suppressNextErrorRef.current = true;
           audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
           audio.src = src;
           audio.load();
@@ -289,7 +292,11 @@ export function useAudio() {
     const upcoming = queue.slice(queueIndex + 1, queueIndex + 4);
     
     // Clean old prebuffered audios not in upcoming
-    const upcomingIds = new Set(upcoming.map(t => (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim()));
+    const upcomingIds = new Set(
+      upcoming
+        .map((t) => (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim())
+        .filter((id) => id && !id.startsWith('spotify:'))
+    );
     for (const [id, el] of preloadedAudiosRef.current.entries()) {
       if (!upcomingIds.has(id)) {
         el.pause();
@@ -302,18 +309,17 @@ export function useAudio() {
     // Preload next upcoming audio streams into browser media cache
     for (const track of upcoming) {
       const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
-      if (!cleanId || preloadedAudiosRef.current.has(cleanId) || preloadedAudiosRef.current.has(track.id)) continue;
+      if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
 
       apiUrl('/player/stream/' + cleanId)
         .then((src) => {
-          if (preloadedAudiosRef.current.has(cleanId) || preloadedAudiosRef.current.has(track.id)) return;
+          if (preloadedAudiosRef.current.has(cleanId)) return;
           const preAudio = new Audio();
           preAudio.preload = 'auto';
           preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
           preAudio.src = src;
           preAudio.load();
           preloadedAudiosRef.current.set(cleanId, preAudio);
-          preloadedAudiosRef.current.set(track.id, preAudio);
         })
         .catch(() => {});
     }
