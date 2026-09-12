@@ -101,6 +101,19 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             quality: refreshed.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
+
+          // Download audio file to disk cache so playback is truly instant
+          // (stream from local file, not YouTube fetch).
+          try {
+            const { cacheAudioFile } = await import('../routes/player.js');
+            const ok = await cacheAudioFile(videoId, audio.url);
+            logPrefetch('audio cache download', { videoId, ok });
+          } catch (err) {
+            logPrefetch('audio cache download failed', {
+              videoId,
+              message: (err as Error).message,
+            });
+          }
         } else {
           const { track, audio } = await resolveTrack(videoId, videoId);
           const saved = upsertTrack(
@@ -123,6 +136,19 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             quality: saved.audioQuality ?? 'unknown',
             elapsedMs: Date.now() - startedAt,
           });
+
+          // Download audio file to disk cache so playback is truly instant
+          // (stream from local file, not YouTube fetch).
+          try {
+            const { cacheAudioFile } = await import('../routes/player.js');
+            const ok = await cacheAudioFile(videoId, audio.url);
+            logPrefetch('audio cache download', { videoId, ok });
+          } catch (err) {
+            logPrefetch('audio cache download failed', {
+              videoId,
+              message: (err as Error).message,
+            });
+          }
         }
       } catch (err) {
         console.warn(
