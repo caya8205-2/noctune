@@ -333,7 +333,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       // Kick off prefetch for next tracks BEFORE resolving current track.
       // This gives the backend time to resolve URLs in the background so
       // /player/resolve hits the prefetched map instead of re-resolving.
-      const nextTracks = getNextCandidateTracks(queue, idx, get().shuffle, 5);
+      const nextTracks = getNextCandidateTracks(queue, idx, get().shuffle, 10);
       if (nextTracks.length > 0) {
         api.prefetchTracks(nextTracks).catch(() => {});
       }
@@ -413,9 +413,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       get().pushQueueHistory(playableTrack);
       void get().topUpQueue();
 
-      // Trigger prefetch for next 5 tracks
+      // Trigger prefetch for next 10 tracks
       if (playbackQueue.length > 0 && playbackIndex >= 0) {
-        const nextTracks = getNextCandidateTracks(playbackQueue, playbackIndex, get().shuffle, 5);
+        const nextTracks = getNextCandidateTracks(playbackQueue, playbackIndex, get().shuffle, 10);
         const nextIds = nextTracks.map(t => t.id);
 
         console.info('[player] prefetch plan', {

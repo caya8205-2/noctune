@@ -4,7 +4,7 @@ import { resolveAudioUrl, resolveTrack } from './audioResolver.js';
 import { getEnvConfig } from './env.js';
 import type { CachedTrack } from '../types/index.js';
 
-const prefetchQueue = new PQueue({ concurrency: 2 });
+const prefetchQueue = new PQueue({ concurrency: 3 });
 const inFlight = new Set<string>();
 const prefetched = new Map<string, CachedTrack>();
 const MAX_PREFETCH_ENTRIES = 50;
@@ -51,7 +51,7 @@ export function isPrefetching(videoId: string): boolean {
 
 export async function schedulePrefetch(videoIds: string[]): Promise<void> {
   prunePrefetchMap();
-  const targets = videoIds.slice(0, 5);
+  const targets = videoIds.slice(0, 10);
   const preference = getEnvConfig().audioQualityPreference;
   logPrefetch('schedule requested', {
     requested: videoIds.length,

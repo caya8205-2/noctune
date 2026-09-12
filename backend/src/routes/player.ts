@@ -1043,7 +1043,7 @@ export async function playerRoutes(app: FastifyInstance) {
     schedulePrefetch(playableIds).catch((err) =>
       app.log.warn(err, '[player] prefetch scheduling error')
     );
-    return reply.send({ scheduled: playableIds.slice(0, 5), message: 'Prefetch queued' });
+    return reply.send({ scheduled: playableIds.slice(0, 10), message: 'Prefetch queued' });
   });
 
   app.post('/player/cache-audio/status', async (req, reply) => {
