@@ -349,7 +349,7 @@ function finishWriter(writer: fs.WriteStream): Promise<void> {
   });
 }
 
-export async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolean> {
+async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolean> {
   const preference = getEnvConfig().audioQualityPreference;
   if (getExistingAudioCachePath(videoId, preference)) return true;
 
