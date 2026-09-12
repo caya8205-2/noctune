@@ -164,17 +164,50 @@ pub fn run() {
 
                 _app.manage(BackendProcess(std::sync::Mutex::new(Some(child))));
 
+                // Persist backend stdout/stderr to a rotating log so silent sidecar
+                // exits can be diagnosed post-mortem. Log lives alongside the PID
+                // file in the app data dir and is truncated per session.
+                let backend_log_path = app_data_dir.join("backend.log");
+                let log_file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&backend_log_path)
+                    .ok();
+
                 // Forward backend stdout/stderr while the sidecar is alive.
                 tauri::async_runtime::spawn(async move {
+                    use std::io::Write;
+                    let mut log_file = log_file;
                     while let Some(event) = rx.recv().await {
                         match event {
                             CommandEvent::Stdout(line) => {
-                                print!("[backend] {}", String::from_utf8_lossy(&line));
+                                let text = String::from_utf8_lossy(&line);
+                                print!("[backend] {}", text);
+                                if let Some(f) = log_file.as_mut() {
+                                    let _ = f.write_all(text.as_bytes());
+                                    let _ = f.flush();
+                                }
                             }
                             CommandEvent::Stderr(line) => {
-                                eprint!("[backend] {}", String::from_utf8_lossy(&line));
+                                let text = String::from_utf8_lossy(&line);
+                                eprint!("[backend] {}", text);
+                                if let Some(f) = log_file.as_mut() {
+                                    let _ = f.write_all(b"[stderr] ");
+                                    let _ = f.write_all(text.as_bytes());
+                                    let _ = f.flush();
+                                }
                             }
-                            CommandEvent::Terminated(_) => {
+                            CommandEvent::Terminated(payload) => {
+                                let msg = format!(
+                                    "[sidecar] terminated code={:?} signal={:?}\n",
+                                    payload.code, payload.signal
+                                );
+                                eprint!("{}", msg);
+                                if let Some(f) = log_file.as_mut() {
+                                    let _ = f.write_all(msg.as_bytes());
+                                    let _ = f.flush();
+                                }
                                 break;
                             }
                             _ => {}
