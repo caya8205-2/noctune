@@ -302,17 +302,18 @@ export function useAudio() {
     // Preload next upcoming audio streams into browser media cache
     for (const track of upcoming) {
       const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
-      if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
+      if (!cleanId || preloadedAudiosRef.current.has(cleanId) || preloadedAudiosRef.current.has(track.id)) continue;
 
       apiUrl('/player/stream/' + cleanId)
         .then((src) => {
-          if (preloadedAudiosRef.current.has(cleanId)) return;
+          if (preloadedAudiosRef.current.has(cleanId) || preloadedAudiosRef.current.has(track.id)) return;
           const preAudio = new Audio();
           preAudio.preload = 'auto';
           preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
           preAudio.src = src;
           preAudio.load();
           preloadedAudiosRef.current.set(cleanId, preAudio);
+          preloadedAudiosRef.current.set(track.id, preAudio);
         })
         .catch(() => {});
     }

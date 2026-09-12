@@ -127,7 +127,8 @@ export function cacheMatchesAudioQuality(
   track: CachedTrack,
   preference: AudioQualityPreference
 ): boolean {
-  return (track.audioQualityPreference ?? 'auto') === preference;
+  if (preference === 'auto') return true;
+  return track.audioQualityPreference === 'high' || track.audioQuality === 'high';
 }
 
 /** Store or update a track after resolving audio metadata. Playback history is updated only by recordPlay(). */

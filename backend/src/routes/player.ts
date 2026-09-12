@@ -229,14 +229,6 @@ function isLikelyWebmStream(contentType: string | null, audioUrl: string): boole
   return content.includes('webm') || url.includes('audio%2fwebm') || url.includes('audio/webm');
 }
 
-function isLimitedIosStream(audioUrl: string): boolean {
-  try {
-    return new URL(audioUrl).searchParams.get('c')?.toUpperCase() === 'IOS';
-  } catch {
-    return audioUrl.includes('c=IOS');
-  }
-}
-
 const STREAM_CHUNK_SIZE = 1024 * 1024;
 
 function normalizeUpstreamRange(range: string | undefined, chunkSize = STREAM_CHUNK_SIZE): string {
@@ -265,9 +257,7 @@ async function fetchAudioStream(
   }
   let res = await fetch(audioUrl, { headers });
 
-  const shouldRefresh =
-    !res.ok ||
-    isLimitedIosStream(audioUrl);
+  const shouldRefresh = !res.ok;
 
   if (!shouldRefresh) {
     return { res, refreshed: false, audioUrl };
@@ -813,7 +803,14 @@ export async function playerRoutes(app: FastifyInstance) {
     }
 
     const preference = getEnvConfig().audioQualityPreference;
-    const cleanStreamId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+    let cleanStreamId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+    if (cleanStreamId.startsWith('spotify:')) {
+      const spotifyId = cleanStreamId.replace(/^spotify:/, '');
+      const match = getCachedBySpotifyId(spotifyId) || getMatchCacheEntry(spotifyId);
+      if (match?.youtubeId) {
+        cleanStreamId = match.youtubeId.replace(/^(youtube|ytdlp):/, '').trim();
+      }
+    }
     if (isPlaybackBlacklisted(cleanStreamId)) {
       return reply.status(404).send({ error: 'Video is blacklisted' });
     }

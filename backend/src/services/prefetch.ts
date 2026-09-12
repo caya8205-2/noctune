@@ -7,6 +7,21 @@ import type { CachedTrack } from '../types/index.js';
 const prefetchQueue = new PQueue({ concurrency: 2 });
 const inFlight = new Set<string>();
 const prefetched = new Map<string, CachedTrack>();
+const MAX_PREFETCH_ENTRIES = 50;
+
+function prunePrefetchMap(): void {
+  const now = Date.now();
+  for (const [id, track] of prefetched.entries()) {
+    if (track.audioUrlExpiry && now >= track.audioUrlExpiry) {
+      prefetched.delete(id);
+    }
+  }
+  while (prefetched.size > MAX_PREFETCH_ENTRIES) {
+    const oldestKey = prefetched.keys().next().value;
+    if (oldestKey) prefetched.delete(oldestKey);
+    else break;
+  }
+}
 
 function logPrefetch(message: string, details?: Record<string, unknown>) {
   const suffix = details ? ` ${JSON.stringify(details)}` : '';
@@ -14,13 +29,20 @@ function logPrefetch(message: string, details?: Record<string, unknown>) {
 }
 
 export function getPrefetched(videoId: string): CachedTrack | undefined {
-  if (prefetched.has(videoId)) return prefetched.get(videoId);
   const rawId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
-  return (
+  const track = (
+    prefetched.get(videoId) ??
     prefetched.get(rawId) ??
     prefetched.get(`youtube:${rawId}`) ??
     prefetched.get(`ytdlp:${rawId}`)
   );
+  if (!track) return undefined;
+  if (track.audioUrlExpiry && Date.now() >= track.audioUrlExpiry) {
+    prefetched.delete(videoId);
+    prefetched.delete(rawId);
+    return undefined;
+  }
+  return track;
 }
 
 export function isPrefetching(videoId: string): boolean {
@@ -28,6 +50,7 @@ export function isPrefetching(videoId: string): boolean {
 }
 
 export async function schedulePrefetch(videoIds: string[]): Promise<void> {
+  prunePrefetchMap();
   const targets = videoIds.slice(0, 5);
   const preference = getEnvConfig().audioQualityPreference;
   logPrefetch('schedule requested', {
@@ -50,11 +73,14 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
       continue;
     }
 
-    const cached = getCachedById(videoId);
+    const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+    const cached = getCachedById(videoId) || getCachedById(cleanId);
     if (cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)) {
       prefetched.set(videoId, cached);
+      prefetched.set(cleanId, cached);
       logPrefetch('fresh cache promoted to prefetched map', {
         videoId,
+        cleanId,
         title: cached.title,
         preference,
         cachedPreference: cached.audioQualityPreference ?? 'auto',
@@ -92,6 +118,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             audio.resolverSource
           );
           prefetched.set(videoId, refreshed);
+          prefetched.set(cleanId, refreshed);
           logPrefetch('job done', {
             videoId,
             mode,
@@ -114,6 +141,7 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
             audio.resolverSource
           );
           prefetched.set(videoId, saved);
+          prefetched.set(cleanId, saved);
           logPrefetch('job done', {
             videoId,
             mode,
@@ -149,7 +177,8 @@ export async function schedulePrefetch(videoIds: string[]): Promise<void> {
 
 export function consumePrefetch(videoId: string): void {
   logPrefetch(prefetched.has(videoId) ? 'consume hit' : 'consume miss', { videoId });
-  prefetched.delete(videoId);
+  // Do not delete immediately: the frontend still needs this URL for /player/stream
+  // and subsequent seeks/loops while the track is active.
 }
 
 export function clearPrefetchCache(): { prefetched: number; inFlight: number; queued: number } {
