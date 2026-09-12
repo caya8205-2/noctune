@@ -329,6 +329,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const resolveQuery = track.id.startsWith('spotify:')
         ? `${track.title} ${track.artist}`
         : track.query;
+
+      // Kick off prefetch for next tracks BEFORE resolving current track.
+      // This gives the backend time to resolve URLs in the background so
+      // /player/resolve hits the prefetched map instead of re-resolving.
+      const nextTracks = getNextCandidateTracks(queue, idx, get().shuffle, 5);
+      if (nextTracks.length > 0) {
+        api.prefetchTracks(nextTracks).catch(() => {});
+      }
+
       const resolved = await api.resolve(track.id, resolveQuery, track.youtubeId);
       const playableTrack = {
         ...resolved,
