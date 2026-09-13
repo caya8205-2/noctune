@@ -78,7 +78,7 @@ jobs:
         if: needs.preflight.outputs.windows_run_id == ''
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: 'npm'
 
       - name: Install Rust
@@ -154,7 +154,7 @@ jobs:
         if: needs.preflight.outputs.linux_run_id == ''
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: 'npm'
 
       - name: Install Rust

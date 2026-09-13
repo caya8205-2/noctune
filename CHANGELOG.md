@@ -2,6 +2,15 @@
 
 All notable Noctune changes are documented here.
 
+## v4.4.2 - 2026-09-13
+
+### Backend Stability & Node 22 LTS Migration
+- **Eliminated Native SQLite GC Crash**: Fixed a fatal crash where the background backend process terminated silently with `Assertion failed: (env) != nullptr` in `node::RemoveEnvironmentCleanupHook` (exit code 134 / SIGABRT) when V8 garbage-collected prepared SQLite statements (such as loading playlists, history, or settings). Root-caused to an upstream Node 24.19+ regression where `node::ObjectWrap` cleanup hooks are invoked without an active environment. Migrated backend standalone binary compilation (`pkg`) and CI runtime targets from Node 24 to Node 22 LTS, completely eliminating the crash.
+
+### In-App Updater & Release Pipeline Polishing
+- **Pruned Redundant Release Assets**: Streamlined GitHub Release publishing to strictly upload user-facing installation packages (`.exe`, `.deb`, `.AppImage`) and `latest.json`, filtering out internal intermediate Debian archives (`control.tar.gz`, `data.tar.gz`) and loose `.sig` files already embedded inside `latest.json`.
+- **Smart CI Build Artifact Caching**: Added automatic artifact detection and reuse across workflow runs, allowing previous successful Windows/Linux builds for the same version to be downloaded instantly rather than recompiling from scratch.
+
 ## v4.4.1 - 2026-09-12
 
 ### In-App Background Updater

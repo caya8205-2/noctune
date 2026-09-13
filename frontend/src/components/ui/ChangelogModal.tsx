@@ -121,7 +121,11 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V441_HIGHLIGHTS = [
+const V442_HIGHLIGHTS = [
+  {
+    title: 'Native Backend & Database Stability',
+    desc: 'Resolved a crash where the backend engine terminated silently during playlist browsing and SQLite garbage collection. Migrated backend binary compilation to Node 22 LTS to eliminate an upstream Node 24 V8 cleanup hook assertion error.',
+  },
   {
     title: 'In-App Background Updates',
     desc: 'New releases are now downloaded silently in the background while you listen. An unobtrusive notification appears when the update is ready, letting you restart Noctune to apply it instantly — no more manual installer downloads from GitHub.',
@@ -138,13 +142,9 @@ const V441_HIGHLIGHTS = [
     title: 'Accurate Queue Status Badges',
     desc: 'Tracks stored in your local match cache now correctly display the emerald-green **Cached** badge in QueueView instead of erroneously showing the sky-blue **Refreshed** indicator, matching the Full Player display.',
   },
-  {
-    title: 'Reliable App Updates & Process Cleanup',
-    desc: 'The Windows installer now cleanly terminates background audio engine sidecars before updating or uninstalling, preventing locked file conflicts and eliminating orphaned backend processes after updating.',
-  },
 ];
 
-const DEFAULT_HIGHLIGHTS = V441_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V442_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
