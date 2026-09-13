@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
   ChevronDown, ChevronRight, Copy, RotateCw, Music2, Ban, Save, FileText,
-  Wifi, HardDrive, List, X, Brain, UploadCloud, ExternalLink
+  HardDrive, X, UploadCloud, ExternalLink
 } from 'lucide-react';
 import {
   debugApi, discoverBackend,
@@ -47,12 +47,6 @@ function ConfirmModal({ config, onClose }: { config: ConfirmConfig; onClose: () 
     if (config.variant === 'danger') {
       return 'btn-danger';
     }
-    if (config.variant === 'emerald') {
-      return 'rounded-xl border border-emerald-500/30 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50';
-    }
-    if (config.variant === 'purple') {
-      return 'rounded-xl border border-purple-500/30 bg-purple-500/20 px-4 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/30 transition-colors disabled:opacity-50';
-    }
     if (config.variant === 'warning') {
       return 'rounded-xl border border-amber-500/30 bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors disabled:opacity-50';
     }
@@ -64,13 +58,11 @@ function ConfirmModal({ config, onClose }: { config: ConfirmConfig; onClose: () 
       <div className="modal-panel max-w-md p-5 space-y-4 shadow-2xl">
         <div className="flex items-start gap-3">
           <div className={`rounded-xl p-2.5 flex-shrink-0 ${
-            config.variant === 'emerald'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              : config.variant === 'purple'
-              ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+            config.variant === 'danger'
+              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
               : config.variant === 'warning'
               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+              : 'bg-white/5 text-soft border border-white/10'
           }`}>
             <AlertCircle size={20} />
           </div>
@@ -529,8 +521,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   if (!track) {
     return (
       <div className="surface-panel p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Music2 size={16} className="text-accent" />
+        <div className="mb-4">
           <h2 className="text-base font-semibold text-white">Current Track</h2>
         </div>
         <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
@@ -569,10 +560,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   return (
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Music2 size={16} className="text-accent" />
-          <h2 className="text-base font-semibold text-white">Current Track</h2>
-        </div>
+        <h2 className="text-base font-semibold text-white">Current Track</h2>
         <button onClick={() => void refreshSnapshot()} disabled={snapLoading} className="btn-ghost" title="Refresh snapshot">
           <RefreshCw size={15} className={snapLoading ? 'animate-spin' : ''} />
         </button>
@@ -810,8 +798,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
 
       {/* Active match — the query + candidate currently in playback (read from cache, no live search) */}
       <div className="mt-5 border-t border-white/[0.06] pt-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Terminal size={15} className="text-accent" />
+        <div className="mb-3">
           <h3 className="text-sm font-semibold text-white">Active match</h3>
         </div>
         {snapshot?.matchCache || snapshot?.learned ? (
@@ -915,8 +902,7 @@ function MatcherInspector() {
 
   return (
     <div className="surface-panel p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Terminal size={16} className="text-accent" />
+      <div className="mb-4">
         <h2 className="text-base font-semibold text-white">Manual Track Search & Save to Cache</h2>
       </div>
       <p className="mb-3 text-xs text-muted">
@@ -1059,7 +1045,6 @@ function CachePanel() {
       <div className="surface-panel p-5">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Database size={16} className="text-accent" />
             <h2 className="text-base font-semibold text-white">Learned Cache</h2>
             <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
               {entries.length} entries
@@ -1209,7 +1194,6 @@ function CachedLyricsList() {
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Database size={16} className="text-accent" />
           <h2 className="text-base font-semibold text-white">Cached Lyrics</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
             {entries.length} entries
@@ -1392,10 +1376,7 @@ function LyricsPanel() {
       {/* Target Track Lyrics Status Card */}
       <div className="surface-panel p-5">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <FileText size={16} className="text-accent" />
-            <h2 className="text-base font-semibold text-white">Current Track Lyrics</h2>
-          </div>
+          <h2 className="text-base font-semibold text-white">Current Track Lyrics</h2>
           <button onClick={() => void loadSnapshot()} disabled={loadingSnap} className="btn-ghost" title="Refresh snapshot">
             <RefreshCw size={15} className={loadingSnap ? 'animate-spin' : ''} />
           </button>
@@ -1456,8 +1437,7 @@ function LyricsPanel() {
 
       {/* Manual Lyrics Search & Save */}
       <div className="surface-panel p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Search size={16} className="text-accent" />
+        <div className="mb-3">
           <h3 className="text-sm font-semibold text-white">Manual Lyrics Search & Save to Cache</h3>
         </div>
         <p className="mb-4 text-xs text-muted">
@@ -1573,19 +1553,16 @@ function StatusPanel() {
   }
 
   const cards = [
-    { label: 'Track Cache', value: status.cache.total, sub: `${status.cache.totalQueries} queries`, color: 'text-accent' },
-    { label: 'Learned Cache', value: status.matchCache.total, sub: 'spotify→youtube', color: 'text-sky-400' },
-    { label: 'Prefetched', value: status.prefetch.prefetched.length, sub: `${status.prefetch.inFlight.length} in-flight · ${status.prefetch.pending} pending`, color: 'text-violet-400' },
-    { label: 'Blacklisted', value: status.playbackBlacklist.failedIds, sub: 'failed IDs', color: 'text-red-400' },
+    { label: 'Track Cache', value: status.cache.total, sub: `${status.cache.totalQueries} queries` },
+    { label: 'Learned Cache', value: status.matchCache.total, sub: 'spotify→youtube' },
+    { label: 'Prefetched', value: status.prefetch.prefetched.length, sub: `${status.prefetch.inFlight.length} in-flight · ${status.prefetch.pending} pending` },
+    { label: 'Blacklisted', value: status.playbackBlacklist.failedIds, sub: 'failed IDs' },
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity size={16} className="text-accent" />
-          <h2 className="text-base font-semibold text-white">Backend Status</h2>
-        </div>
+        <h2 className="text-base font-semibold text-white">Backend Status</h2>
         <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -1595,7 +1572,7 @@ function StatusPanel() {
         {cards.map((c) => (
           <div key={c.label} className="surface-panel p-4">
             <div className="section-label mb-1.5">{c.label}</div>
-            <div className={`text-3xl font-semibold tabular-nums ${c.color}`}>{c.value}</div>
+            <div className="text-3xl font-semibold tabular-nums text-white">{c.value}</div>
             <div className="mt-0.5 text-xs text-muted">{c.sub}</div>
           </div>
         ))}
@@ -1606,17 +1583,17 @@ function StatusPanel() {
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between">
             <span className="text-muted">Engine</span>
-            <span className="font-mono text-soft">{status.resolver.name}</span>
+            <span className="font-mono text-white">{status.resolver.name}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted">Discord RPC</span>
-            <span className={status.discordRpc.ready ? 'text-emerald-400' : 'text-muted'}>
+            <span className="text-white">
               {status.discordRpc.enabled ? (status.discordRpc.ready ? 'Ready' : 'Connecting...') : 'Disabled'}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted">Demo Mode</span>
-            <span className={status.demoMode ? 'text-amber-400' : 'text-muted'}>
+            <span className="text-white">
               {status.demoMode ? 'Active' : 'Off'}
             </span>
           </div>
@@ -1634,7 +1611,7 @@ function StatusPanel() {
           {status.prefetch.prefetched.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {status.prefetch.prefetched.map((id) => (
-                <code key={id} className="rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] text-emerald-300">{id}</code>
+                <code key={id} className="rounded-md bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">{id}</code>
               ))}
             </div>
           ) : (
@@ -1647,7 +1624,7 @@ function StatusPanel() {
           {status.prefetch.inFlight.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {status.prefetch.inFlight.map((id) => (
-                <code key={id} className="rounded-md bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] text-amber-300">{id}</code>
+                <code key={id} className="rounded-md bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">{id}</code>
               ))}
             </div>
           ) : (
@@ -1734,7 +1711,6 @@ function BlacklistPanel() {
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Ban size={16} className="text-amber-400" />
           <h2 className="text-base font-semibold text-white">Playback Blacklist</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
         </div>
@@ -1871,7 +1847,6 @@ function AudioCachePanel() {
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <HardDrive size={16} className="text-violet-400" />
           <h2 className="text-base font-semibold text-white">Audio File Cache</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
             {files.length} files · {formatBytes(totalBytes)}
@@ -2008,7 +1983,6 @@ function RequestLogPanel() {
     <div className="surface-panel p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Wifi size={16} className="text-sky-400" />
           <h2 className="text-base font-semibold text-white">Request Log</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
         </div>
@@ -2091,8 +2065,7 @@ function QueueInspector() {
 
   return (
     <div className="surface-panel p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <List size={16} className="text-accent" />
+      <div className="mb-4">
         <h2 className="text-base font-semibold text-white">Queue Inspector</h2>
       </div>
 
@@ -2352,13 +2325,12 @@ function MlModelPanel() {
     <div className="surface-panel p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Brain size={16} className="text-purple-400" />
           <h2 className="text-base font-semibold text-white">ML Recommendation Model</h2>
-          <span className={`rounded-md border px-2 py-0.5 font-mono text-xs ${stats?.isReady ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>
+          <span className={`rounded-md border px-2 py-0.5 font-mono text-xs ${stats?.isReady ? 'border-white/10 bg-white/[0.04] text-white' : 'border-white/10 bg-white/[0.04] text-muted'}`}>
             {stats?.isReady ? 'Model Active' : 'Cold Start'}
           </span>
           {stats?.hasSeedModel && (
-            <span className="rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 font-mono text-xs text-purple-300" title="Pre-trained seed model + locally learned tracks from your listening history">
+            <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-xs text-soft" title="Pre-trained seed model + locally learned tracks from your listening history">
               Trained Dataset ({stats.seedTrackCount.toLocaleString()} tracks)
             </span>
           )}
@@ -2400,7 +2372,7 @@ function MlModelPanel() {
           </div>
           <div className="rounded-lg border border-white/[0.04] bg-base-900/30 p-3">
             <span className="text-[11px] text-muted">ML Approach</span>
-            <div className="mt-1 font-mono text-xs font-semibold text-purple-300">Hybrid Collaborative</div>
+            <div className="mt-1 font-mono text-xs font-semibold text-white">Hybrid Collaborative</div>
           </div>
         </div>
       )}
@@ -2408,8 +2380,8 @@ function MlModelPanel() {
       {/* Live ML Recommendation Sandbox */}
       <div className="border-t border-white/[0.06] pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <span className="text-xs font-semibold text-white flex items-center gap-2">
-            <Terminal size={14} className="text-accent" /> Live ML Recommendation Sandbox
+          <span className="text-xs font-semibold text-white">
+            Live ML Recommendation Sandbox
           </span>
           <div className="flex items-center gap-2">
             <input
@@ -2422,7 +2394,7 @@ function MlModelPanel() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
               title="Import telemetry JSON file or full seed-model.json from Cloudflare KV Collector to update persistent Roaming seed-model.json"
             >
               <FileText size={13} /> Import Telemetry JSON
@@ -2430,7 +2402,7 @@ function MlModelPanel() {
             <button
               onClick={handleContributeDataset}
               disabled={submitting || importing}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
               title="Submit anonymous listening dataset to help train Noctune's next base model"
             >
               {submitting ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
@@ -2439,7 +2411,7 @@ function MlModelPanel() {
             <button
               onClick={handleImportProd}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-1.5 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/10 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
               title="Import tracks & play history from songs.json into play-log.json in AppData Roaming (does not alter seed-model.json)"
             >
               {importing ? <RefreshCw size={13} className="animate-spin" /> : <HardDrive size={13} />}
@@ -2448,7 +2420,7 @@ function MlModelPanel() {
             <button
               onClick={handleClearDataset}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40"
               title="Clear all recorded play events and reset ML dataset"
             >
               <Trash2 size={13} /> Clear Dataset
@@ -2456,7 +2428,7 @@ function MlModelPanel() {
             <button
               onClick={handleTestPredictions}
               disabled={testing || !currentTrack}
-              className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
             >
               {testing ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
               {testing ? 'Predicting...' : 'Test ML Predictions'}
@@ -2465,8 +2437,8 @@ function MlModelPanel() {
         </div>
 
         <div className="mb-3 rounded-lg border border-white/[0.04] bg-base-950/40 p-2.5 text-[11px] leading-relaxed text-muted space-y-1">
-          <p><strong className="text-blue-300">• Import Telemetry JSON:</strong> Accepts telemetry export files (e.g., <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">telemetry_xxx_xxx.json</code>) or full <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>. Merges transitions & saves directly to persistent Roaming <code className="rounded bg-blue-500/10 px-1 py-0.5 font-mono text-blue-200 border border-blue-500/20">seed-model.json</code>.</p>
-          <p><strong className="text-purple-300">• Import Prod Dataset:</strong> Extracts track history & play counts from local <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">songs.json</code> into <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">play-log.json</code> in Roaming (does not generate or alter <code className="rounded bg-purple-500/10 px-1 py-0.5 font-mono text-purple-200 border border-purple-500/20">seed-model.json</code>).</p>
+          <p><strong className="text-white">• Import Telemetry JSON:</strong> Accepts telemetry export files (e.g., <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">telemetry_xxx_xxx.json</code>) or full <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">seed-model.json</code>. Merges transitions & saves directly to persistent Roaming <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">seed-model.json</code>.</p>
+          <p><strong className="text-white">• Import Prod Dataset:</strong> Extracts track history & play counts from local <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">songs.json</code> into <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">play-log.json</code> in Roaming (does not generate or alter <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-soft border border-white/[0.08]">seed-model.json</code>).</p>
         </div>
 
         {telemetrySubmission && (
@@ -2634,8 +2606,8 @@ export default function DebugApp() {
         </div>
 
         {/* Content */}
-        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto p-5">
-          <div className="mx-auto max-w-4xl">
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8">
+          <div className="flex flex-col gap-6">
             {tab === 'resolver' && <ResolverPanel />}
             {tab === 'lyrics' && <LyricsPanel />}
             {tab === 'status' && <StatusPanel />}

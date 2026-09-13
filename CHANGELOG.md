@@ -8,6 +8,11 @@ All notable Noctune changes are documented here.
 - **Toast Layering & Clickability**: Fixed an issue where the update notification toast rendered beneath view cards and failed to register click events due to an invalid z-index utility; restored proper elevation (`z-toast`) and pointer event handling in the top-right corner.
 - **Strict SemVer Version Check**: Enforced strict SemVer comparison before background downloading, ensuring the updater only downloads releases that are strictly newer than the running app's local version.
 
+### Debug Dashboard Visual & Layout Alignment
+- **Icon-Free Section Headers**: Removed decorative section header icons across Resolver, Lyrics, Status, and Tools tabs in `DebugApp.tsx`, standardizing on pure typographic hierarchy.
+- **Full-Width Responsive Cards**: Removed the rigid `max-w-4xl mx-auto` constraint in `DebugApp.tsx` and aligned content padding with `SettingsView` (`px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8`), allowing card sections to dynamically adapt when the Track Details sidebar is opened or closed.
+- **Status Data Typography & ML Button Consistency**: Standardized status metrics and data values to solid white typography, and unified colorful ML action buttons to consistent neutral bordered controls while strictly preserving danger styling for delete actions.
+
 ### Interface & Header Refinements
 - **Quiet Section Headings**: Simplified section header copy across Search ("Find a track."), Settings ("Make a change, or just look around."), and Stats, removing superfluous descriptive text to maintain a calm, typography-first aesthetic.
 

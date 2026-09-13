@@ -127,6 +127,10 @@ const V443_HIGHLIGHTS = [
     desc: 'Fixed an issue where the update notification toast rendered beneath page cards and failed to register clicks. The notification is now properly layered and fully clickable.',
   },
   {
+    title: 'Debug Dashboard Visual Alignment',
+    desc: 'Streamlined section headers without decorative icons, standardized status and tools button styling, and widened card sections to match Settings View while seamlessly responding to the track details sidebar.',
+  },
+  {
     title: 'Quiet Header Typography',
     desc: 'Streamlined view headers across Search, Settings, and Stats, removing redundant subtitles for a cleaner, quieter interface.',
   },
