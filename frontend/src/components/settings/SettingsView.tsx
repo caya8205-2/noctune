@@ -168,8 +168,10 @@ export function SettingsView() {
     checking: updaterChecking,
     downloading: updaterDownloading,
     downloadProgress: updaterProgress,
+    updateAvailable: updaterUpdateAvailable,
     updateReady: updaterReady,
     version: updaterVersion,
+    error: updaterError,
     checkForUpdates: runUpdaterCheck,
     installUpdate: runUpdateInstall,
   } = useUpdaterStore();
@@ -240,7 +242,9 @@ export function SettingsView() {
 
   useEffect(() => {
     loadSettings().catch(console.error);
-    api.checkForUpdates().then(setUpdateInfo).catch(console.error);
+    if (!IS_TAURI) {
+      api.checkForUpdates().then(setUpdateInfo).catch(console.error);
+    }
   }, []);
 
   async function handleSave() {
@@ -576,7 +580,7 @@ export function SettingsView() {
             Updates
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Noctune checks GitHub Releases on startup and then every 5 hours while the app is open.
+            Noctune checks for updates in the background on startup and every 5 hours while open.
           </p>
         </div>
 
@@ -590,10 +594,12 @@ export function SettingsView() {
                   ? `Downloading update v${updaterVersion}... (${updaterProgress}%)`
                   : updaterChecking || updateBusy
                   ? 'Checking for updates...'
+                  : updaterError
+                  ? `Update check failed: ${updaterError}`
                   : updateInfo?.ok === false
                   ? 'Update check failed'
-                  : updateInfo?.updateAvailable
-                  ? `Noctune ${updateInfo.latestVersion} is available`
+                  : (updaterVersion && updaterUpdateAvailable) || updateInfo?.updateAvailable
+                  ? `Noctune ${updaterVersion || updateInfo?.latestVersion} is available`
                   : 'Noctune is up to date'}
               </p>
               <p className="mt-1 text-xs text-muted">
@@ -641,16 +647,26 @@ export function SettingsView() {
                   <Loader2 size={14} className="animate-spin" />
                   Downloading ({updaterProgress}%)
                 </button>
-              ) : (
+              ) : IS_TAURI && (updaterUpdateAvailable || updateInfo?.updateAvailable) ? (
+                <button
+                  type="button"
+                  onClick={handleCheckForUpdates}
+                  disabled={updateBusy || updaterChecking}
+                  className="btn-accent px-3 py-2 rounded-xl text-sm flex items-center gap-1.5"
+                >
+                  <Download size={14} />
+                  Download & Install
+                </button>
+              ) : !IS_TAURI && updateInfo?.updateAvailable ? (
                 <button
                   type="button"
                   onClick={() => openExternalUrl(updateInfo?.releaseUrl ?? 'https://github.com/caya8205-2/noctune/releases/latest').catch(console.error)}
-                  className="btn-accent px-3 py-2 rounded-xl text-sm"
+                  className="btn-accent px-3 py-2 rounded-xl text-sm flex items-center gap-1.5"
                 >
                   <ExternalLink size={14} />
-                  Update
+                  View Release
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
