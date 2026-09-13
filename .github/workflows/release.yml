@@ -255,9 +255,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
           files: |
-            dist/windows/*
+            dist/windows/*.exe
             dist/linux/**/*.deb
             dist/linux/**/*.AppImage
-            dist/linux/**/*.tar.gz
-            dist/linux/**/*.sig
             latest.json
