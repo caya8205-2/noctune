@@ -158,6 +158,8 @@ jobs:
 
       - name: Build Tauri (Linux)
         env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_RPC_ENABLED: ${{ secrets.DISCORD_RPC_ENABLED }}
           DISCORD_RPC_LARGE_IMAGE_KEY: ${{ secrets.DISCORD_RPC_LARGE_IMAGE_KEY }}
@@ -216,5 +218,7 @@ jobs:
             dist/windows/*
             dist/linux/**/*.deb
             dist/linux/**/*.AppImage
+            dist/linux/**/*.tar.gz
+            dist/linux/**/*.sig
             latest.json
 
