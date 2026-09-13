@@ -123,16 +123,20 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
 
 const V441_HIGHLIGHTS = [
   {
-    title: 'Instant Track Transitions',
-    desc: 'Audio playback now transitions instantly when skipping or advancing to the next song. Resolved an issue where initial audio stream requests were rejected by upstream servers, eliminating the 1.5-second loading delay and preventing premature stream format errors.',
+    title: 'In-App Background Updates',
+    desc: 'New releases are now downloaded silently in the background while you listen. An unobtrusive notification appears when the update is ready, letting you restart Noctune to apply it instantly — no more manual installer downloads from GitHub.',
+  },
+  {
+    title: 'Instant Track Transitions & Gapless Flow',
+    desc: 'Audio playback transitions instantly when skipping tracks or advancing through the queue. Upgraded stream resolution to reliable progressive audio, eliminated stream abort errors during fast skips, and ensured background prefetching stays ahead of your queue.',
   },
   {
     title: 'Consistent In-Memory Prefetching',
-    desc: 'Pre-resolved stream URLs are now preserved in memory across track handoffs. Fixed an issue where high-quality streams were mistakenly flagged as quality mismatches and resolved a second time on playback.',
+    desc: 'Pre-resolved stream URLs are now preserved in memory across track handoffs and sliding queue advances. Fixed an issue where high-quality streams were mistakenly flagged as quality mismatches and resolved a second time on playback.',
   },
   {
     title: 'Accurate Queue Status Badges',
-    desc: 'Tracks stored in your offline match cache now correctly display the emerald-green **Cached** badge in QueueView instead of erroneously showing the sky-blue **Refreshed** indicator, matching the Full Player display.',
+    desc: 'Tracks stored in your local match cache now correctly display the emerald-green **Cached** badge in QueueView instead of erroneously showing the sky-blue **Refreshed** indicator, matching the Full Player display.',
   },
   {
     title: 'Reliable App Updates & Process Cleanup',
