@@ -31,6 +31,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "externalBin": [
       "binaries/noctune-backend"
@@ -57,6 +58,14 @@
         "sidebarImage": "icons/nsis-sidebar.bmp",
         "installerHooks": "windows/installer-hooks.nsh"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxRDg5MzYzQ0Y4ODNCRQpSV1MrZy9nOE5va2RBOHRJNXZrSC9mMVIwSlVta0VxbmRxSC9xYTBsUGwwUGZ3SmpSZlBFangxUAo=",
+      "endpoints": [
+        "https://github.com/caya8205-2/noctune/releases/latest/download/latest.json"
+      ]
     }
   }
 }

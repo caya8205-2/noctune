@@ -30,5 +30,8 @@ frontend/.env.local
 .tmp-sidecar-data/
 .tmp-sidecar-data-3134/
 signed/
+*.key
+src-tauri/*.key
+src-tauri/*.pub
 mobile/**
 !docs/RULES.md

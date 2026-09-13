@@ -15,6 +15,7 @@ import {
   Loader2,
   Keyboard,
   RefreshCw,
+  RotateCcw,
   Scale,
   Sparkles,
   Trash2,
@@ -24,6 +25,7 @@ import {
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
 import { api, apiUrl, type UpdateInfo, IS_TAURI } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
+import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
 import { openChangelogModal } from '../ui/ChangelogModal';
@@ -162,6 +164,15 @@ export function SettingsView() {
   const [previewBusy, setPreviewBusy] = useState<'start' | 'stop' | 'open' | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const {
+    checking: updaterChecking,
+    downloading: updaterDownloading,
+    downloadProgress: updaterProgress,
+    updateReady: updaterReady,
+    version: updaterVersion,
+    checkForUpdates: runUpdaterCheck,
+    installUpdate: runUpdateInstall,
+  } = useUpdaterStore();
   const setView = usePlayerStore((state) => state.setView);
 
   async function loadSettings() {
@@ -525,7 +536,11 @@ export function SettingsView() {
   async function handleCheckForUpdates() {
     setUpdateBusy(true);
     try {
-      setUpdateInfo(await api.checkForUpdates(true));
+      if (IS_TAURI) {
+        await runUpdaterCheck(true);
+      } else {
+        setUpdateInfo(await api.checkForUpdates(true));
+      }
     } catch (err) {
       setUpdateInfo({
         ok: false,
@@ -569,7 +584,13 @@ export function SettingsView() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-white">
-                {updateInfo?.ok === false
+                {updaterReady
+                  ? `Noctune v${updaterVersion} is ready to install`
+                  : updaterDownloading
+                  ? `Downloading update v${updaterVersion}... (${updaterProgress}%)`
+                  : updaterChecking || updateBusy
+                  ? 'Checking for updates...'
+                  : updateInfo?.ok === false
                   ? 'Update check failed'
                   : updateInfo?.updateAvailable
                   ? `Noctune ${updateInfo.latestVersion} is available`
@@ -593,20 +614,43 @@ export function SettingsView() {
               <button
                 type="button"
                 onClick={handleCheckForUpdates}
-                disabled={updateBusy}
+                disabled={updateBusy || updaterChecking || updaterDownloading}
                 className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
               >
-                {updateBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {updateBusy || updaterChecking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 Check
               </button>
-              <button
-                type="button"
-                onClick={() => openExternalUrl(updateInfo?.releaseUrl ?? 'https://github.com/caya8205-2/noctune/releases/latest').catch(console.error)}
-                className="btn-accent px-3 py-2 rounded-xl text-sm"
-              >
-                <ExternalLink size={14} />
-                Update
-              </button>
+              {updaterReady ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setUpdateBusy(true);
+                    await runUpdateInstall();
+                  }}
+                  className="btn-accent px-3 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md shadow-accent/20"
+                >
+                  <RotateCcw size={14} />
+                  Restart & Install
+                </button>
+              ) : updaterDownloading ? (
+                <button
+                  type="button"
+                  disabled
+                  className="btn-accent px-3 py-2 rounded-xl text-sm flex items-center gap-1.5 opacity-60"
+                >
+                  <Loader2 size={14} className="animate-spin" />
+                  Downloading ({updaterProgress}%)
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openExternalUrl(updateInfo?.releaseUrl ?? 'https://github.com/caya8205-2/noctune/releases/latest').catch(console.error)}
+                  className="btn-accent px-3 py-2 rounded-xl text-sm"
+                >
+                  <ExternalLink size={14} />
+                  Update
+                </button>
+              )}
             </div>
           </div>
         </div>
