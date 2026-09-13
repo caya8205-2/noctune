@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   # ─── Check version & whether release already exists ─────────────────────────
@@ -22,6 +23,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       exists: ${{ steps.release.outputs.exists }}
+      windows_run_id: ${{ steps.artifacts.outputs.windows_run_id }}
+      linux_run_id: ${{ steps.artifacts.outputs.linux_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +49,12 @@ jobs:
             echo "Release v$version not found."
           fi
 
+      - name: Check existing build artifacts
+        id: artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-existing-artifacts.mjs "${{ steps.version.outputs.version }}"
+
   # ─── Windows build (NSIS installer, signed) ──────────────────────────────────
   build-windows:
     needs: preflight
@@ -56,24 +65,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download existing Windows artifact
+        if: needs.preflight.outputs.windows_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          run-id: ${{ needs.preflight.outputs.windows_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: src-tauri/target/release/bundle/nsis
+
       - name: Setup Node.js
+        if: needs.preflight.outputs.windows_run_id == ''
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
       - name: Install Rust
+        if: needs.preflight.outputs.windows_run_id == ''
         uses: dtolnay/rust-toolchain@stable
 
       - name: Rust Cache
+        if: needs.preflight.outputs.windows_run_id == ''
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
       - name: Install dependencies
+        if: needs.preflight.outputs.windows_run_id == ''
         run: npm ci
 
       - name: Cache bundled binaries (Windows)
+        if: needs.preflight.outputs.windows_run_id == ''
         uses: actions/cache@v4
         with:
           path: |
@@ -84,6 +107,7 @@ jobs:
           key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
 
       - name: Build Tauri (Windows)
+        if: needs.preflight.outputs.windows_run_id == ''
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -117,21 +141,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download existing Linux artifact
+        if: needs.preflight.outputs.linux_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          run-id: ${{ needs.preflight.outputs.linux_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: src-tauri/target/release/bundle
+
       - name: Setup Node.js
+        if: needs.preflight.outputs.linux_run_id == ''
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
       - name: Install Rust
+        if: needs.preflight.outputs.linux_run_id == ''
         uses: dtolnay/rust-toolchain@stable
 
       - name: Rust Cache
+        if: needs.preflight.outputs.linux_run_id == ''
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
       - name: Install Linux system dependencies
+        if: needs.preflight.outputs.linux_run_id == ''
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -144,9 +181,11 @@ jobs:
             ffmpeg
 
       - name: Install dependencies
+        if: needs.preflight.outputs.linux_run_id == ''
         run: npm ci
 
       - name: Cache bundled binaries (Linux)
+        if: needs.preflight.outputs.linux_run_id == ''
         uses: actions/cache@v4
         with:
           path: |
@@ -157,6 +196,7 @@ jobs:
           key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
 
       - name: Build Tauri (Linux)
+        if: needs.preflight.outputs.linux_run_id == ''
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -221,4 +261,3 @@ jobs:
             dist/linux/**/*.tar.gz
             dist/linux/**/*.sig
             latest.json
-
