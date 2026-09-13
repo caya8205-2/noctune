@@ -5,7 +5,8 @@ All notable Noctune changes are documented here.
 ## v4.4.3 - 2026-09-13
 
 ### Update Notification & Stacking Fixes
-- **Toast Layering & Clickability**: Fixed an issue where the update notification toast rendered beneath view cards and failed to register click events due to an invalid z-index utility; restored proper elevation (`z-toast`) and pointer event handling in the top-right corner.
+- **Portal Toast Rendering & Stacking Fix**: Teleported the update notification toast directly into `document.body` via React Portal with root-level `z-[9999999]`. This decouples the toast from all application layout stacking contexts, ensuring it never renders beneath Settings view cards or the Track Details sidebar.
+- **Pre-Update Backend Termination Hook**: Added a native `kill_backend` Tauri command triggered before executing the update installer, coupled with a 600ms grace period in NSIS `PREINSTALL` hooks. This ensures the backend process is fully terminated and its executable file handle released before the installer attempts file replacement, preventing "failed to write sidecar" errors on auto-restart.
 - **Strict SemVer Version Check**: Enforced strict SemVer comparison before background downloading, ensuring the updater only downloads releases that are strictly newer than the running app's local version.
 
 ### Debug Dashboard Visual & Layout Alignment

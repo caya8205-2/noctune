@@ -123,8 +123,8 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
 
 const V443_HIGHLIGHTS = [
   {
-    title: 'Update Notification Fix',
-    desc: 'Fixed an issue where the update notification toast rendered beneath page cards and failed to register clicks. The notification is now properly layered and fully clickable.',
+    title: 'Update Notification & Installer Reliability',
+    desc: 'Fixed an issue where update notification toasts were drowned beneath view cards and sidebar track details, ensuring toasts always float on top. Added pre-update backend termination to eliminate installer file lock errors when restarting.',
   },
   {
     title: 'Debug Dashboard Visual Alignment',

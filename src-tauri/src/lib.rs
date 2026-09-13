@@ -45,6 +45,31 @@ fn open_external_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn kill_backend() -> Result<(), String> {
+    #[cfg(not(debug_assertions))]
+    {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = Command::new("taskkill")
+                .args(["/F", "/T", "/IM", "noctune-backend.exe"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "noctune-backend"])
+                .spawn();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(not(debug_assertions))]
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
@@ -109,6 +134,7 @@ pub fn run() {
         .manage(InnertubeState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
+            kill_backend,
             get_youtube_channel,
             get_youtube_playlist,
             get_channel_posts,

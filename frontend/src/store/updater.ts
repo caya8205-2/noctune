@@ -56,6 +56,16 @@ interface UpdaterState {
 
 const DEFAULT_REPO_URL = 'https://github.com/caya8205-2/noctune/releases/latest';
 
+async function terminateBackendBeforeInstall() {
+  if (!IS_TAURI) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('kill_backend');
+  } catch (e) {
+    console.warn('[updater] kill_backend invoke failed:', e);
+  }
+}
+
 export const useUpdaterStore = create<UpdaterState>((set, get) => ({
   checking: false,
   downloading: false,
@@ -191,6 +201,7 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
           const remoteVersion = normalizeVersion(update.version);
           if (compareVersions(remoteVersion, localVersion) > 0) {
             pendingUpdate = update;
+            await terminateBackendBeforeInstall();
             await update.downloadAndInstall(undefined, { restartAfterInstall: true });
           }
         }
@@ -202,10 +213,12 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
     }
 
     try {
+      await terminateBackendBeforeInstall();
       await pendingUpdate.install({ restartAfterInstall: true });
     } catch (err) {
       console.warn('[updater] install() failed, falling back to downloadAndInstall():', err);
       try {
+        await terminateBackendBeforeInstall();
         await pendingUpdate.downloadAndInstall(undefined, { restartAfterInstall: true });
       } catch (err2) {
         console.error('[updater] downloadAndInstall() also failed:', err2);

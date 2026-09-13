@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ExternalLink, RotateCcw, X } from 'lucide-react';
 import { useUpdaterStore } from '../store/updater';
 import { IS_TAURI } from '../utils/api';
@@ -70,87 +71,90 @@ export function useUpdateChecker() {
       ? 'border-white/10 shadow-black/20'
       : 'border-accent/40 shadow-black/80';
 
-  const updateToast = shouldShow ? (
-    <aside
-      data-tauri-drag-region="false"
-      style={{ zIndex: 9999, ...({ WebkitAppRegion: 'no-drag' } as Record<string, string>) }}
-      className={`fixed right-4 top-16 z-toast w-[calc(100vw-2rem)] max-w-sm rounded-xl border ${borderClass} bg-base-950/95 p-4 shadow-2xl backdrop-blur-2xl animate-fade-in transition-all pointer-events-auto select-none`}
-      aria-live="polite"
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`section-label ${urgency === 'major' ? 'text-amber-400' : urgency === 'patch' ? 'text-soft' : 'text-accent'}`}>
-              {urgencyLabel}
-            </span>
-            <span className="text-xs font-mono font-semibold text-white">v{version}</span>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted">
-            {urgencyDescription}
-          </p>
-          <div className="mt-3 flex items-center gap-2">
-            {IS_TAURI ? (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    setInstalling(true);
-                    await installUpdate();
-                  } catch (err) {
-                    console.error('Failed to trigger update restart:', err);
-                    setInstalling(false);
-                  }
-                }}
-                disabled={installing}
-                className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md cursor-pointer pointer-events-auto ${
-                  urgency === 'major'
-                    ? 'rounded-full bg-amber-500 hover:bg-amber-400 text-base-950 shadow-amber-500/20'
-                    : 'btn-accent shadow-accent/20'
-                }`}
-              >
-                <RotateCcw size={12} className={installing ? 'animate-spin' : ''} />
-                {installing ? 'Restarting...' : 'Restart Now'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openExternalUrl(releaseUrl).catch(console.error);
-                }}
-                className="btn-accent px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 cursor-pointer pointer-events-auto"
-              >
-                <ExternalLink size={12} />
-                Download
-              </button>
-            )}
+  const updateToast = shouldShow && typeof document !== 'undefined'
+    ? createPortal(
+        <aside
+          data-tauri-drag-region="false"
+          style={{ zIndex: 9999999, ...({ WebkitAppRegion: 'no-drag' } as Record<string, string>) }}
+          className={`fixed right-4 top-16 z-[9999999] w-[calc(100vw-2rem)] max-w-sm rounded-xl border ${borderClass} bg-base-950/95 p-4 shadow-2xl backdrop-blur-2xl animate-fade-in transition-all pointer-events-auto select-none`}
+          aria-live="polite"
+        >
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className={`section-label ${urgency === 'major' ? 'text-amber-400' : urgency === 'patch' ? 'text-soft' : 'text-accent'}`}>
+                  {urgencyLabel}
+                </span>
+                <span className="text-xs font-mono font-semibold text-white">v{version}</span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                {urgencyDescription}
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                {IS_TAURI ? (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        setInstalling(true);
+                        await installUpdate();
+                      } catch (err) {
+                        console.error('Failed to trigger update restart:', err);
+                        setInstalling(false);
+                      }
+                    }}
+                    disabled={installing}
+                    className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md cursor-pointer pointer-events-auto ${
+                      urgency === 'major'
+                        ? 'rounded-full bg-amber-500 hover:bg-amber-400 text-base-950 shadow-amber-500/20'
+                        : 'btn-accent shadow-accent/20'
+                    }`}
+                  >
+                    <RotateCcw size={12} className={installing ? 'animate-spin' : ''} />
+                    {installing ? 'Restarting...' : 'Restart Now'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openExternalUrl(releaseUrl).catch(console.error);
+                    }}
+                    className="btn-accent px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 cursor-pointer pointer-events-auto"
+                  >
+                    <ExternalLink size={12} />
+                    Download
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismissToast();
+                  }}
+                  className="btn-ghost px-3 py-1.5 text-xs text-muted hover:text-white cursor-pointer pointer-events-auto"
+                >
+                  Later
+                </button>
+              </div>
+            </div>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 dismissToast();
               }}
-              className="btn-ghost px-3 py-1.5 text-xs text-muted hover:text-white cursor-pointer pointer-events-auto"
+              className="btn-ghost -mr-1 -mt-1 p-1 text-muted hover:text-white cursor-pointer pointer-events-auto"
+              title="Dismiss"
             >
-              Later
+              <X size={14} />
             </button>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            dismissToast();
-          }}
-          className="btn-ghost -mr-1 -mt-1 p-1 text-muted hover:text-white cursor-pointer pointer-events-auto"
-          title="Dismiss"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    </aside>
-  ) : null;
+        </aside>,
+        document.body
+      )
+    : null;
 
   return { updateToast, updateReady, version };
 }
