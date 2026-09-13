@@ -221,7 +221,7 @@ export function SearchView() {
         <div className="flex items-end justify-between gap-4 mb-5">
           <div>
             <p className="section-label mb-2 text-accent">Search</p>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">Find a seed track.</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">Find a track.</h1>
           </div>
           {searched && (
             <span className="text-xs text-muted">

@@ -121,30 +121,18 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V442_HIGHLIGHTS = [
+const V443_HIGHLIGHTS = [
   {
-    title: 'Native Backend & Database Stability',
-    desc: 'Resolved a crash where the backend engine terminated silently during playlist browsing and SQLite garbage collection. Migrated backend binary compilation to Node 22 LTS to eliminate an upstream Node 24 V8 cleanup hook assertion error.',
+    title: 'Update Notification Fix',
+    desc: 'Fixed an issue where the update notification toast rendered beneath page cards and failed to register clicks. The notification is now properly layered and fully clickable.',
   },
   {
-    title: 'In-App Background Updates',
-    desc: 'New releases are now downloaded silently in the background while you listen. An unobtrusive notification appears when the update is ready, letting you restart Noctune to apply it instantly — no more manual installer downloads from GitHub.',
-  },
-  {
-    title: 'Instant Track Transitions & Gapless Flow',
-    desc: 'Audio playback transitions instantly when skipping tracks or advancing through the queue. Upgraded stream resolution to reliable progressive audio, eliminated stream abort errors during fast skips, and ensured background prefetching stays ahead of your queue.',
-  },
-  {
-    title: 'Consistent In-Memory Prefetching',
-    desc: 'Pre-resolved stream URLs are now preserved in memory across track handoffs and sliding queue advances. Fixed an issue where high-quality streams were mistakenly flagged as quality mismatches and resolved a second time on playback.',
-  },
-  {
-    title: 'Accurate Queue Status Badges',
-    desc: 'Tracks stored in your local match cache now correctly display the emerald-green **Cached** badge in QueueView instead of erroneously showing the sky-blue **Refreshed** indicator, matching the Full Player display.',
+    title: 'Quiet Header Typography',
+    desc: 'Streamlined view headers across Search, Settings, and Stats, removing redundant subtitles for a cleaner, quieter interface.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V442_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V443_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();

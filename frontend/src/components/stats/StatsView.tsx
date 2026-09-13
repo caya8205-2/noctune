@@ -354,9 +354,6 @@ export function StatsView() {
           <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mt-2">
             Your Listening stats.
           </h1>
-          <p className="text-xs text-muted mt-2">
-            See what you've been spinning — tracks, artists, and hours lost to the night.
-          </p>
         </div>
 
         <div className="flex gap-1 rounded-xl border border-white/[0.06] bg-base-800/60 p-1 backdrop-blur-md">

@@ -1,7 +1,7 @@
 {
   "name": "noctune",
-  "version": "4.4.2",
-  "description": "noctune — local-first music player with smart audio matching",
+  "version": "4.4.3",
+  "description": "A lightweight desktop music player",
   "workspaces": [
     "frontend",
     "backend"

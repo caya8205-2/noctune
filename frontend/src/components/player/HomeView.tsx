@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Heart,
+  ListOrdered,
   Music2,
+  Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api, isTrackActive, resolveYouTubeChannelId, type CachedTrack, type PersonalMix, type Playlist, type Track } from '../../utils/api';
@@ -246,10 +248,8 @@ function CleanMixCard({
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-base-800">
-            <span className="font-display text-4xl text-muted/60 select-none">
-              {mix.name.charAt(0).toUpperCase()}
-            </span>
+          <div className="flex h-full w-full items-center justify-center text-accent">
+            <Sparkles size={32} strokeWidth={1.4} />
           </div>
         )}
       </div>
@@ -329,9 +329,7 @@ function CleanCoverCard({
         ) : isLiked ? (
           <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
         ) : (
-          <span className="font-display text-4xl text-muted/60 select-none">
-            {title.charAt(0).toUpperCase()}
-          </span>
+          <ListOrdered size={32} strokeWidth={1.4} className="text-accent" />
         )}
       </div>
 

@@ -1,12 +1,17 @@
-let rootPkg: { version: string };
-try {
-  rootPkg = require('../../../package.json');
-} catch {
-  try {
-    rootPkg = require('../../package.json');
-  } catch {
-    rootPkg = { version: '4.1.1' };
+function getLocalVersion(): string {
+  const candidates = [
+    '../../../package.json',
+    '../../package.json',
+    '../package.json',
+    './package.json',
+  ];
+  for (const c of candidates) {
+    try {
+      const p = require(c);
+      if (p && p.version) return p.version;
+    } catch {}
   }
+  return process.env.APP_VERSION || '4.4.3';
 }
 
 const UPDATE_REPO = process.env.NOCTUNE_UPDATE_REPO ?? 'caya8205-2/noctune';
@@ -64,9 +69,10 @@ function compareVersions(a: string, b: string): number {
 }
 
 function unavailable(error: string): UpdateInfo {
+  const currentVersion = getLocalVersion();
   return {
     ok: false,
-    currentVersion: rootPkg.version,
+    currentVersion,
     latestVersion: null,
     updateAvailable: false,
     releaseName: null,
@@ -82,11 +88,13 @@ export async function getLatestReleaseUpdate(force = false): Promise<UpdateInfo>
     return cachedUpdate;
   }
 
+  const currentVersion = getLocalVersion();
+
   try {
     const response = await fetch(RELEASE_API_URL, {
       headers: {
         Accept: 'application/vnd.github+json',
-        'User-Agent': `Noctune/${rootPkg.version}`,
+        'User-Agent': `Noctune/${currentVersion}`,
       },
     });
 
@@ -102,9 +110,9 @@ export async function getLatestReleaseUpdate(force = false): Promise<UpdateInfo>
 
     cachedUpdate = {
       ok: true,
-      currentVersion: rootPkg.version,
+      currentVersion,
       latestVersion,
-      updateAvailable: compareVersions(latestVersion, rootPkg.version) > 0,
+      updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
       releaseName: release.name ?? release.tag_name ?? latestVersion,
       releaseUrl: release.html_url ?? RELEASES_URL,
       publishedAt: release.published_at ?? null,

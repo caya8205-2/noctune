@@ -24,6 +24,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useLyricsPrefetch } from './hooks/useLyrics';
 import { useSmartPlaylistsPrefetch } from './hooks/useSmartPlaylists';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
+import { useUpdaterStore } from './store/updater';
 import { DownloadProvider } from './hooks/useDownloadTrack';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ChangelogModal } from './components/ui/ChangelogModal';
@@ -86,6 +87,15 @@ function AppInner() {
 
   async function handleClose() {
     if (!IS_TAURI) return;
+    const { updateReady, installUpdate } = useUpdaterStore.getState();
+    if (updateReady) {
+      try {
+        await installUpdate();
+        return;
+      } catch (err) {
+        console.error('Failed to auto-install update on close:', err);
+      }
+    }
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     await getCurrentWindow().close();
   }

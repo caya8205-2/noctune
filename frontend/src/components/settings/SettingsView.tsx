@@ -1,25 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle,
-  Database,
   Download,
   ExternalLink,
-  HardDrive,
   Eye,
   EyeOff,
   FileText,
   FileUp,
   FolderOpen,
   Info,
-  ListMusic,
   Loader2,
-  Keyboard,
   RefreshCw,
   RotateCcw,
-  Scale,
-  Sparkles,
   Trash2,
-  Zap,
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
@@ -54,34 +47,6 @@ interface SettingsData {
     matchCache?: { total: number };
   };
 }
-
-const engineNotes = [
-  {
-    Icon: HardDrive,
-    title: 'Local library',
-    desc: 'Playlists, covers, liked songs, and learned playback data stay on this device.',
-  },
-  {
-    Icon: Database,
-    title: 'Local cache',
-    desc: 'Tracks, lyrics, and audio files are cached locally so repeat plays can start faster.',
-  },
-  {
-    Icon: Zap,
-    title: 'Prefetch queue',
-    desc: 'Upcoming tracks are prepared in the background after playback starts.',
-  },
-  {
-    Icon: Sparkles,
-    title: 'Spotify matching',
-    desc: 'Spotify results provide metadata, then Noctune maps the track to a playable YouTube stream.',
-  },
-  {
-    Icon: ListMusic,
-    title: 'Auto queue',
-    desc: 'Recommendations are built from the selected seed track and filtered before playback.',
-  },
-];
 
 function formatBytes(bytes = 0): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -569,7 +534,7 @@ export function SettingsView() {
           <p className="section-label text-accent">Settings</p>
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-          Make global choices feel immediate.
+          Make a change, or just look around.
         </h1>
       </div>
 
@@ -633,7 +598,7 @@ export function SettingsView() {
                     setUpdateBusy(true);
                     await runUpdateInstall();
                   }}
-                  className="btn-accent px-3 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md shadow-accent/20"
+                  className="btn-accent px-3 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md shadow-accent/20 cursor-pointer pointer-events-auto"
                 >
                   <RotateCcw size={14} />
                   Restart & Install
@@ -1190,9 +1155,6 @@ export function SettingsView() {
       {/* Keyboard Shortcuts */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
-            <Keyboard size={18} />
-          </div>
           <div>
             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
               Keyboard shortcuts
@@ -1218,41 +1180,9 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* About */}
-      <section className="surface-panel flex flex-col gap-5 p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
-            <Info size={18} />
-          </div>
-          <div>
-            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-              About
-            </h2>
-            <p className="text-xs text-muted leading-relaxed mt-2">
-              Noctune is a local-first music player that uses metadata search, cached stream resolution, and queue prefetching to keep playback responsive.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {engineNotes.map(({ Icon, title, desc }) => (
-            <div key={title} className="rounded-lg border border-base-600/70 bg-base-900 p-4">
-              <div className="w-9 h-9 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent mb-3">
-                <Icon size={17} />
-              </div>
-              <p className="text-sm font-medium text-white mb-1">{title}</p>
-              <p className="text-xs text-muted leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Licenses */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-base-700 border border-base-600/60 flex items-center justify-center text-accent flex-shrink-0">
-            <Scale size={18} />
-          </div>
           <div>
             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
               Licenses

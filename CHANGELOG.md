@@ -2,6 +2,15 @@
 
 All notable Noctune changes are documented here.
 
+## v4.4.3 - 2026-09-13
+
+### Update Notification & Stacking Fixes
+- **Toast Layering & Clickability**: Fixed an issue where the update notification toast rendered beneath view cards and failed to register click events due to an invalid z-index utility; restored proper elevation (`z-toast`) and pointer event handling in the top-right corner.
+- **Strict SemVer Version Check**: Enforced strict SemVer comparison before background downloading, ensuring the updater only downloads releases that are strictly newer than the running app's local version.
+
+### Interface & Header Refinements
+- **Quiet Section Headings**: Simplified section header copy across Search ("Find a track."), Settings ("Make a change, or just look around."), and Stats, removing superfluous descriptive text to maintain a calm, typography-first aesthetic.
+
 ## v4.4.2 - 2026-09-13
 
 ### Backend Stability & Node 22 LTS Migration
