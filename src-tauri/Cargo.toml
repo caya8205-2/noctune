@@ -23,6 +23,10 @@ reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 urlencoding = "2"
 innertube-rs = "0.8.0"
+spotstream = "0.1.0"
+librespot = { version = "0.8.0", default-features = false, features = ["native-tls"] }
+bytes = "1"
+dirs = "6"
 
 [profile.dev]
 incremental = true

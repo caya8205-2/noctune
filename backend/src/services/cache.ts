@@ -140,7 +140,7 @@ export function upsertTrack(
   audioQualityPreference: AudioQualityPreference = 'auto',
   audioFormat?: string,
   audioQuality?: string,
-  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local'
+  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local' | 'spotstream'
 ): CachedTrack {
   const store = getStore();
   const hash = hashQuery(query);
@@ -178,7 +178,7 @@ export function refreshTrackUrl(
   audioQualityPreference: AudioQualityPreference = 'auto',
   audioFormat?: string,
   audioQuality?: string,
-  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local'
+  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local' | 'spotstream'
 ): void {
   const store = getStore();
   const track = store.tracks[videoId];

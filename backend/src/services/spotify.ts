@@ -391,33 +391,96 @@ export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promis
     name: string;
     tracks: Track[];
 }> {
-    const firstUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
-    firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(id,name),album(id,name,images),external_urls)),tracks.next');
-    firstUrl.searchParams.set('limit', '100');
+    try {
+        const firstUrl = new URL(`https://api.spotify.com/v1/playlists/${id}`);
+        firstUrl.searchParams.set('fields', 'name,tracks.items(track(id,name,duration_ms,artists(id,name),album(id,name,images),external_urls)),tracks.next');
+        firstUrl.searchParams.set('limit', '100');
 
-    const firstData = await spotifyApiFetch<SpotifyPlaylistResponse>(firstUrl);
-    const playlistName = firstData.name || 'Spotify Playlist';
-    const allItems = [...firstData.tracks.items];
-    let nextUrl: string | null = firstData.tracks.next;
+        const firstData = await spotifyApiFetch<SpotifyPlaylistResponse>(firstUrl);
+        const playlistName = firstData.name || 'Spotify Playlist';
+        const allItems = [...firstData.tracks.items];
+        let nextUrl: string | null = firstData.tracks.next;
 
-    while (nextUrl && allItems.length < limit) {
-        try {
-            const pageData = await spotifyApiFetch<SpotifyPlaylistResponse['tracks']>(nextUrl);
-            allItems.push(...pageData.items);
-            nextUrl = pageData.next;
-        } catch {
-            break;
+        while (nextUrl && allItems.length < limit) {
+            try {
+                const pageData = await spotifyApiFetch<SpotifyPlaylistResponse['tracks']>(nextUrl);
+                allItems.push(...pageData.items);
+                nextUrl = pageData.next;
+            } catch {
+                break;
+            }
         }
-    }
 
-    return {
-        name: playlistName,
-        tracks: allItems
-            .map((item) => item.track)
-            .filter((track): track is SpotifyTrack => Boolean(track?.id))
-            .slice(0, limit)
-            .map((track) => spotifyTrackToTrack(track, playlistName)),
-    };
+        return {
+            name: playlistName,
+            tracks: allItems
+                .map((item) => item.track)
+                .filter((track): track is SpotifyTrack => Boolean(track?.id))
+                .slice(0, limit)
+                .map((track) => spotifyTrackToTrack(track, playlistName)),
+        };
+    } catch (webApiErr) {
+        // Fallback: If Web API fails (e.g. 404 on personalized playlist like Daily Mix),
+        // try Mercury protocol via spotstream CLI if available
+        const { isSpotstreamAvailable, resolveSpotstreamBinaryPath, resolveSpotifyCacheDir } = await import('./spotifyDirect.js');
+        if (isSpotstreamAvailable()) {
+            const binaryPath = resolveSpotstreamBinaryPath();
+            const cacheDir = resolveSpotifyCacheDir();
+            if (binaryPath) {
+                try {
+                    const { execFile } = await import('child_process');
+                    const { promisify } = await import('util');
+                    const execFileAsync = promisify(execFile);
+                    const { stdout } = await execFileAsync(binaryPath, ['--cache-dir', cacheDir, 'playlist', id], { timeout: 15000 });
+                    const mercuryPlaylist = JSON.parse(stdout) as {
+                        name: string;
+                        description: string;
+                        tracks: Array<{ id: string; uri: string }>;
+                    };
+
+                    const playlistName = mercuryPlaylist.name || 'Spotify Playlist';
+                    const trackIds = mercuryPlaylist.tracks.map((t) => t.id).slice(0, limit);
+
+                    // Fetch metadata in batches of 50 via Web API /v1/tracks?ids=...
+                    const enrichedTracks: Track[] = [];
+                    for (let i = 0; i < trackIds.length; i += 50) {
+                        const batch = trackIds.slice(i, i + 50);
+                        try {
+                            const res = await spotifyApiFetch<{ tracks: SpotifyTrack[] }>(`/tracks?ids=${batch.join(',')}`);
+                            for (const st of res.tracks) {
+                                if (st) {
+                                    enrichedTracks.push(spotifyTrackToTrack(st, playlistName));
+                                }
+                            }
+                        } catch {
+                            // If batch fails, create minimal tracks from IDs
+                            for (const tid of batch) {
+                                enrichedTracks.push({
+                                    id: `spotify:${tid}`,
+                                    title: 'Spotify Track',
+                                    artist: 'Unknown Artist',
+                                    album: playlistName,
+                                    duration: 180,
+                                    thumbnail: '',
+                                    query: tid,
+                                    spotifyId: tid,
+                                    spotifyUrl: `https://open.spotify.com/track/${tid}`,
+                                });
+                            }
+                        }
+                    }
+
+                    return {
+                        name: playlistName,
+                        tracks: enrichedTracks,
+                    };
+                } catch (mercuryErr) {
+                    console.warn('[spotify] Mercury playlist resolution failed:', mercuryErr);
+                }
+            }
+        }
+        throw webApiErr;
+    }
 }
 
 export async function getSpotifyNewReleaseTracks(limit = 8): Promise<Track[]> {

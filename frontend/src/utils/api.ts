@@ -463,6 +463,48 @@ export const api = {
       request<StatsDailyEntry[]>(`/stats/daily?days=${days}`),
   },
 
+  // ── Spotify Direct (spotstream) IPC ───────────────────────────────────────
+  spotifyAuthStatus: async (): Promise<SpotifyAuthStatus> => {
+    if (!detectTauriEnvironment()) return { authenticated: false, cacheDir: '', credentialsFile: '', username: null };
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<SpotifyAuthStatus>('spotify_auth_status');
+    } catch (err) {
+      console.warn('[api] spotify_auth_status failed:', err);
+      return { authenticated: false, cacheDir: '', credentialsFile: '', username: null };
+    }
+  },
+  spotifyStartPairing: async (): Promise<SpotifyPairingInfo> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<SpotifyPairingInfo>('spotify_start_pairing');
+  },
+  spotifyPollPairing: async (deviceCode: string, expiresIn: number, interval: number): Promise<boolean> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<boolean>('spotify_poll_pairing', { deviceCode, expiresIn, interval });
+  },
+  spotifyDisconnect: async (): Promise<boolean> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<boolean>('spotify_disconnect');
+  },
+  spotifyTrackInfo: async (trackId: string): Promise<SpotifyTrackInfo> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<SpotifyTrackInfo>('spotify_track_info', { trackId });
+  },
+  spotifyPlaylistInfo: async (playlistId: string): Promise<SpotifyPlaylistInfo> => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<SpotifyPlaylistInfo>('spotify_playlist_info', { playlistId });
+  },
+  spotifyGetRadioTracks: async (seedTrackId: string, limit?: number): Promise<SpotifyRadioTrack[]> => {
+    if (!detectTauriEnvironment()) return [];
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<SpotifyRadioTrack[]>('spotify_get_radio_tracks', { seedTrackId, limit: limit ?? null });
+    } catch (err) {
+      console.warn('[api] spotify_get_radio_tracks failed:', err);
+      return [];
+    }
+  },
+
 };
 
 export async function resolveYouTubeChannelId(track: Track): Promise<string | undefined> {
@@ -530,11 +572,54 @@ export interface CachedTrack extends Track {
   audioUrl: string;
   audioUrlExpiry: number;
   audioQualityPreference?: 'auto' | 'high';
+  audioFormat?: string;
+  audioQuality?: string;
+  resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local' | 'spotstream';
   localAudioPath?: string;
   cachedAt: number;
   playCount: number;
   lastPlayed?: number;
   source?: 'prefetch' | 'cache' | 'cache_refreshed' | 'resolved';
+}
+
+export interface SpotifyAuthStatus {
+  authenticated: boolean;
+  cacheDir: string;
+  credentialsFile: string;
+  username: string | null;
+}
+
+export interface SpotifyPairingInfo {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string | null;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface SpotifyTrackInfo {
+  id: string;
+  title: string;
+  artists: string[];
+  album: string;
+  durationMs: number;
+}
+
+export interface SpotifyPlaylistInfo {
+  name: string;
+  description: string;
+  tracks: Array<{ id: string; uri: string }>;
+}
+
+export interface SpotifyRadioTrack {
+  id: string;
+  uri: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  thumbnail: string;
 }
 
 export interface Playlist {

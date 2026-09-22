@@ -23,6 +23,7 @@ export interface EnvConfig {
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
     recommendationEngine: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy';
+    spotifyPlayback: 'youtube-match' | 'spotify-direct';
     audioQualityPreference: 'auto' | 'high';
     audioCacheLimitMb: number;
     discordRpcEnabled: boolean;
@@ -37,6 +38,7 @@ const DEFAULTS: EnvConfig = {
     spotifyClientSecret: '',
     searchEngine: 'ytdlp',
     recommendationEngine: 'innertube-rs',
+    spotifyPlayback: 'youtube-match',
     audioQualityPreference: 'auto',
     audioCacheLimitMb: 1024,
     discordRpcEnabled: true,
@@ -48,6 +50,7 @@ const DEFAULTS: EnvConfig = {
 
 function withProcessEnv(config: EnvConfig): EnvConfig {
     const envSearchEngine = process.env.SEARCH_ENGINE;
+    const envSpotifyPlayback = process.env.SPOTIFY_PLAYBACK;
     const envClientId = process.env.SPOTIFY_CLIENT_ID?.trim();
     const envClientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
     const envApiKey = process.env.NOCTUNE_API_KEY?.trim();
@@ -67,6 +70,9 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
         searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
             ? envSearchEngine
             : config.searchEngine,
+        spotifyPlayback: envSpotifyPlayback === 'spotify-direct' || envSpotifyPlayback === 'youtube-match'
+            ? envSpotifyPlayback
+            : (config.spotifyPlayback || 'youtube-match'),
         recommendationEngine: recEngine,
         downloadDir: config.downloadDir || getDefaultDownloadDir(),
     };

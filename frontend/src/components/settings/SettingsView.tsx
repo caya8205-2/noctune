@@ -16,7 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type UpdateInfo, IS_TAURI } from '../../utils/api';
+import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
@@ -28,6 +28,7 @@ const APP_VERSION = __APP_VERSION__;
 interface SettingsData {
   searchEngine: 'ytdlp' | 'spotify';
   recommendationEngine?: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy';
+  spotifyPlayback?: 'youtube-match' | 'spotify-direct';
   audioQualityPreference: 'auto' | 'high';
   audioCacheLimitMb: number;
   discordRpcEnabled: boolean;
@@ -106,6 +107,11 @@ export function SettingsView() {
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
+  const [spotifyPlayback, setSpotifyPlayback] = useState<'youtube-match' | 'spotify-direct'>('youtube-match');
+  const [spotifyAuthStatus, setSpotifyAuthStatus] = useState<SpotifyAuthStatus | null>(null);
+  const [isPairingSpotify, setIsPairingSpotify] = useState(false);
+  const [spotifyPairingData, setSpotifyPairingData] = useState<SpotifyPairingInfo | null>(null);
+  const [spotifyPairingError, setSpotifyPairingError] = useState<string | null>(null);
   const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy'>('innertube-rs');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
   const [downloadDir, setDownloadDir] = useState('');
@@ -149,9 +155,14 @@ export function SettingsView() {
     setClientId(d.spotify.clientId);
     setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
+    setSpotifyPlayback(d.spotifyPlayback ?? 'youtube-match');
     setRecommendationEngine(d.recommendationEngine ?? 'innertube-rs');
     setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
     if (d.downloadDir) setDownloadDir(d.downloadDir);
+
+    if (IS_TAURI) {
+      api.spotifyAuthStatus().then(setSpotifyAuthStatus).catch(() => {});
+    }
   }
 
   async function handleOpenDownloadDir() {
@@ -468,6 +479,68 @@ export function SettingsView() {
     } catch (err) {
       setAudioQualityPreference(previous);
       setCacheMessage({ ok: false, text: (err as Error).message });
+    }
+  }
+
+  async function handleSpotifyPlaybackChange(choice: 'youtube-match' | 'spotify-direct') {
+    if (choice === spotifyPlayback) return;
+    const previous = spotifyPlayback;
+    setSpotifyPlayback(choice);
+    try {
+      const res = await fetch(await apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spotifyPlayback: choice }),
+      });
+      const updated = (await res.json()) as SettingsData;
+      if (!res.ok) throw new Error('Save Spotify playback engine failed');
+      setData(updated);
+      setSpotifyPlayback(updated.spotifyPlayback ?? choice);
+      setCacheMessage({ ok: true, text: `Spotify playback set to ${choice === 'spotify-direct' ? 'Spotify Direct' : 'YouTube Match'}.` });
+      if (choice === 'spotify-direct' && IS_TAURI) {
+        api.spotifyAuthStatus().then(setSpotifyAuthStatus).catch(() => {});
+      }
+    } catch (err) {
+      setSpotifyPlayback(previous);
+      setCacheMessage({ ok: false, text: (err as Error).message });
+    }
+  }
+
+  async function handleStartSpotifyPairing() {
+    setIsPairingSpotify(true);
+    setSpotifyPairingError(null);
+    try {
+      const pairing = await api.spotifyStartPairing();
+      setSpotifyPairingData(pairing);
+      const url = pairing.verificationUriComplete || pairing.verificationUri;
+      if (url) {
+        await openExternalUrl(url);
+      }
+
+      // Start polling
+      const success = await api.spotifyPollPairing(pairing.deviceCode, pairing.expiresIn, pairing.interval);
+      if (success) {
+        setIsPairingSpotify(false);
+        setSpotifyPairingData(null);
+        const status = await api.spotifyAuthStatus();
+        setSpotifyAuthStatus(status);
+        setCacheMessage({ ok: true, text: 'Spotify account paired successfully!' });
+      }
+    } catch (err) {
+      setSpotifyPairingError((err as Error).message || 'Pairing timed out or was rejected');
+      setIsPairingSpotify(false);
+      setSpotifyPairingData(null);
+    }
+  }
+
+  async function handleSpotifyDisconnect() {
+    try {
+      await api.spotifyDisconnect();
+      const status = await api.spotifyAuthStatus();
+      setSpotifyAuthStatus(status);
+      setCacheMessage({ ok: true, text: 'Spotify credentials disconnected.' });
+    } catch (err) {
+      console.warn('Failed to disconnect Spotify:', err);
     }
   }
 
@@ -825,6 +898,105 @@ export function SettingsView() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-white">Spotify playback engine</p>
+                <p className="mt-1 text-xs text-muted">
+                  Choose how Spotify tracks are streamed. YouTube Match works for everyone without extra accounts.
+                </p>
+              </div>
+              <div className="flex shrink-0 rounded-xl border border-base-600/70 bg-base-950 p-1">
+                {(['youtube-match', 'spotify-direct'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleSpotifyPlaybackChange(option)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      spotifyPlayback === option
+                        ? 'bg-accent text-base-950'
+                        : 'text-muted hover:bg-base-800 hover:text-white'
+                    }`}
+                  >
+                    {option === 'youtube-match' ? 'YouTube Match (default)' : 'Spotify Direct'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {spotifyPlayback === 'spotify-direct' && IS_TAURI && (
+              <div className="mt-2 border-t border-base-700/60 pt-3">
+                {spotifyAuthStatus?.authenticated ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#1DB954] shadow-[0_0_8px_rgba(29,185,84,0.6)]" />
+                      <span className="text-xs font-medium text-[#1DB954]">
+                        Connected {spotifyAuthStatus.username ? `as ${spotifyAuthStatus.username}` : ''}
+                      </span>
+                      <span className="text-[11px] text-muted">· Direct 320kbps Vorbis decoding</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSpotifyDisconnect}
+                      className="rounded-lg border border-base-600/70 bg-base-800 px-2.5 py-1 text-xs text-muted hover:border-red-500/50 hover:text-red-400 transition-colors"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-amber-400/90 font-medium">
+                        Requires Spotify Premium account pairing via RFC 8628 (device code).
+                      </p>
+                      {!isPairingSpotify && (
+                        <button
+                          type="button"
+                          onClick={handleStartSpotifyPairing}
+                          className="rounded-lg bg-[#1DB954] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1ed760] transition-colors"
+                        >
+                          Pair Spotify Account
+                        </button>
+                      )}
+                    </div>
+
+                    {isPairingSpotify && spotifyPairingData && (
+                      <div className="rounded-lg border border-[#1DB954]/30 bg-[#1DB954]/10 p-3 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-white">Enter this pairing code on Spotify:</span>
+                          <span className="font-mono text-base font-bold tracking-widest text-[#1DB954] bg-base-950 px-2.5 py-1 rounded border border-[#1DB954]/40">
+                            {spotifyPairingData.userCode}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted">
+                          A browser window opened to{' '}
+                          <button
+                            type="button"
+                            onClick={() => openExternalUrl(spotifyPairingData.verificationUriComplete || spotifyPairingData.verificationUri)}
+                            className="text-[#1DB954] underline hover:text-[#1ed760]"
+                          >
+                            spotify.com/pair
+                          </button>
+                          . Log in with your Premium account and click Approve.
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted mt-1">
+                          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[#1DB954] border-t-transparent" />
+                          <span>Waiting for your approval on Spotify...</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {spotifyPairingError && (
+                      <p className="text-xs text-red-400">{spotifyPairingError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,9 +1,14 @@
 mod innertube_service;
+mod spotify_service;
 mod youtube_channel;
 
 use innertube_service::{
     get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
     InnertubeState,
+};
+use spotify_service::{
+    spotify_auth_status, spotify_disconnect, spotify_get_radio_tracks, spotify_playlist_info,
+    spotify_poll_pairing, spotify_start_pairing, spotify_track_info, SpotifySessionState,
 };
 use youtube_channel::{get_youtube_channel, get_youtube_playlist, get_channel_posts};
 
@@ -132,6 +137,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(InnertubeState::new())
+        .manage(SpotifySessionState::new())
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             kill_backend,
@@ -141,7 +147,14 @@ pub fn run() {
             resolve_audio_stream,
             get_video_metadata,
             search_youtube_tracks,
-            get_watch_next_tracks
+            get_watch_next_tracks,
+            spotify_auth_status,
+            spotify_start_pairing,
+            spotify_poll_pairing,
+            spotify_disconnect,
+            spotify_track_info,
+            spotify_playlist_info,
+            spotify_get_radio_tracks
         ])
         .setup(|_app| {
             // Only spawn the backend sidecar in production builds.

@@ -230,7 +230,17 @@ function LocalDetails({
       <div className="space-y-3 rounded-lg border border-base-600/60 bg-base-800 p-3">
         <DetailRow icon={Clock3} label="Duration" value={formatDuration(track.duration)} />
         <DetailRow icon={Sparkles} label="Play count" value={track.playCount} />
-        <DetailRow icon={Radio} label="Source" value={track.spotifyId ? 'Spotify metadata' : 'Local YouTube resolver'} />
+        <DetailRow
+          icon={Radio}
+          label="Source"
+          value={
+            (track as any).resolverSource === 'spotstream' || (track as any).audioQuality === 'spotify-320kbps'
+              ? 'Spotify Direct (320kbps Vorbis via spotstream)'
+              : track.spotifyId
+                ? 'Spotify metadata (YouTube stream)'
+                : 'Local YouTube resolver'
+          }
+        />
         <DetailRow icon={Tag} label="Video ID" value={track.youtubeId ?? track.id} />
       </div>
     </>

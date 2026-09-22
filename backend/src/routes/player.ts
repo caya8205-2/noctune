@@ -521,6 +521,52 @@ export async function playerRoutes(app: FastifyInstance) {
         }
       }
 
+      // Handle Spotify Direct playback when enabled
+      if (videoId.startsWith('spotify:')) {
+        const { isSpotifyDirectEnabled, cleanSpotifyId } = await import('../services/spotifyDirect.js');
+        if (isSpotifyDirectEnabled()) {
+          const spotifyId = cleanSpotifyId(videoId);
+          app.log.info({ videoId, spotifyId }, '[player] resolving via Spotify Direct (spotstream)');
+          try {
+            const { getSpotifyTrackById } = await import('../services/spotify.js');
+            const track = await getSpotifyTrackById(spotifyId, req.query.query || spotifyId);
+            const streamUrl = `/player/stream/spotify:${spotifyId}`;
+            const cachedLike = {
+              id: `spotify:${spotifyId}`,
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              duration: track.duration,
+              thumbnail: track.thumbnail,
+              query: track.title,
+              spotifyId,
+              spotifyUrl: track.spotifyUrl,
+              audioUrl: streamUrl,
+              audioUrlExpiry: Date.now() + 86400000,
+              audioQualityPreference: 'high',
+              audioFormat: 'webm',
+              audioQuality: 'spotify-320kbps',
+              resolverSource: 'spotstream' as const,
+              cachedAt: Date.now(),
+              playCount: 0,
+            };
+            const saved = upsertTrack(
+              track.title,
+              cachedLike as any,
+              streamUrl,
+              undefined,
+              'high',
+              'webm',
+              'spotify-320kbps',
+              'spotstream'
+            );
+            return reply.send({ ...saved, source: 'resolved' });
+          } catch (err) {
+            app.log.warn({ err, videoId }, '[player] Spotify Direct resolve failed, falling back to YouTube match');
+          }
+        }
+      }
+
       const query = req.query.query ?? videoId;
       const preference = getEnvConfig().audioQualityPreference;
       const startedAt = Date.now();
@@ -810,6 +856,44 @@ export async function playerRoutes(app: FastifyInstance) {
         .header('Cache-Control', 'public, max-age=86400');
 
       return reply.send(fs.createReadStream(localFile.path));
+    }
+
+    // Handle Spotify Direct streaming when enabled
+    if (videoId.startsWith('spotify:')) {
+      const { isSpotifyDirectEnabled, cleanSpotifyId, streamSpotifyDirectTrack } = await import('../services/spotifyDirect.js');
+      if (isSpotifyDirectEnabled()) {
+        const spotifyId = cleanSpotifyId(videoId);
+        const preference = getEnvConfig().audioQualityPreference;
+        const localAudioPath = getExistingAudioCachePath(spotifyId, preference) || getExistingAudioCachePath(videoId, preference);
+        if (localAudioPath && fs.existsSync(localAudioPath)) {
+          touchAudioCache(localAudioPath);
+          app.log.info({ videoId, localAudioPath }, '[player] streaming local cached Spotify audio');
+          return streamLocalAudioFile(localAudioPath, req.headers.range, reply);
+        }
+
+        app.log.info({ videoId, spotifyId }, '[player] streaming live via Spotify Direct (spotstream)');
+        try {
+          const { stream, contentType, destroy } = streamSpotifyDirectTrack(spotifyId);
+
+          req.raw.on('close', () => {
+            destroy();
+          });
+
+          reply
+            .header('Content-Type', contentType)
+            .header('Access-Control-Allow-Origin', '*')
+            .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+            .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+            .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+            .header('Cross-Origin-Resource-Policy', 'cross-origin')
+            .header('Accept-Ranges', 'none')
+            .header('Cache-Control', 'no-cache');
+
+          return reply.send(stream);
+        } catch (err) {
+          app.log.warn({ videoId, err }, '[player] Spotify Direct live stream failed, falling through to YouTube match');
+        }
+      }
     }
 
     const preference = getEnvConfig().audioQualityPreference;

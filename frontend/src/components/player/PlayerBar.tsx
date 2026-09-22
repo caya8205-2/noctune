@@ -227,23 +227,34 @@ export function PlayerBar() {
                 >
                   {currentTrack.title}
                 </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    'mt-0.5 inline-block max-w-full truncate text-left text-xs text-muted transition-colors',
-                    currentTrack ? 'hover:text-accent cursor-pointer' : 'cursor-default'
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <button
+                    type="button"
+                    className={clsx(
+                      'mt-0.5 inline-block max-w-full truncate text-left text-xs text-muted transition-colors',
+                      currentTrack ? 'hover:text-accent cursor-pointer' : 'cursor-default'
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (currentTrack) {
+                        void (artistViewId ? Promise.resolve(artistViewId) : resolveYouTubeChannelId(currentTrack))
+                          .then((resolvedId) => { if (resolvedId) setView('artist', resolvedId); });
+                      }
+                    }}
+                    title={currentTrack ? `Go to artist: ${currentTrack.artist}` : undefined}
+                  >
+                    {currentTrack.artist}
+                  </button>
+                  {((currentTrack as any).resolverSource === 'spotstream' || (currentTrack as any).audioQuality === 'spotify-320kbps') && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded bg-[#1DB954]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#1DB954] border border-[#1DB954]/30"
+                      title="Streaming directly from Spotify (320kbps Vorbis via spotstream)"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#1DB954]" />
+                      320k
+                    </span>
                   )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (currentTrack) {
-                      void (artistViewId ? Promise.resolve(artistViewId) : resolveYouTubeChannelId(currentTrack))
-                        .then((resolvedId) => { if (resolvedId) setView('artist', resolvedId); });
-                    }
-                  }}
-                  title={currentTrack ? `Go to artist: ${currentTrack.artist}` : undefined}
-                >
-                  {currentTrack.artist}
-                </button>
+                </div>
               </div>
             </>
           ) : (
