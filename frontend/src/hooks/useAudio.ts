@@ -302,7 +302,7 @@ export function useAudio() {
     const upcomingIds = new Set(
       upcoming
         .map((t) => (t.youtubeId || t.id).replace(/^(youtube|ytdlp):/, '').trim())
-        .filter((id) => id && !id.startsWith('spotify:'))
+        .filter(Boolean)
     );
     for (const [id, el] of preloadedAudiosRef.current.entries()) {
       if (!upcomingIds.has(id)) {
@@ -313,23 +313,33 @@ export function useAudio() {
       }
     }
 
-    // Preload next upcoming audio streams into browser media cache
-    for (const track of upcoming) {
-      const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
-      if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
+    // Preload next upcoming audio streams into browser media cache.
+    // Delay prebuffering by 2s so current track's initial playback buffers smoothly without bandwidth contention.
+    const timer = setTimeout(() => {
+      for (const track of upcoming) {
+        const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
+        if (!cleanId || preloadedAudiosRef.current.has(cleanId)) continue;
 
-      apiUrl('/player/stream/' + cleanId)
-        .then((src) => {
-          if (preloadedAudiosRef.current.has(cleanId)) return;
-          const preAudio = new Audio();
-          preAudio.preload = 'auto';
-          preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
-          preAudio.src = src;
-          preAudio.load();
-          preloadedAudiosRef.current.set(cleanId, preAudio);
-        })
-        .catch(() => {});
-    }
+        // For Spotify tracks: prebuffer ONLY the immediate next track to conserve bandwidth & session
+        if (cleanId.startsWith('spotify:') && upcoming[0] !== track) {
+          continue;
+        }
+
+        apiUrl('/player/stream/' + cleanId)
+          .then((src) => {
+            if (preloadedAudiosRef.current.has(cleanId)) return;
+            const preAudio = new Audio();
+            preAudio.preload = 'auto';
+            preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+            preAudio.src = src;
+            preAudio.load();
+            preloadedAudiosRef.current.set(cleanId, preAudio);
+          })
+          .catch(() => {});
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, [queue, queueIndex, shuffle]);
 
   // Sync play/pause

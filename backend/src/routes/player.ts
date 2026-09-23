@@ -212,8 +212,16 @@ async function avoidUnwantedLiveVersion(
 
 async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<string[]> {
   const directIds = videoIds.filter((id) => !id.startsWith('spotify:') && isYoutubeVideoId(id));
-  const { isSpotifyDirectEnabled } = await import('../services/spotifyDirect.js');
+  const { isSpotifyDirectEnabled, prefetchSpotifyDirectTrack } = await import('../services/spotifyDirect.js');
   const skipSpotify = isSpotifyDirectEnabled();
+
+  // If Spotify Direct is active, prefetch the first upcoming Spotify track strictly into RAM
+  if (skipSpotify) {
+    const nextSpotify = tracks.find((t) => t.id.startsWith('spotify:') || t.spotifyId);
+    if (nextSpotify) {
+      prefetchSpotifyDirectTrack(nextSpotify.id).catch(() => {});
+    }
+  }
 
   const trackIds = await Promise.all(
     tracks.map(async (track) => {

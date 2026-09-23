@@ -12,6 +12,19 @@ let daemonProcess: ChildProcess | null = null;
 let daemonStartingPromise: Promise<boolean> | null = null;
 let isDaemonReady = false;
 
+interface MemoryAudioBuffer {
+  buffer: Buffer;
+  contentType: string;
+  createdAt: number;
+}
+
+const memoryAudioCache = new Map<string, MemoryAudioBuffer>();
+const MAX_MEMORY_TRACKS = 3;
+
+export function clearSpotifyMemoryCache(): void {
+  memoryAudioCache.clear();
+}
+
 export function cleanSpotifyId(id: string): string {
   return (id || '')
     .trim()
@@ -216,6 +229,98 @@ export function stopSpotifyDaemon(): void {
   }
 }
 
+/**
+ * Prefetches a Spotify Direct track into memory in the background.
+ * Buffered chunks are held in an in-memory Map so playback triggers in 0ms.
+ */
+export async function prefetchSpotifyDirectTrack(rawId: string): Promise<void> {
+  const cleanId = cleanSpotifyId(rawId);
+  if (!cleanId || memoryAudioCache.has(cleanId)) return;
+
+  const ready = await ensureSpotifyDaemon();
+  if (!ready) return;
+
+  console.info(`[spotifyDirect] Prefetching ${cleanId} into RAM in background...`);
+
+  return new Promise<void>((resolve) => {
+    let resolved = false;
+    const finish = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      finish();
+    }, 20000);
+
+    const socket = net.connect(SPOTSTREAM_DAEMON_PORT, '127.0.0.1');
+    socket.write(`STREAM ${cleanId}\n`);
+
+    const ffmpegProc = spawn(
+      'ffmpeg',
+      [
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-f', 's16le',
+        '-ar', '44100',
+        '-ac', '2',
+        '-i', 'pipe:0',
+        '-c:a', 'libopus',
+        '-b:a', '160k',
+        '-vbr', 'on',
+        '-cluster_time_limit', '100',
+        '-cluster_size_limit', '4096',
+        '-f', 'webm',
+        'pipe:1',
+      ],
+      {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
+
+    const chunks: Buffer[] = [];
+    socket.pipe(ffmpegProc.stdin);
+
+    ffmpegProc.stdout.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+      // Once we have buffered 256KB (~15 seconds of audio), resolve promise so caller unblocks
+      const total = chunks.reduce((acc, c) => acc + c.length, 0);
+      if (total > 256000) {
+        finish();
+      }
+    });
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      try { socket.destroy(); } catch {}
+      try { ffmpegProc.kill(); } catch {}
+      if (chunks.length > 0) {
+        const fullBuffer = Buffer.concat(chunks);
+        if (fullBuffer.length > 64000) {
+          if (memoryAudioCache.size >= MAX_MEMORY_TRACKS) {
+            const oldestKey = memoryAudioCache.keys().next().value;
+            if (oldestKey) memoryAudioCache.delete(oldestKey);
+          }
+          memoryAudioCache.set(cleanId, {
+            buffer: fullBuffer,
+            contentType: 'audio/webm',
+            createdAt: Date.now(),
+          });
+          console.info(`[spotifyDirect] Prefetched and held ${fullBuffer.length} bytes in RAM for ${cleanId}`);
+        }
+      }
+      finish();
+    };
+
+    socket.on('error', cleanup);
+    ffmpegProc.on('error', cleanup);
+    ffmpegProc.stdout.on('close', cleanup);
+  });
+}
+
 export interface SpotifyAudioStreamResult {
   stream: Readable;
   contentType: string;
@@ -224,6 +329,18 @@ export interface SpotifyAudioStreamResult {
 
 export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResult {
   const cleanId = cleanSpotifyId(rawId);
+
+  // 1. Check in-memory stream cache first for instant 0ms playback
+  const cached = memoryAudioCache.get(cleanId);
+  if (cached && cached.buffer.length > 64000) {
+    console.info(`[spotifyDirect:${cleanId}] Serving INSTANTLY from in-memory RAM cache (${cached.buffer.length} bytes)`);
+    const stream = Readable.from(cached.buffer);
+    return {
+      stream,
+      contentType: cached.contentType,
+      destroy: () => stream.destroy(),
+    };
+  }
 
   // If daemon is warm and ready, stream via high-speed TCP socket without AP reconnect overhead
   if (isDaemonReady) {
@@ -253,6 +370,11 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       }
     );
 
+    const chunks: Buffer[] = [];
+    ffmpegProc.stdout.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
     let isDestroyed = false;
     const killStream = () => {
       if (isDestroyed) return;
@@ -265,6 +387,21 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
         ffmpegProc.stdout?.destroy();
         ffmpegProc.kill();
       } catch {}
+
+      if (chunks.length > 0) {
+        const fullBuffer = Buffer.concat(chunks);
+        if (fullBuffer.length > 64000) {
+          if (memoryAudioCache.size >= MAX_MEMORY_TRACKS) {
+            const oldestKey = memoryAudioCache.keys().next().value;
+            if (oldestKey) memoryAudioCache.delete(oldestKey);
+          }
+          memoryAudioCache.set(cleanId, {
+            buffer: fullBuffer,
+            contentType: 'audio/webm',
+            createdAt: Date.now(),
+          });
+        }
+      }
     };
 
     socket.pipe(ffmpegProc.stdin);
