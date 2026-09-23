@@ -218,6 +218,13 @@ async function bootstrap() {
   scheduleDemoStateReset((result, message) => app.log.info(result, message));
   scheduleStartupPrefetch();
 
+  // Pre-warm Spotify streaming daemon if Spotify Direct is configured
+  if (getEnvConfig().spotifyPlayback === 'spotify-direct') {
+    import('./services/spotifyDirect.js').then(({ ensureSpotifyDaemon }) => {
+      ensureSpotifyDaemon().catch(() => {});
+    }).catch(() => {});
+  }
+
   // Try preferred port, fall back to next available ports
   for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
     const port = PREFERRED_PORT + attempt;
@@ -241,9 +248,17 @@ async function bootstrap() {
   throw new Error(`Could not find an available port in range ${PREFERRED_PORT}-${PREFERRED_PORT + MAX_PORT_ATTEMPTS - 1}`);
 }
 
-process.on('exit', cleanupPidFile);
-process.on('SIGINT', () => { cleanupPidFile(); process.exit(0); });
-process.on('SIGTERM', () => { cleanupPidFile(); process.exit(0); });
+function shutdownCleanly() {
+  cleanupPidFile();
+  try {
+    const { stopSpotifyDaemon } = require('./services/spotifyDirect.js');
+    stopSpotifyDaemon();
+  } catch {}
+}
+
+process.on('exit', shutdownCleanly);
+process.on('SIGINT', () => { shutdownCleanly(); process.exit(0); });
+process.on('SIGTERM', () => { shutdownCleanly(); process.exit(0); });
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal:uncaughtException]', err);

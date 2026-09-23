@@ -112,6 +112,15 @@ export async function settingsRoutes(app: FastifyInstance) {
             clearPrefetchCache();
         }
 
+        if (parsed.data.spotifyPlayback !== undefined && parsed.data.spotifyPlayback !== previous.spotifyPlayback) {
+            const { ensureSpotifyDaemon, stopSpotifyDaemon } = await import('../services/spotifyDirect.js');
+            if (parsed.data.spotifyPlayback === 'spotify-direct') {
+                ensureSpotifyDaemon().catch(() => {});
+            } else {
+                stopSpotifyDaemon();
+            }
+        }
+
         return reply.send({
             ok: true,
             searchEngine: updated.searchEngine,

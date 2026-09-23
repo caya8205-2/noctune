@@ -2,10 +2,15 @@ import { spawn, type ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import net from 'net';
 import { Readable } from 'stream';
 import { getEnvConfig } from './env.js';
 
 let cachedBinaryPath: string | null = null;
+export const SPOTSTREAM_DAEMON_PORT = 3135;
+let daemonProcess: ChildProcess | null = null;
+let daemonStartingPromise: Promise<boolean> | null = null;
+let isDaemonReady = false;
 
 export function cleanSpotifyId(id: string): string {
   return (id || '')
@@ -119,6 +124,98 @@ export function isSpotifyDirectEnabled(): boolean {
   return config.spotifyPlayback === 'spotify-direct' && isSpotstreamAvailable();
 }
 
+/**
+ * Ensures the persistent spotstream streaming daemon is running in the background.
+ * The daemon keeps the Spotify AccessPoint session warm in RAM so tracks start in ~1s.
+ */
+export async function ensureSpotifyDaemon(): Promise<boolean> {
+  if (isDaemonReady && daemonProcess && !daemonProcess.killed) {
+    return true;
+  }
+  if (daemonStartingPromise) {
+    return daemonStartingPromise;
+  }
+
+  daemonStartingPromise = (async () => {
+    const binaryPath = resolveSpotstreamBinaryPath();
+    if (!binaryPath) return false;
+    const cacheDir = resolveSpotifyCacheDir();
+
+    try {
+      // Check if something is already listening on the port
+      const alreadyListening = await new Promise<boolean>((resolve) => {
+        const client = net.connect(SPOTSTREAM_DAEMON_PORT, '127.0.0.1', () => {
+          client.destroy();
+          resolve(true);
+        });
+        client.on('error', () => resolve(false));
+      });
+
+      if (alreadyListening) {
+        isDaemonReady = true;
+        return true;
+      }
+
+      console.info(`[spotifyDirect] Spawning persistent spotstream daemon on port ${SPOTSTREAM_DAEMON_PORT}...`);
+      const proc = spawn(binaryPath, ['--cache-dir', cacheDir, 'daemon', '--port', String(SPOTSTREAM_DAEMON_PORT)], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      daemonProcess = proc;
+
+      proc.on('exit', (code) => {
+        console.warn(`[spotifyDirect] spotstream daemon exited with code ${code}`);
+        isDaemonReady = false;
+        daemonProcess = null;
+        // Auto restart if still enabled
+        if (isSpotifyDirectEnabled()) {
+          setTimeout(() => ensureSpotifyDaemon().catch(() => {}), 2000);
+        }
+      });
+
+      // Wait for {"status":"ready"} from daemon stdout
+      const ready = await new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => resolve(false), 10000);
+        proc.stdout?.on('data', (data) => {
+          const text = data.toString();
+          if (text.includes('"status":"ready"')) {
+            clearTimeout(timeout);
+            resolve(true);
+          }
+        });
+        proc.on('error', () => {
+          clearTimeout(timeout);
+          resolve(false);
+        });
+      });
+
+      isDaemonReady = ready;
+      if (ready) {
+        console.info('[spotifyDirect] spotstream daemon is warm and ready for instant playback!');
+      }
+      return ready;
+    } finally {
+      daemonStartingPromise = null;
+    }
+  })();
+
+  return daemonStartingPromise;
+}
+
+/**
+ * Cleanly terminates the persistent spotstream daemon when switching back to YouTube Match or on shutdown.
+ */
+export function stopSpotifyDaemon(): void {
+  if (daemonProcess) {
+    console.info('[spotifyDirect] Stopping spotstream daemon...');
+    try {
+      daemonProcess.kill();
+    } catch {}
+    daemonProcess = null;
+    isDaemonReady = false;
+  }
+}
+
 export interface SpotifyAudioStreamResult {
   stream: Readable;
   contentType: string;
@@ -126,14 +223,76 @@ export interface SpotifyAudioStreamResult {
 }
 
 export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResult {
+  const cleanId = cleanSpotifyId(rawId);
+
+  // If daemon is warm and ready, stream via high-speed TCP socket without AP reconnect overhead
+  if (isDaemonReady) {
+    const socket = net.connect(SPOTSTREAM_DAEMON_PORT, '127.0.0.1');
+    socket.write(`STREAM ${cleanId}\n`);
+
+    const ffmpegProc = spawn(
+      'ffmpeg',
+      [
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-f', 's16le',
+        '-ar', '44100',
+        '-ac', '2',
+        '-i', 'pipe:0',
+        '-c:a', 'libopus',
+        '-b:a', '160k',
+        '-vbr', 'on',
+        '-cluster_time_limit', '100',
+        '-cluster_size_limit', '4096',
+        '-f', 'webm',
+        'pipe:1',
+      ],
+      {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
+    );
+
+    let isDestroyed = false;
+    const killStream = () => {
+      if (isDestroyed) return;
+      isDestroyed = true;
+      try {
+        socket.destroy();
+      } catch {}
+      try {
+        ffmpegProc.stdin?.destroy();
+        ffmpegProc.stdout?.destroy();
+        ffmpegProc.kill();
+      } catch {}
+    };
+
+    socket.pipe(ffmpegProc.stdin);
+
+    socket.on('error', (err) => {
+      console.warn(`[spotify-socket:${cleanId}] socket error:`, err);
+      killStream();
+    });
+
+    ffmpegProc.stdout.on('close', killStream);
+    ffmpegProc.stdout.on('error', killStream);
+
+    return {
+      stream: ffmpegProc.stdout,
+      contentType: 'audio/webm',
+      destroy: killStream,
+    };
+  }
+
+  // Fallback: spawn one-shot spotstream process if daemon is not active, and kick off daemon warm-up
+  ensureSpotifyDaemon().catch(() => {});
+
   const binaryPath = resolveSpotstreamBinaryPath();
   if (!binaryPath) {
     throw new Error('spotstream binary not found on system');
   }
 
-  const cleanId = cleanSpotifyId(rawId);
   const cacheDir = resolveSpotifyCacheDir();
-
   const spotstreamProc = spawn(binaryPath, ['--cache-dir', cacheDir, 'stream', cleanId], {
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -208,14 +367,8 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
   });
 
   spotstreamProc.stdout.pipe(ffmpegProc.stdin);
-
-  ffmpegProc.stdout.on('close', () => {
-    killProcesses();
-  });
-
-  ffmpegProc.stdout.on('error', () => {
-    killProcesses();
-  });
+  ffmpegProc.stdout.on('close', killProcesses);
+  ffmpegProc.stdout.on('error', killProcesses);
 
   return {
     stream: ffmpegProc.stdout,
