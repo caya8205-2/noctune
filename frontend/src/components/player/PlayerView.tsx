@@ -28,10 +28,12 @@ import { lyricsQueryOptions } from '../../hooks/useLyrics';
 import { extractDominantColor } from '../../utils/colorExtractor';
 
 const sourceMeta = {
+  spotify_direct: { label: 'Spotify Direct (320k)', Icon: Radio, className: 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/60 font-semibold' },
   prefetch: { label: 'Prefetch', Icon: Zap, className: 'bg-yellow-400/20 text-yellow-400 border-yellow-400/60' },
   cache: { label: 'Cache', Icon: Database, className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/60' },
   cache_refreshed: { label: 'Refreshed', Icon: Activity, className: 'bg-sky-500/20 text-sky-300 border-sky-400/60' },
   resolved: { label: 'Resolved', Icon: Radio, className: 'bg-red-500/20 text-red-400 border-red-500/60' },
+  local: { label: 'Local File', Icon: Music2, className: 'bg-purple-500/20 text-purple-400 border-purple-500/60' },
 };
 
 const JAPANESE_SCRIPT_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
@@ -370,15 +372,6 @@ export function PlayerView() {
               </p>
             )}
               <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
-                {((currentTrack as any).resolverSource === 'spotstream' || (currentTrack as any).audioQuality === 'spotify-320kbps') && (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border border-[#1DB954]/40 bg-[#1DB954]/15 text-[#1DB954]"
-                    title="Direct 320kbps Vorbis audio stream from Spotify via spotstream"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#1DB954] shadow-[0_0_6px_rgba(29,185,84,0.8)]" />
-                    Spotify Direct 320k
-                  </span>
-                )}
                 {currentTrack.source && SourceIcon && (
                   <button
                     type="button"
@@ -407,6 +400,7 @@ export function PlayerView() {
               {/* Badge Legend (toggleable on badge click) */}
               {showLegend && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl border border-white/5 bg-base-900/40 px-4 py-2 text-[11px] text-muted animate-fade-in">
+                  <span><strong className="text-[#1DB954] font-medium">Spotify Direct:</strong> Decrypted 320kbps Vorbis audio directly from Spotify CDN without YouTube matching</span>
                   <span><strong className="text-yellow-400 font-medium">Prefetch:</strong> Audio file on disk or pre-loaded in memory for instant playback</span>
                   <span><strong className="text-emerald-400 font-medium">Cache:</strong> Matched from learned store cache without searching YouTube</span>
                   <span><strong className="text-sky-300 font-medium">Refreshed:</strong> Audio stream URL renewed from cached YouTube match</span>

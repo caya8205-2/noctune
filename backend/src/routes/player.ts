@@ -590,7 +590,7 @@ export async function playerRoutes(app: FastifyInstance) {
               'spotify-320kbps',
               'spotstream'
             );
-            return reply.send({ ...saved, source: 'resolved' });
+            return reply.send({ ...saved, source: 'spotify_direct' });
           } catch (err) {
             app.log.warn({ err, videoId }, '[player] Spotify Direct resolve failed, falling back to YouTube match');
           }

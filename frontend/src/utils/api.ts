@@ -579,7 +579,7 @@ export interface CachedTrack extends Track {
   cachedAt: number;
   playCount: number;
   lastPlayed?: number;
-  source?: 'prefetch' | 'cache' | 'cache_refreshed' | 'resolved';
+  source?: 'prefetch' | 'cache' | 'cache_refreshed' | 'resolved' | 'spotify_direct' | 'local';
 }
 
 export interface SpotifyAuthStatus {
