@@ -151,6 +151,8 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       '-c:a', 'libopus',
       '-b:a', '160k',
       '-vbr', 'on',
+      '-cluster_time_limit', '100',
+      '-cluster_size_limit', '4096',
       '-f', 'webm',
       'pipe:1',
     ],
