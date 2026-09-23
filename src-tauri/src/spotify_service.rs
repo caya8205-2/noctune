@@ -4,8 +4,7 @@ use librespot::core::{
 };
 use librespot::metadata::{Metadata, Playlist, Track};
 use serde::{Deserialize, Serialize};
-use spotstream::auth::DeviceAuthResponse;
-use spotstream::{PlaylistInfo, PlaylistItemInfo, TrackInfo};
+use spotstream::{PlaylistInfo, PlaylistItemInfo};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -18,6 +17,27 @@ pub struct SpotifyAuthStatus {
     pub cache_dir: String,
     pub credentials_file: String,
     pub username: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotifyPairingInfo {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: Option<String>,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotifyTrackInfo {
+    pub id: String,
+    pub title: String,
+    pub artists: Vec<String>,
+    pub album: String,
+    pub duration_ms: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,10 +135,19 @@ pub async fn spotify_auth_status(state: State<'_, SpotifySessionState>) -> Resul
 }
 
 #[tauri::command]
-pub async fn spotify_start_pairing() -> Result<DeviceAuthResponse, String> {
-    spotstream::auth::request_pairing_code()
+pub async fn spotify_start_pairing() -> Result<SpotifyPairingInfo, String> {
+    let auth_data = spotstream::auth::request_pairing_code()
         .await
-        .map_err(|e| format!("Failed to request Spotify pairing code: {}", e))
+        .map_err(|e| format!("Failed to request Spotify pairing code: {}", e))?;
+
+    Ok(SpotifyPairingInfo {
+        device_code: auth_data.device_code,
+        user_code: auth_data.user_code,
+        verification_uri: auth_data.verification_uri,
+        verification_uri_complete: auth_data.verification_uri_complete,
+        expires_in: auth_data.expires_in,
+        interval: auth_data.interval,
+    })
 }
 
 #[tauri::command]
@@ -151,7 +180,7 @@ pub async fn spotify_disconnect(state: State<'_, SpotifySessionState>) -> Result
 pub async fn spotify_track_info(
     track_id: String,
     state: State<'_, SpotifySessionState>,
-) -> Result<TrackInfo, String> {
+) -> Result<SpotifyTrackInfo, String> {
     let parsed_id = spotstream::player::parse_track_id(&track_id)
         .map_err(|e| format!("Invalid track ID: {}", e))?;
 
@@ -165,7 +194,7 @@ pub async fn spotify_track_info(
     let artists: Vec<String> = track.artists.iter().map(|a| a.name.clone()).collect();
     let base62_id = parsed_id.to_base62().unwrap_or_else(|_| "unknown".to_string());
 
-    Ok(TrackInfo {
+    Ok(SpotifyTrackInfo {
         id: base62_id,
         title: track.name,
         artists,

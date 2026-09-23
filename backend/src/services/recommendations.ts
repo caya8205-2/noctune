@@ -650,6 +650,15 @@ export async function getRecommendations(
         } catch (err) {
           console.warn(`[recommend] innertube-rs watch_next failed for seed "${sTrack.title}": ${(err as Error).message}`);
         }
+      } else if (selectedEngine === 'spotify-radio') {
+        const q = `${sTrack.title} ${sTrack.artist}`;
+        try {
+          const sp = await searchSpotify(q, perSeedLimit * 2);
+          currentSeedCandidates.push(...sp.map(track => ({ track, source: 'search' as const })));
+        } catch {
+          const yt = await searchTracks(q, perSeedLimit * 2);
+          currentSeedCandidates.push(...yt.map(track => ({ track, source: 'search' as const })));
+        }
       } else if (selectedEngine === 'hybrid-ml') {
         if (isLastFmConfigured()) {
           try {

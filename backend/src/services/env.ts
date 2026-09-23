@@ -22,7 +22,7 @@ export interface EnvConfig {
     spotifyClientId: string;
     spotifyClientSecret: string;
     searchEngine: 'ytdlp' | 'spotify'; // which engine to use for search
-    recommendationEngine: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy';
+    recommendationEngine: 'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy' | 'spotify-radio';
     spotifyPlayback: 'youtube-match' | 'spotify-direct';
     audioQualityPreference: 'auto' | 'high';
     audioCacheLimitMb: number;
