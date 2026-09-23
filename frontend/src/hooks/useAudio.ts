@@ -320,8 +320,8 @@ export function useAudio() {
         const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
         if (!cleanId || preloadedAudiosRef.current.has(cleanId)) continue;
 
-        // For Spotify tracks: prebuffer ONLY the immediate next track to conserve bandwidth & session
-        if (cleanId.startsWith('spotify:') && upcoming[0] !== track) {
+        // Do not prebuffer Spotify tracks concurrently over HTTP: Spotify accounts permit only one active playback stream per session
+        if (cleanId.startsWith('spotify:')) {
           continue;
         }
 

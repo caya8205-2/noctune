@@ -925,13 +925,20 @@ export function SettingsView() {
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 pr-4">
-              <label htmlFor="spotify-playback-select" className="block text-sm font-medium text-white">
-                Spotify Playback Engine
-              </label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="spotify-playback-select" className="block text-sm font-medium text-white">
+                  Spotify Playback Engine
+                </label>
+                {spotifyPlayback !== (data?.spotifyPlayback ?? 'youtube-match') && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-400 border border-amber-400/30">
+                    Unsaved
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 {spotifyPlayback === 'spotify-direct'
-                  ? 'Spotify Direct: Streams Vorbis audio at 320kbps directly from Spotify CDN (Requires Spotify Premium & OAuth pairing).'
-                  : 'YouTube Match (default): Matches Spotify track metadata to YouTube via scoring heuristic and streams via InnerTube-rs (No account required).'}
+                  ? 'Spotify Direct: Memutar audio 320kbps Vorbis langsung dari server Spotify (memerlukan akun Spotify Premium & OAuth pairing). Catatan: Pengaturan ini hanya berlaku untuk track Spotify — track YouTube dan sumber lainnya akan tetap menggunakan engine YouTube bawaan.'
+                  : 'YouTube Match (default): Mencocokkan metadata track Spotify ke YouTube lewat scoring heuristic dan memutarnya via InnerTube-rs (Tanpa perlu akun atau login Spotify).'}
               </p>
             </div>
             <select
@@ -950,7 +957,7 @@ export function SettingsView() {
                 YouTube Match (default)
               </option>
               <option value="spotify-direct" className="bg-base-900 text-white">
-                Spotify Direct (320kbps)
+                Spotify Direct (320kbps — Khusus Spotify)
               </option>
             </select>
           </div>
