@@ -212,12 +212,18 @@ async function avoidUnwantedLiveVersion(
 
 async function resolvePrefetchIds(videoIds: string[], tracks: Track[]): Promise<string[]> {
   const directIds = videoIds.filter((id) => !id.startsWith('spotify:') && isYoutubeVideoId(id));
+  const { isSpotifyDirectEnabled } = await import('../services/spotifyDirect.js');
+  const skipSpotify = isSpotifyDirectEnabled();
+
   const trackIds = await Promise.all(
     tracks.map(async (track) => {
-      if (!track.id.startsWith('spotify:')) return isYoutubeVideoId(track.id) ? track.id : null;
-      if (track.youtubeId && isYoutubeVideoId(track.youtubeId)) return track.youtubeId;
-      const matched = await matchSpotifyTrackToYoutube(track);
-      return matched?.id && isYoutubeVideoId(matched.id) ? matched.id : null;
+      if (track.id.startsWith('spotify:') || track.spotifyId) {
+        if (skipSpotify) return null;
+        if (track.youtubeId && isYoutubeVideoId(track.youtubeId)) return track.youtubeId;
+        const matched = await matchSpotifyTrackToYoutube(track);
+        return matched?.id && isYoutubeVideoId(matched.id) ? matched.id : null;
+      }
+      return isYoutubeVideoId(track.id) ? track.id : null;
     })
   );
 
@@ -528,19 +534,43 @@ export async function playerRoutes(app: FastifyInstance) {
           const spotifyId = cleanSpotifyId(videoId);
           app.log.info({ videoId, spotifyId }, '[player] resolving via Spotify Direct (spotstream)');
           try {
-            const { getSpotifyTrackById } = await import('../services/spotify.js');
-            const track = await getSpotifyTrackById(spotifyId, req.query.query || spotifyId);
+            const cachedSpotify = getCachedBySpotifyId(spotifyId);
+            let title = cachedSpotify?.title;
+            let artist = cachedSpotify?.artist || '';
+            let album = cachedSpotify?.album || '';
+            let duration = cachedSpotify?.duration || 0;
+            let thumbnail = cachedSpotify?.thumbnail || '';
+            let spotifyUrl = cachedSpotify?.spotifyUrl || `https://open.spotify.com/track/${spotifyId}`;
+
+            if (!title && req.query.query && req.query.query !== videoId && req.query.query !== spotifyId) {
+              title = req.query.query;
+            }
+
+            if (!title) {
+              try {
+                const { getSpotifyTrackById } = await import('../services/spotify.js');
+                const track = await getSpotifyTrackById(spotifyId, spotifyId);
+                title = track.title;
+                artist = track.artist;
+                album = track.album || '';
+                duration = track.duration;
+                thumbnail = track.thumbnail;
+                spotifyUrl = track.spotifyUrl || spotifyUrl;
+              } catch {}
+            }
+
+            title = title || 'Spotify Track';
             const streamUrl = `/player/stream/spotify:${spotifyId}`;
             const cachedLike = {
               id: `spotify:${spotifyId}`,
-              title: track.title,
-              artist: track.artist,
-              album: track.album,
-              duration: track.duration,
-              thumbnail: track.thumbnail,
-              query: track.title,
+              title,
+              artist,
+              album,
+              duration,
+              thumbnail,
+              query: title,
               spotifyId,
-              spotifyUrl: track.spotifyUrl,
+              spotifyUrl,
               audioUrl: streamUrl,
               audioUrlExpiry: Date.now() + 86400000,
               audioQualityPreference: 'high',
@@ -551,7 +581,7 @@ export async function playerRoutes(app: FastifyInstance) {
               playCount: 0,
             };
             const saved = upsertTrack(
-              track.title,
+              title,
               cachedLike as any,
               streamUrl,
               undefined,

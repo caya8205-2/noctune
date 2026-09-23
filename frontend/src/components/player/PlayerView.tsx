@@ -370,6 +370,15 @@ export function PlayerView() {
               </p>
             )}
               <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
+                {((currentTrack as any).resolverSource === 'spotstream' || (currentTrack as any).audioQuality === 'spotify-320kbps') && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border border-[#1DB954]/40 bg-[#1DB954]/15 text-[#1DB954]"
+                    title="Direct 320kbps Vorbis audio stream from Spotify via spotstream"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#1DB954] shadow-[0_0_6px_rgba(29,185,84,0.8)]" />
+                    Spotify Direct 320k
+                  </span>
+                )}
                 {currentTrack.source && SourceIcon && (
                   <button
                     type="button"

@@ -232,7 +232,14 @@ export function useAudio() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
-    if (currentTrack.id.startsWith('spotify:') && !currentTrack.youtubeId) return;
+    if (
+      currentTrack.id.startsWith('spotify:') &&
+      !currentTrack.youtubeId &&
+      (currentTrack as any).resolverSource !== 'spotstream' &&
+      !(currentTrack as any).audioUrl?.includes('spotify:')
+    ) {
+      return;
+    }
 
     let cancelled = false;
     const targetId = (currentTrack.youtubeId || currentTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
