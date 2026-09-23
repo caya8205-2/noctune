@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { CachedTrack, PersonalMix, Track } from '../utils/api';
-import { api } from '../utils/api';
+import { api, getSpotifyPlaybackSettingSync } from '../utils/api';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -338,7 +338,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         api.prefetchTracks(nextTracks).catch(() => {});
       }
 
-      const resolved = await api.resolve(track.id, resolveQuery, track.youtubeId);
+      let resolved: CachedTrack;
+      const isDirectSpotify = track.id.startsWith('spotify:') && getSpotifyPlaybackSettingSync() === 'spotify-direct';
+      if (isDirectSpotify) {
+        const cleanId = track.id.replace(/^spotify:(track:)?/, '');
+        resolved = {
+          ...track,
+          id: `spotify:${cleanId}`,
+          spotifyId: cleanId,
+          audioUrl: `/player/stream/spotify:${cleanId}`,
+          audioUrlExpiry: Date.now() + 86400000,
+          resolverSource: 'spotstream',
+          source: 'spotify_direct',
+          cachedAt: Date.now(),
+          playCount: 0,
+        };
+        // Background sync to backend store without blocking playback start
+        api.resolve(track.id, resolveQuery, track.youtubeId).catch(() => {});
+      } else {
+        resolved = await api.resolve(track.id, resolveQuery, track.youtubeId);
+      }
+
       const playableTrack = {
         ...resolved,
         title: track.title,

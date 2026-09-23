@@ -16,7 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI } from '../../utils/api';
+import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI, setSpotifyPlaybackSetting } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
@@ -211,6 +211,7 @@ export function SettingsView() {
       const updated = (await res.json()) as SettingsData;
       if (updated.spotifyPlayback) {
         setSpotifyPlayback(updated.spotifyPlayback);
+        setSpotifyPlaybackSetting(updated.spotifyPlayback);
       }
       if (updated.recommendationEngine) {
         setRecommendationEngine(updated.recommendationEngine);
@@ -937,8 +938,8 @@ export function SettingsView() {
               </div>
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 {spotifyPlayback === 'spotify-direct'
-                  ? 'Spotify Direct: Memutar audio 320kbps Vorbis langsung dari server Spotify (memerlukan akun Spotify Premium & OAuth pairing). Catatan: Pengaturan ini hanya berlaku untuk track Spotify — track YouTube dan sumber lainnya akan tetap menggunakan engine YouTube bawaan.'
-                  : 'YouTube Match (default): Mencocokkan metadata track Spotify ke YouTube lewat scoring heuristic dan memutarnya via InnerTube-rs (Tanpa perlu akun atau login Spotify).'}
+                  ? 'Spotify Direct: Streams 320kbps Vorbis audio directly from Spotify CDN (Requires Spotify Premium & OAuth pairing). Note: This setting only applies to Spotify tracks — YouTube and local tracks will continue using their respective engines.'
+                  : 'YouTube Match (default): Matches Spotify track metadata to YouTube via scoring heuristic and streams via InnerTube-rs (No Spotify account required).'}
               </p>
             </div>
             <select
@@ -957,7 +958,7 @@ export function SettingsView() {
                 YouTube Match (default)
               </option>
               <option value="spotify-direct" className="bg-base-900 text-white">
-                Spotify Direct (320kbps — Khusus Spotify)
+                Spotify Direct (320kbps — Spotify tracks only)
               </option>
             </select>
           </div>

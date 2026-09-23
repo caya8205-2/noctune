@@ -905,3 +905,20 @@ export function isTrackActive(currentTrack: Track | null | undefined, track: Tra
 
   return false;
 }
+
+let cachedSpotifyPlaybackSetting: 'youtube-match' | 'spotify-direct' = 'youtube-match';
+
+export function getSpotifyPlaybackSettingSync(): 'youtube-match' | 'spotify-direct' {
+  return cachedSpotifyPlaybackSetting;
+}
+
+export function setSpotifyPlaybackSetting(val: 'youtube-match' | 'spotify-direct') {
+  cachedSpotifyPlaybackSetting = val;
+}
+
+// Initial fetch of settings to populate in-memory playback engine state
+apiUrl('/settings').then(url => fetch(url)).then(res => res.json()).then(data => {
+  if (data?.spotifyPlayback) {
+    cachedSpotifyPlaybackSetting = data.spotifyPlayback;
+  }
+}).catch(() => {});
