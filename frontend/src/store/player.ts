@@ -237,6 +237,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       isLoading: true,
       isPlaying: false,
       progress: 0,
+      duration: initialTrack.duration || 0,
       queue: queue.length > 0 ? queue : [initialTrack],
       queueIndex: idx >= 0 ? idx : 0,
     });
@@ -429,6 +430,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         currentTrack: playableTrack,
         isPlaying: true,
         progress: 0,
+        duration: playableTrack.duration || 0,
         queue: playbackQueue,
         queueIndex: playbackIndex,
       });

@@ -549,9 +549,9 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     (track.id.startsWith('spotify:') && !youtubeId);
 
   const resolverEngine = isDirectSpotify
-    ? { label: 'Spotify Direct (spotstream)', cls: 'text-emerald-400 font-semibold' }
+    ? { label: 'Spotify', cls: 'text-emerald-400 font-semibold' }
     : resolverSource === 'youtubei'
-    ? { label: 'Innertube-rs', cls: 'text-emerald-400 font-semibold' }
+    ? { label: 'Innertube', cls: 'text-emerald-400 font-semibold' }
     : resolverSource === 'ytdlp'
     ? { label: 'yt-dlp (bundled fallback)', cls: 'text-amber-400 font-semibold' }
     : resolverSource === 'local'

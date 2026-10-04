@@ -903,7 +903,8 @@ export async function playerRoutes(app: FastifyInstance) {
 
         app.log.info({ videoId, spotifyId }, '[player] streaming live via Spotify Direct (spotstream)');
         try {
-          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(spotifyId);
+          const cachedSpotify = getCachedBySpotifyId(spotifyId);
+          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(spotifyId, cachedSpotify?.duration);
 
           req.raw.on('close', () => {
             destroy();

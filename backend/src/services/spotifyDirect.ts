@@ -5,6 +5,7 @@ import os from 'os';
 import net from 'net';
 import { Readable } from 'stream';
 import { getEnvConfig } from './env.js';
+import { getCachedBySpotifyId } from './cache.js';
 
 let cachedBinaryPath: string | null = null;
 export const SPOTSTREAM_DAEMON_PORT = 3135;
@@ -70,17 +71,7 @@ export function resolveSpotstreamBinaryPath(): string | undefined {
     return envPath;
   }
 
-  // 2. Check %LOCALAPPDATA%/avpull/spotstream.exe (User convention)
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    const avpullPath = path.join(localAppData, 'avpull', 'spotstream.exe');
-    if (fs.existsSync(avpullPath)) {
-      cachedBinaryPath = avpullPath;
-      return avpullPath;
-    }
-  }
-
-  // 3. Check bundled resources or workspace relative paths
+  // 2. Check bundled resources or workspace relative paths
   const exeDir = path.dirname(process.execPath);
   const roots = [process.cwd(), exeDir];
   const binaryNames = process.platform === 'win32' ? ['spotstream.exe', 'spotstream'] : ['spotstream'];
@@ -236,7 +227,7 @@ export interface SpotifyAudioStreamResult {
   destroy: () => void;
 }
 
-export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResult {
+export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?: number): SpotifyAudioStreamResult {
   const cleanId = cleanSpotifyId(rawId);
 
   // 1. Check in-memory stream cache first for instant 0ms playback
@@ -251,6 +242,10 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       destroy: () => stream.destroy(),
     };
   }
+
+  // Calculate expected PCM bytes (44.1kHz * 2 channels * 2 bytes/sample = 176,400 bytes/sec)
+  const durationSec = expectedDurationSeconds ?? (getCachedBySpotifyId(cleanId)?.duration || 0);
+  const expectedPcmBytes = durationSec > 0 ? durationSec * 176400 : 0;
 
   // If daemon is warm and ready, stream via high-speed TCP socket without AP reconnect overhead
   if (isDaemonReady) {
@@ -291,8 +286,17 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
     socket.on('data', (chunk: Buffer) => {
       totalBytesReceived += chunk.length;
       if (silenceTimer) clearTimeout(silenceTimer);
-      // Once audio data is streaming (>64KB), if no new chunks arrive for 1200ms,
-      // the daemon has finished sending all PCM for this song. End FFmpeg stdin cleanly.
+
+      // If we know expected PCM size, check if >= 90% has been transferred.
+      // If duration is unknown, require at least 1MB before applying the short silence timer.
+      const hasReceivedTarget = expectedPcmBytes > 0
+        ? totalBytesReceived >= expectedPcmBytes * 0.9
+        : totalBytesReceived > 1024 * 1024;
+
+      // When the song is essentially complete (>90%), a short 1500ms silence cleanly triggers EOF.
+      // If the song is still mid-stream (<90%), allow up to 15s for network/CDN buffering before aborting.
+      const silenceTimeoutMs = hasReceivedTarget ? 1500 : 15000;
+
       if (totalBytesReceived > 64000) {
         silenceTimer = setTimeout(() => {
           if (!isDestroyed) {
@@ -303,7 +307,7 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
               socket.destroy();
             } catch {}
           }
-        }, 1200);
+        }, silenceTimeoutMs);
       }
     });
 

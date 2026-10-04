@@ -88,7 +88,9 @@ export function PlayerBar() {
     }
   }, [playbackRate, crossfadeDuration]);
 
-  const seekDuration = duration > 0 ? duration : currentTrack?.duration ?? 0;
+  const seekDuration = currentTrack?.duration && currentTrack.duration > 0
+    ? currentTrack.duration
+    : (duration > 0 ? duration : 0);
   const progressPct = seekDuration > 0 ? (progress / seekDuration) * 100 : 0;
 
   const progressFillStyle = { width: `${progressPct}%` };

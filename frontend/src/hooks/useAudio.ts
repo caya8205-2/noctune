@@ -52,10 +52,10 @@ function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
 export function seekAudio(seconds: number) {
   if (!activeAudio) return;
   const state = usePlayerStore.getState();
-  const fallbackDuration = state.currentTrack?.duration ?? state.duration;
-  const duration = Number.isFinite(activeAudio.duration) && activeAudio.duration > 0
-    ? activeAudio.duration
-    : fallbackDuration;
+  const trackDuration = state.currentTrack?.duration;
+  const duration = trackDuration && trackDuration > 0
+    ? trackDuration
+    : (Number.isFinite(activeAudio.duration) && activeAudio.duration > 0 ? activeAudio.duration : state.duration);
   const target = Math.max(0, Math.min(seconds, duration || seconds));
 
   try {
@@ -142,32 +142,17 @@ export function useAudio() {
 
     audio.addEventListener('timeupdate', () => {
       setProgress(audio.currentTime);
-      const state = usePlayerStore.getState();
-      const trackDuration = state.currentTrack?.duration || state.duration;
-      // Watchdog: If audio.duration is finite and known, advance right at the end (<0.4s)
-      if (
-        !trackEndedTriggeredRef.current &&
-        Number.isFinite(audio.duration) &&
-        audio.duration > 5 &&
-        audio.currentTime >= audio.duration - 0.4
-      ) {
-        handleTrackEndedRef.current();
-        return;
-      }
-      // Watchdog: If playback time reached or exceeded the expected track duration
-      if (
-        !trackEndedTriggeredRef.current &&
-        Number.isFinite(trackDuration) &&
-        trackDuration > 5 &&
-        audio.currentTime >= trackDuration
-      ) {
-        handleTrackEndedRef.current();
-      }
     });
 
     audio.addEventListener('durationchange', () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        setDuration(audio.duration);
+        const currentMetaDuration = usePlayerStore.getState().currentTrack?.duration;
+        // Don't let partial WebM streaming buffer shrink an already known track duration
+        if (!currentMetaDuration || currentMetaDuration <= 0) {
+          setDuration(audio.duration);
+        } else if (audio.duration >= currentMetaDuration - 1) {
+          setDuration(audio.duration);
+        }
       }
     });
 
