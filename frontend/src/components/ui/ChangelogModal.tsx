@@ -121,22 +121,30 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
-const V443_HIGHLIGHTS = [
+const V450_HIGHLIGHTS = [
   {
-    title: 'Update Notification & Installer Reliability',
-    desc: 'Fixed an issue where update notification toasts were drowned beneath view cards and sidebar track details, ensuring toasts always float on top. Added pre-update backend termination to eliminate installer file lock errors when restarting.',
+    title: 'Direct Spotify Playback (320kbps)',
+    desc: 'Stream Spotify tracks natively in original 320kbps Vorbis audio directly from Spotify servers without YouTube search or audio matching. Pair your Spotify Premium account seamlessly in Settings with instant device login. Features an ultra-responsive background engine delivering sub-second track transitions, instant in-memory replay cache, and bundled engine binaries included directly in the installer.',
   },
   {
-    title: 'Debug Dashboard Visual Alignment',
-    desc: 'Streamlined section headers without decorative icons, standardized status and tools button styling, and widened card sections to match Settings View while seamlessly responding to the track details sidebar.',
+    title: 'Personalized Playlists & Spotify Radio',
+    desc: 'Import your personal and algorithmic Spotify playlists—including Discover Weekly, Daily Mixes, and personalized radio stations—that were previously inaccessible. Introduces a dedicated Spotify Radio recommendation mode in Settings to generate smart queues based on your active seed tracks.',
   },
   {
-    title: 'Quiet Header Typography',
-    desc: 'Streamlined view headers across Search, Settings, and Stats, removing redundant subtitles for a cleaner, quieter interface.',
+    title: 'Resizable Navigation Sidebar',
+    desc: 'Easily customize the desktop layout by clicking and dragging the navigation sidebar border to any preferred width. Double-click the resize border to instantly snap back to the default width, with your custom size automatically saved across restarts.',
+  },
+  {
+    title: 'Settings & Debug Interface Refinements',
+    desc: 'Reorganized audio engines and playback settings into a cleaner layout with real-time connection status indicators, unsaved change badges, and streamlined engine identifiers in the debug dashboard.',
+  },
+  {
+    title: 'Playback Timing & Progress Accuracy',
+    desc: 'Fixed a timing issue where certain songs could unexpectedly cut off mid-track and advance to the next song in the queue. Resolved player bar progress duration discrepancies where live stream buffering temporarily shrank the total song length.',
   },
 ];
 
-const DEFAULT_HIGHLIGHTS = V443_HIGHLIGHTS;
+const DEFAULT_HIGHLIGHTS = V450_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
