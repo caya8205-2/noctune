@@ -381,11 +381,16 @@ export function useAudio() {
     }
 
     // Preload next upcoming audio streams into browser media cache.
-    // For non-Spotify (YouTube / local tracks): prebuffer after 2s so current track buffers smoothly.
-    const ytTimer = setTimeout(() => {
+    // Delay prebuffering by 2s so current track's initial playback buffers smoothly without bandwidth contention.
+    const timer = setTimeout(() => {
       for (const track of upcoming) {
         const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
-        if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
+        if (!cleanId || preloadedAudiosRef.current.has(cleanId)) continue;
+
+        // Do not prebuffer Spotify tracks concurrently over HTTP: Spotify accounts permit only one active playback stream per session
+        if (cleanId.startsWith('spotify:')) {
+          continue;
+        }
 
         apiUrl('/player/stream/' + cleanId)
           .then((src) => {
@@ -401,31 +406,7 @@ export function useAudio() {
       }
     }, 2000);
 
-    // For Spotify Direct: prebuffer ONLY the immediate next track (upcoming[0]) with a 4s delay,
-    // ensuring the active track's high-speed daemon stream has cleanly completed and disconnected.
-    const spotifyTimer = setTimeout(() => {
-      const nextTrack = upcoming[0];
-      if (!nextTrack) return;
-      const cleanId = (nextTrack.youtubeId || nextTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
-      if (!cleanId || !cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) return;
-
-      apiUrl('/player/stream/' + cleanId)
-        .then((src) => {
-          if (preloadedAudiosRef.current.has(cleanId)) return;
-          const preAudio = new Audio();
-          preAudio.preload = 'auto';
-          preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
-          preAudio.src = src;
-          preAudio.load();
-          preloadedAudiosRef.current.set(cleanId, preAudio);
-        })
-        .catch(() => {});
-    }, 4000);
-
-    return () => {
-      clearTimeout(ytTimer);
-      clearTimeout(spotifyTimer);
-    };
+    return () => clearTimeout(timer);
   }, [queue, queueIndex, shuffle]);
 
   // Sync play/pause

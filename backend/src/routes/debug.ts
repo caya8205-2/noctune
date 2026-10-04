@@ -158,19 +158,28 @@ export async function debugRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { spotifyId?: string; youtubeId?: string } }>(
     '/debug/resolver-snapshot',
     async (req) => {
-      const { spotifyId, youtubeId } = req.query;
-      const matchEntry = spotifyId ? getMatchCacheEntry(spotifyId) : null;
+      const { spotifyId } = req.query;
+      let { youtubeId } = req.query;
+      if (youtubeId?.startsWith('spotify:')) {
+        youtubeId = undefined;
+      }
+      const cleanSpotify = spotifyId?.replace(/^spotify:(track:)?/, '').trim();
+      const matchEntry = cleanSpotify ? getMatchCacheEntry(cleanSpotify) : null;
       const resolvedYoutubeId = youtubeId ?? matchEntry?.youtubeId ?? undefined;
       const preference = getEnvConfig().audioQualityPreference;
       const learned = resolvedYoutubeId
         ? getCachedById(resolvedYoutubeId)
-        : spotifyId
-          ? getCachedBySpotifyId(spotifyId)
+        : cleanSpotify
+          ? (getCachedBySpotifyId(cleanSpotify) || getCachedById(`spotify:${cleanSpotify}`))
           : null;
+
+      const isDirect = learned?.resolverSource === 'spotstream' ||
+                       (!resolvedYoutubeId && Boolean(cleanSpotify));
+
       return {
-        spotifyId: spotifyId ?? null,
-        youtubeId: resolvedYoutubeId ?? null,
-        matchCache: matchEntry,
+        spotifyId: cleanSpotify ?? null,
+        youtubeId: isDirect ? null : (resolvedYoutubeId ?? null),
+        matchCache: isDirect ? null : matchEntry,
         learned: learned ?? null,
         audioCache: {
           cached: resolvedYoutubeId ? Boolean(getExistingAudioCachePath(resolvedYoutubeId, preference)) : false,

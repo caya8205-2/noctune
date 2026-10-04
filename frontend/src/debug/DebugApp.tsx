@@ -426,8 +426,9 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const spotifyId = track?.spotifyId;
-  const youtubeId = track ? (track.youtubeId ?? (track.id.startsWith('spotify:') ? undefined : track.id)) : undefined;
+  const spotifyId = track?.spotifyId || (track?.id?.startsWith('spotify:') ? track.id.replace(/^spotify:(track:)?/, '') : undefined);
+  const rawYt = track ? (track.youtubeId ?? (track.id.startsWith('spotify:') ? undefined : track.id)) : undefined;
+  const youtubeId = rawYt?.startsWith('spotify:') ? undefined : rawYt;
 
   const refreshSnapshot = useCallback(async () => {
     if (!youtubeId && !spotifyId) return;
@@ -449,7 +450,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
       return;
     }
     void refreshSnapshot();
-  }, [track, refreshSnapshot]);
+  }, [track?.id, spotifyId, youtubeId, refreshSnapshot]);
 
   // Esc keybind to close resolve modal
   useEffect(() => {
@@ -543,7 +544,13 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
   const src = track.source ? sourceMeta[track.source] ?? { label: track.source, cls: 'text-soft' } : null;
 
   const resolverSource = snapshot?.learned?.resolverSource || ((track as any).source === 'local' || (track as any).localAudioPath ? 'local' : null);
-  const resolverEngine = resolverSource === 'youtubei'
+  const isDirectSpotify = (track as any).source === 'spotify_direct' ||
+    resolverSource === 'spotstream' ||
+    (track.id.startsWith('spotify:') && !youtubeId);
+
+  const resolverEngine = isDirectSpotify
+    ? { label: 'Spotify Direct (spotstream)', cls: 'text-emerald-400 font-semibold' }
+    : resolverSource === 'youtubei'
     ? { label: 'Innertube-rs', cls: 'text-emerald-400 font-semibold' }
     : resolverSource === 'ytdlp'
     ? { label: 'yt-dlp (bundled fallback)', cls: 'text-amber-400 font-semibold' }
@@ -555,6 +562,8 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     ? `${snapshot.learned.audioFormat.toUpperCase()}${snapshot.learned.audioQuality && snapshot.learned.audioQuality !== 'unknown' ? ` · ${snapshot.learned.audioQuality}` : ''}`
     : (track as any).audioFormat
     ? `${String((track as any).audioFormat).toUpperCase()}`
+    : isDirectSpotify
+    ? 'WEBM · spotify-320kbps'
     : '—';
 
   return (
@@ -582,14 +591,14 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
       <div className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
         <StatusRow label="Resolver engine" value={<span className={resolverEngine.cls}>{resolverEngine.label}</span>} />
         <StatusRow label="Audio format" value={formatStr} tone={formatStr !== '—' ? 'ok' : 'muted'} />
-        <StatusRow label="Playback source" value={src ? <span className={src.cls}>{src.label}</span> : '—'} />
+        <StatusRow label="Playback source" value={src ? <span className={src.cls}>{src.label}</span> : isDirectSpotify ? <span className="text-emerald-400 font-semibold">spotify_direct</span> : '—'} />
         <StatusRow label="Queue source" value={track.queueSource ?? '—'} />
         <StatusRow label="Spotify ID" value={spotifyId ?? '—'} tone="muted" />
-        <StatusRow label="Active YouTube ID" value={snapshot?.youtubeId ?? youtubeId ?? '—'} />
+        <StatusRow label="Active YouTube ID" value={isDirectSpotify ? '—' : (snapshot?.youtubeId ?? youtubeId ?? '—')} />
         <StatusRow
           label="Match cache"
-          value={snapshot?.matchCache ? `hit · score ${snapshot.matchCache.score}` : (snapshot ? 'miss' : '—')}
-          tone={snapshot?.matchCache ? 'ok' : 'muted'}
+          value={isDirectSpotify ? '—' : snapshot?.matchCache ? `hit · score ${snapshot.matchCache.score}` : (snapshot ? 'miss' : '—')}
+          tone={isDirectSpotify ? 'muted' : snapshot?.matchCache ? 'ok' : 'muted'}
         />
         <StatusRow
           label="Learned cache"
@@ -801,7 +810,11 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
         <div className="mb-3">
           <h3 className="text-sm font-semibold text-white">Active match</h3>
         </div>
-        {snapshot?.matchCache || snapshot?.learned ? (
+        {isDirectSpotify ? (
+          <div className="rounded-lg border border-white/[0.06] bg-base-900/40 p-3 text-xs text-muted">
+            No YouTube matching used — playback is streamed directly from Spotify (Spotify Direct).
+          </div>
+        ) : snapshot?.matchCache ? (
           <div className="space-y-2.5 rounded-lg border border-white/[0.06] bg-base-900/40 p-3">
             <div>
               <p className="mb-0.5 text-[11px] text-muted">Query used</p>
@@ -843,9 +856,11 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
         ) : (
           <p className="text-xs text-muted">No active match recorded for this track.</p>
         )}
-        <p className="mt-2 text-[11px] text-muted">
-          Inspect the full fallback query chain in the Matcher Inspector below.
-        </p>
+        {!isDirectSpotify && (
+          <p className="mt-2 text-[11px] text-muted">
+            Inspect the full fallback query chain in the Matcher Inspector below.
+          </p>
+        )}
       </div>
     </div>
   );

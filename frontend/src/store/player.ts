@@ -221,8 +221,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const queue = newQueue ?? get().queue;
     const idx = queue.findIndex(t => t.id === track.id);
     const source = options?.queueSource ?? track.queueSource ?? 'search';
+    const isDirectSpotifySetting = track.id.startsWith('spotify:') && getSpotifyPlaybackSettingSync() === 'spotify-direct';
+    const cleanSpotifyIdInitial = track.id.startsWith('spotify:') ? track.id.replace(/^spotify:(track:)?/, '') : undefined;
     const initialTrack = {
       ...track,
+      spotifyId: track.spotifyId ?? cleanSpotifyIdInitial,
+      source: isDirectSpotifySetting ? ('spotify_direct' as const) : (track as any).source,
       queueSource: source,
       originalSource: track.originalSource ?? (source === 'history' ? undefined : source),
     };
@@ -359,6 +363,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         resolved = await api.resolve(track.id, resolveQuery, track.youtubeId);
       }
 
+      const cleanSpotifyId = track.id.startsWith('spotify:') ? track.id.replace(/^spotify:(track:)?/, '') : undefined;
       const playableTrack = {
         ...resolved,
         title: track.title,
@@ -367,13 +372,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         duration: track.duration,
         thumbnail: track.thumbnail,
         query: track.query,
-        spotifyId: track.spotifyId,
+        spotifyId: track.spotifyId ?? resolved.spotifyId ?? cleanSpotifyId,
         spotifyUrl: track.spotifyUrl,
         artistId: track.artistId ?? resolved.artistId,
         albumId: track.albumId,
-        youtubeId: track.youtubeId ?? resolved.id,
-        youtubeTitle: track.youtubeTitle,
-        youtubeArtist: track.youtubeArtist,
+        youtubeId: isDirectSpotify ? undefined : (track.youtubeId ?? resolved.id),
+        youtubeTitle: isDirectSpotify ? undefined : track.youtubeTitle,
+        youtubeArtist: isDirectSpotify ? undefined : track.youtubeArtist,
         queueSource: track.queueSource,
       };
       const source = options?.queueSource ?? track.queueSource ?? 'search';

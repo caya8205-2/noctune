@@ -312,20 +312,7 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       chunks.push(chunk);
     });
 
-    let isDestroyed = false;
-    const killStream = () => {
-      if (isDestroyed) return;
-      isDestroyed = true;
-      if (silenceTimer) clearTimeout(silenceTimer);
-      try {
-        socket.destroy();
-      } catch {}
-      try {
-        ffmpegProc.stdin?.destroy();
-        ffmpegProc.stdout?.destroy();
-        ffmpegProc.kill();
-      } catch {}
-
+    const saveToMemoryCache = () => {
       if (chunks.length > 0) {
         const fullBuffer = Buffer.concat(chunks);
         if (fullBuffer.length > 64000) {
@@ -342,6 +329,22 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       }
     };
 
+    let isDestroyed = false;
+    const killStream = () => {
+      if (isDestroyed) return;
+      isDestroyed = true;
+      if (silenceTimer) clearTimeout(silenceTimer);
+      try {
+        socket.destroy();
+      } catch {}
+      try {
+        ffmpegProc.stdin?.destroy();
+        ffmpegProc.stdout?.destroy();
+        ffmpegProc.kill();
+      } catch {}
+      saveToMemoryCache();
+    };
+
     socket.pipe(ffmpegProc.stdin, { end: false });
 
     socket.on('error', (err) => {
@@ -349,7 +352,9 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       killStream();
     });
 
-    ffmpegProc.stdout.on('close', killStream);
+    ffmpegProc.stdout.on('close', () => {
+      saveToMemoryCache();
+    });
     ffmpegProc.stdout.on('error', killStream);
 
     return {
