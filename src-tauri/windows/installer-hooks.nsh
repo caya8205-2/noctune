@@ -6,10 +6,12 @@
 
 !macro NSIS_HOOK_PREINSTALL
   nsExec::ExecToLog 'taskkill /F /T /IM noctune-backend.exe'
+  nsExec::ExecToLog 'taskkill /F /T /IM spotstream.exe'
   Sleep 600
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
   nsExec::ExecToLog 'taskkill /F /T /IM noctune-backend.exe'
+  nsExec::ExecToLog 'taskkill /F /T /IM spotstream.exe'
   Sleep 600
 !macroend

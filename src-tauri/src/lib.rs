@@ -177,6 +177,10 @@ pub fn run() {
                     .path()
                     .resolve("resources/innertube.exe", BaseDirectory::Resource)
                     .expect("failed to resolve bundled innertube path");
+                let spotstream_path = _app
+                    .path()
+                    .resolve("resources/spotstream.exe", BaseDirectory::Resource)
+                    .ok();
 
                 let (mut rx, child) = _app
                     .shell()
@@ -185,6 +189,12 @@ pub fn run() {
                     .env("APP_DATA_DIR", app_data_dir.to_string_lossy().to_string())
                     .env("YT_DLP_PATH", ytdlp_path.to_string_lossy().to_string())
                     .env("INNERTUBE_PATH", innertube_path.to_string_lossy().to_string())
+                    .env(
+                        "SPOTSTREAM_PATH",
+                        spotstream_path
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_default(),
+                    )
                     .env("DISCORD_CLIENT_ID", option_env!("DISCORD_CLIENT_ID").unwrap_or(""))
                     .env("DISCORD_RPC_ENABLED", option_env!("DISCORD_RPC_ENABLED").unwrap_or("true"))
                     .env(

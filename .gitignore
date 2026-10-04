@@ -20,6 +20,10 @@ src-tauri/binaries/*.exe
 src-tauri/binaries/noctune-backend-*
 src-tauri/resources/yt-dlp.exe
 src-tauri/resources/.yt-dlp-platform
+src-tauri/resources/innertube.exe
+src-tauri/resources/.innertube-platform
+src-tauri/resources/spotstream.exe
+src-tauri/resources/.spotstream-platform
 .env
 .env.local
 backend/.env

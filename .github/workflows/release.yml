@@ -102,9 +102,11 @@ jobs:
           path: |
             src-tauri/resources/yt-dlp.exe
             src-tauri/resources/innertube.exe
+            src-tauri/resources/spotstream.exe
             src-tauri/resources/.yt-dlp-platform
             src-tauri/resources/.innertube-platform
-          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
+            src-tauri/resources/.spotstream-platform
+          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs', 'scripts/prepare-spotstream.mjs') }}
 
       - name: Build Tauri (Windows)
         if: needs.preflight.outputs.windows_run_id == ''
@@ -191,9 +193,11 @@ jobs:
           path: |
             src-tauri/resources/yt-dlp.exe
             src-tauri/resources/innertube.exe
+            src-tauri/resources/spotstream.exe
             src-tauri/resources/.yt-dlp-platform
             src-tauri/resources/.innertube-platform
-          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs') }}
+            src-tauri/resources/.spotstream-platform
+          key: ${{ runner.os }}-binaries-${{ hashFiles('scripts/prepare-ytdlp.mjs', 'scripts/prepare-innertube.mjs', 'scripts/prepare-spotstream.mjs') }}
 
       - name: Build Tauri (Linux)
         if: needs.preflight.outputs.linux_run_id == ''

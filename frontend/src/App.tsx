@@ -62,6 +62,8 @@ function AppInner() {
     showTrackDetails,
     showShortcutsHelp,
     sidebarCompact,
+    sidebarWidth,
+    setSidebarWidth,
     currentTrack,
     setView,
     toggleShortcutsHelp,
@@ -70,6 +72,37 @@ function AppInner() {
     activeChannelTab,
   } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  const handleSidebarMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setSidebarWidth(startWidth + delta);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleSidebarDoubleClick = () => {
+    setSidebarWidth(240);
+  };
 
   const currentRouteId = viewRouteId(activeView, {
     playlistId: activePlaylistId,
@@ -308,12 +341,32 @@ function AppInner() {
 
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
         <div
+          style={{ width: sidebarCompact ? 64 : sidebarWidth }}
           className={clsx(
-            'hidden flex-shrink-0 border-r border-white/[0.06] transition-all duration-300 md:block',
-            sidebarCompact ? 'w-16' : 'w-60'
+            'group/sidebar relative hidden flex-shrink-0 border-r border-white/[0.06] md:block',
+            !isResizingSidebar && 'transition-[width] duration-200'
           )}
         >
           <Sidebar />
+
+          {/* Draggable resize handle */}
+          {!sidebarCompact && (
+            <div
+              onMouseDown={handleSidebarMouseDown}
+              onDoubleClick={handleSidebarDoubleClick}
+              className="absolute top-0 -right-1 z-30 h-full w-2 cursor-col-resize select-none"
+              title="Drag to resize sidebar (double-click to reset)"
+            >
+              <div
+                className={clsx(
+                  'h-full w-[2px] mx-auto transition-colors duration-150',
+                  isResizingSidebar
+                    ? 'bg-accent shadow-[0_0_8px_rgba(var(--accent-rgb,20,184,166),0.6)]'
+                    : 'bg-transparent group-hover/sidebar:bg-white/10 hover:!bg-accent'
+                )}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -413,6 +466,11 @@ function AppInner() {
             <Sidebar onNavigate={() => setMobileMenuOpen(false)} />
           </aside>
         </div>
+      )}
+
+      {/* Global dragging overlay to prevent iframe/child hover capture during sidebar resize */}
+      {isResizingSidebar && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
       )}
     </div>
   );

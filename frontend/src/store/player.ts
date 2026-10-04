@@ -60,9 +60,11 @@ interface PlayerState {
   showTrackDetails: boolean;
   showShortcutsHelp: boolean;
   sidebarCompact: boolean;
+  sidebarWidth: number;
   playbackNotice: string | null;
 
   toggleSidebarCompact: () => void;
+  setSidebarWidth: (width: number) => void;
 
   // ── Equalizer ──────────────────────────────────────────────────────────────
   eqEnabled: boolean;
@@ -174,6 +176,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   showTrackDetails: true,
   showShortcutsHelp: false,
   sidebarCompact: Boolean(localStorage.getItem('noctune:sidebar-compact') === 'true'),
+  sidebarWidth: Math.max(180, Math.min(480, Number(localStorage.getItem('noctune:sidebar-width')) || 240)),
   playbackNotice: null,
 
   toggleSidebarCompact: () =>
@@ -184,6 +187,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       } catch {}
       return { sidebarCompact: next };
     }),
+
+  setSidebarWidth: (width: number) => {
+    const clamped = Math.max(180, Math.min(480, Math.round(width)));
+    try {
+      localStorage.setItem('noctune:sidebar-width', String(clamped));
+    } catch {}
+    set({ sidebarWidth: clamped });
+  },
 
   setLoading: (v) => set({ isLoading: v }),
   setIsPlaying: (v) => set({ isPlaying: v }),
