@@ -250,19 +250,37 @@ function minimumAcceptableScore(title: string, artist: string, duration: number)
   return titleLooksNoisy ? 75 : 55;
 }
 
-async function searchLrclib(title: string, artist: string): Promise<LrclibLyrics[]> {
+async function searchLrclib(title: string, artist: string, retries = 1): Promise<LrclibLyrics[]> {
   const url = new URL(`${LRCLIB_BASE}/search`);
   url.searchParams.set('track_name', title);
   if (artist) url.searchParams.set('artist_name', artist);
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT },
-  });
-  if (res.status === 404) return [];
-  if (!res.ok) {
-    throw new Error(`LRCLIB search failed: HTTP ${res.status}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
+      if (res.status === 404) return [];
+      if (res.status === 503 || res.status === 429) {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        return [];
+      }
+      if (!res.ok) {
+        throw new Error(`LRCLIB search failed: HTTP ${res.status}`);
+      }
+      return (await res.json()) as LrclibLyrics[];
+    } catch (err) {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+      throw err;
+    }
   }
-  return (await res.json()) as LrclibLyrics[];
+  return [];
 }
 
 export async function findLyrics(title: string, artist: string, duration: number): Promise<LyricsResult | null> {
@@ -282,11 +300,15 @@ export async function findLyrics(title: string, artist: string, duration: number
   const artistCandidates = [...new Set([artist, ''])];
   for (const candidateTitle of titleCandidates(title)) {
     for (const candidateArtist of artistCandidates) {
-      const results = await searchLrclib(candidateTitle, candidateArtist);
-      for (const result of results) {
-        if (seen.has(result.id)) continue;
-        seen.add(result.id);
-        candidates.push(result);
+      try {
+        const results = await searchLrclib(candidateTitle, candidateArtist);
+        for (const result of results) {
+          if (seen.has(result.id)) continue;
+          seen.add(result.id);
+          candidates.push(result);
+        }
+      } catch (err) {
+        console.warn(`[lyrics] search candidate failed for "${candidateTitle}": ${(err as Error).message}`);
       }
     }
   }

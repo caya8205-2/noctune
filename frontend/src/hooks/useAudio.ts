@@ -82,6 +82,8 @@ export function useAudio() {
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
   const suppressNextErrorRef = useRef(false);
   const recoveryAttemptsRef = useRef<Record<string, number>>({});
+  const trackEndedTriggeredRef = useRef(false);
+  const handleTrackEndedRef = useRef<() => void>(() => {});
 
   const {
     currentTrack,
@@ -98,6 +100,24 @@ export function useAudio() {
     setLoading,
     next,
   } = usePlayerStore();
+
+  handleTrackEndedRef.current = () => {
+    if (trackEndedTriggeredRef.current) return;
+    trackEndedTriggeredRef.current = true;
+    const state = usePlayerStore.getState();
+    if (state.repeat === 'one') {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        playAudio(audio).catch(() => {});
+      }
+      setTimeout(() => {
+        trackEndedTriggeredRef.current = false;
+      }, 1000);
+    } else {
+      next();
+    }
+  };
 
   // Create audio element once
   useEffect(() => {
@@ -120,25 +140,71 @@ export function useAudio() {
     audioRef.current = audio;
     activeAudio = audio;
 
-    audio.addEventListener('timeupdate', () => setProgress(audio.currentTime));
+    audio.addEventListener('timeupdate', () => {
+      setProgress(audio.currentTime);
+      const state = usePlayerStore.getState();
+      const trackDuration = state.currentTrack?.duration || state.duration;
+      // Watchdog: If audio.duration is finite and known, advance right at the end (<0.4s)
+      if (
+        !trackEndedTriggeredRef.current &&
+        Number.isFinite(audio.duration) &&
+        audio.duration > 5 &&
+        audio.currentTime >= audio.duration - 0.4
+      ) {
+        handleTrackEndedRef.current();
+        return;
+      }
+      // Watchdog: If playback time reached or exceeded the expected track duration
+      if (
+        !trackEndedTriggeredRef.current &&
+        Number.isFinite(trackDuration) &&
+        trackDuration > 5 &&
+        audio.currentTime >= trackDuration
+      ) {
+        handleTrackEndedRef.current();
+      }
+    });
+
     audio.addEventListener('durationchange', () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
       }
     });
+
     audio.addEventListener('ended', () => {
-      if (usePlayerStore.getState().repeat === 'one') {
-        audio.currentTime = 0;
-        playAudio(audio).catch(() => {});
-      } else {
-        next();
-      }
+      handleTrackEndedRef.current();
     });
+
     audio.addEventListener('playing', () => {
+      if (audio.currentTime < 2) {
+        trackEndedTriggeredRef.current = false;
+      }
       setIsPlaying(true);
       setLoading(false);
     });
-    audio.addEventListener('waiting', () => setLoading(true));
+
+    audio.addEventListener('waiting', () => {
+      const state = usePlayerStore.getState();
+      const trackDuration = state.currentTrack?.duration || state.duration || audio.duration;
+      // If playback stalls near the end of the track (e.g. at 4:13 / 4:16 when the stream ended),
+      // advance to next track instead of showing a perpetual loading spinner
+      if (
+        !trackEndedTriggeredRef.current &&
+        Number.isFinite(trackDuration) &&
+        trackDuration > 10 &&
+        audio.currentTime >= Math.max(0, trackDuration - 4.5)
+      ) {
+        console.info('[audio] Stream ended near completion (waiting at end-of-track), advancing to next track');
+        handleTrackEndedRef.current();
+        return;
+      }
+      setLoading(true);
+    });
+
+    audio.addEventListener('seeked', () => {
+      trackEndedTriggeredRef.current = false;
+    });
+
     audio.addEventListener('canplay', () => setLoading(false));
     audio.addEventListener('error', (e) => {
       const target = e.target as HTMLAudioElement;
@@ -232,6 +298,7 @@ export function useAudio() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
+    trackEndedTriggeredRef.current = false;
     if (
       currentTrack.id.startsWith('spotify:') &&
       !currentTrack.youtubeId &&
@@ -314,16 +381,11 @@ export function useAudio() {
     }
 
     // Preload next upcoming audio streams into browser media cache.
-    // Delay prebuffering by 2s so current track's initial playback buffers smoothly without bandwidth contention.
-    const timer = setTimeout(() => {
+    // For non-Spotify (YouTube / local tracks): prebuffer after 2s so current track buffers smoothly.
+    const ytTimer = setTimeout(() => {
       for (const track of upcoming) {
         const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
-        if (!cleanId || preloadedAudiosRef.current.has(cleanId)) continue;
-
-        // Do not prebuffer Spotify tracks concurrently over HTTP: Spotify accounts permit only one active playback stream per session
-        if (cleanId.startsWith('spotify:')) {
-          continue;
-        }
+        if (!cleanId || cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) continue;
 
         apiUrl('/player/stream/' + cleanId)
           .then((src) => {
@@ -339,7 +401,31 @@ export function useAudio() {
       }
     }, 2000);
 
-    return () => clearTimeout(timer);
+    // For Spotify Direct: prebuffer ONLY the immediate next track (upcoming[0]) with a 4s delay,
+    // ensuring the active track's high-speed daemon stream has cleanly completed and disconnected.
+    const spotifyTimer = setTimeout(() => {
+      const nextTrack = upcoming[0];
+      if (!nextTrack) return;
+      const cleanId = (nextTrack.youtubeId || nextTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
+      if (!cleanId || !cleanId.startsWith('spotify:') || preloadedAudiosRef.current.has(cleanId)) return;
+
+      apiUrl('/player/stream/' + cleanId)
+        .then((src) => {
+          if (preloadedAudiosRef.current.has(cleanId)) return;
+          const preAudio = new Audio();
+          preAudio.preload = 'auto';
+          preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+          preAudio.src = src;
+          preAudio.load();
+          preloadedAudiosRef.current.set(cleanId, preAudio);
+        })
+        .catch(() => {});
+    }, 4000);
+
+    return () => {
+      clearTimeout(ytTimer);
+      clearTimeout(spotifyTimer);
+    };
   }, [queue, queueIndex, shuffle]);
 
   // Sync play/pause

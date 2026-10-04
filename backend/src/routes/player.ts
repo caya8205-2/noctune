@@ -903,7 +903,7 @@ export async function playerRoutes(app: FastifyInstance) {
 
         app.log.info({ videoId, spotifyId }, '[player] streaming live via Spotify Direct (spotstream)');
         try {
-          const { stream, contentType, destroy } = streamSpotifyDirectTrack(spotifyId);
+          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(spotifyId);
 
           req.raw.on('close', () => {
             destroy();
@@ -916,8 +916,14 @@ export async function playerRoutes(app: FastifyInstance) {
             .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
             .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
             .header('Cross-Origin-Resource-Policy', 'cross-origin')
-            .header('Accept-Ranges', 'none')
-            .header('Cache-Control', 'no-cache');
+            .header('Accept-Ranges', 'none');
+
+          if (contentLength) {
+            reply.header('Content-Length', contentLength);
+            reply.header('Cache-Control', 'public, max-age=3600');
+          } else {
+            reply.header('Cache-Control', 'no-cache');
+          }
 
           return reply.send(stream);
         } catch (err) {

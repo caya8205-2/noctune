@@ -20,8 +20,8 @@ export async function lyricsRoutes(app: FastifyInstance) {
       }
       return reply.send(lyrics);
     } catch (err) {
-      app.log.warn({ err }, '[lyrics] LRCLIB request failed');
-      return reply.status(502).send({ error: 'Lyrics provider failed', message: (err as Error).message });
+      app.log.warn({ err: (err as Error).message }, '[lyrics] LRCLIB request failed');
+      return reply.status(204).send();
     }
   });
 }

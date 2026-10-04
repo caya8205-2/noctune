@@ -232,6 +232,7 @@ export function stopSpotifyDaemon(): void {
 export interface SpotifyAudioStreamResult {
   stream: Readable;
   contentType: string;
+  contentLength?: number;
   destroy: () => void;
 }
 
@@ -246,6 +247,7 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
     return {
       stream,
       contentType: cached.contentType,
+      contentLength: cached.buffer.length,
       destroy: () => stream.destroy(),
     };
   }
@@ -283,6 +285,28 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       }
     );
 
+    let silenceTimer: NodeJS.Timeout | null = null;
+    let totalBytesReceived = 0;
+
+    socket.on('data', (chunk: Buffer) => {
+      totalBytesReceived += chunk.length;
+      if (silenceTimer) clearTimeout(silenceTimer);
+      // Once audio data is streaming (>64KB), if no new chunks arrive for 1200ms,
+      // the daemon has finished sending all PCM for this song. End FFmpeg stdin cleanly.
+      if (totalBytesReceived > 64000) {
+        silenceTimer = setTimeout(() => {
+          if (!isDestroyed) {
+            try {
+              ffmpegProc.stdin?.end();
+            } catch {}
+            try {
+              socket.destroy();
+            } catch {}
+          }
+        }, 1200);
+      }
+    });
+
     const chunks: Buffer[] = [];
     ffmpegProc.stdout.on('data', (chunk: Buffer) => {
       chunks.push(chunk);
@@ -292,6 +316,7 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
     const killStream = () => {
       if (isDestroyed) return;
       isDestroyed = true;
+      if (silenceTimer) clearTimeout(silenceTimer);
       try {
         socket.destroy();
       } catch {}
@@ -317,7 +342,7 @@ export function streamSpotifyDirectTrack(rawId: string): SpotifyAudioStreamResul
       }
     };
 
-    socket.pipe(ffmpegProc.stdin);
+    socket.pipe(ffmpegProc.stdin, { end: false });
 
     socket.on('error', (err) => {
       console.warn(`[spotify-socket:${cleanId}] socket error:`, err);
