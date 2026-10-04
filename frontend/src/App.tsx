@@ -73,29 +73,45 @@ function AppInner() {
   } = usePlayerStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const lastSidebarClickTimeRef = useRef(0);
 
   const handleSidebarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizingSidebar(true);
+    const now = Date.now();
+    if (now - lastSidebarClickTimeRef.current < 350) {
+      lastSidebarClickTimeRef.current = 0;
+      setSidebarWidth(240);
+      return;
+    }
+    lastSidebarClickTimeRef.current = now;
 
     const startX = e.clientX;
     const startWidth = sidebarWidth;
+    let hasDragged = false;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientX - startX;
-      setSidebarWidth(startWidth + delta);
+      if (!hasDragged && Math.abs(delta) > 2) {
+        hasDragged = true;
+        setIsResizingSidebar(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      }
+      if (hasDragged) {
+        setSidebarWidth(startWidth + delta);
+      }
     };
 
     const handleMouseUp = () => {
-      setIsResizingSidebar(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      if (hasDragged) {
+        setIsResizingSidebar(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
 
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   };
@@ -354,7 +370,7 @@ function AppInner() {
             <div
               onMouseDown={handleSidebarMouseDown}
               onDoubleClick={handleSidebarDoubleClick}
-              className="absolute top-0 -right-1 z-30 h-full w-2 cursor-col-resize select-none"
+              className="absolute top-0 -right-1.5 z-30 h-full w-3 cursor-col-resize select-none"
               title="Drag to resize sidebar (double-click to reset)"
             >
               <div
