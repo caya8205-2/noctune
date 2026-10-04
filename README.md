@@ -9,7 +9,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=111111)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Node.js](https://img.shields.io/badge/Node.js-24-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4-000000?style=for-the-badge&logo=fastify&logoColor=white)](https://fastify.dev/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)\
 [![Rust](https://img.shields.io/badge/Rust-2021-730039?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
@@ -37,11 +37,12 @@
 
 - **Rich Discovery & Search**: Search tracks via Spotify metadata (clean titles, HQ covers, albums) or directly query YouTube.
 - **Native YouTube Audio Engine**: Fast, deciphered stream resolving powered natively by [`innertube-rs`](https://github.com/caya8205-2/innertube-rs).
+- **Spotify Direct Playback (Opt-In)**: Direct 320kbps Vorbis audio streaming for Spotify Premium users via native `spotstream` daemon & RFC 8628 device pairing.
 - **Instant Audio Pre-buffering**: 0ms gapless transition between queued songs via background pre-buffering pool.
-- **Smart Recommendations & Autoqueue**: Continuous dynamic queueing powered by YouTube watch-next graphs, Last.fm similarity, or local Markov chain transitions.
+- **Smart Recommendations & Autoqueue**: Continuous dynamic queueing powered by YouTube watch-next graphs, Spotify track radio, Last.fm similarity, or local Markov chain transitions.
 - **Synced Lyrics & Romaji**: Real-time synchronized lyrics via LRCLIB with Japanese Romaji conversion.
 - **Adaptive Circular Visualizer**: 6 audio reactive visualizer presets rendering directly around the album disk.
-- **Local Playlists & Library**: Full playlist management, liked songs, cover upload/crop, drag-and-drop reordering, and native audio tag scanner (`.flac`, `.mp3`, `.m4a`, etc.).
+- **Local Playlists & Library**: Full playlist management, liked songs, cover upload/crop, drag-and-drop reordering, and audio tag scanner (`.flac`, `.mp3`, `.m4a`, etc.).
 - **Debug Dashboard**: Built-in inspector for cache management, stream logs, candidate matching scores, and model stats.
 
 ## How It Works
@@ -52,18 +53,21 @@
 1. Metadata & Query Parsing
    └── Spotify track selected (rich metadata, title, artist, duration, cover).
          │
-2. Intelligent YouTube Matching Engine
-   └── Queries YouTube via innertube-rs using "Title + Artist".
-   └── Ranks candidate videos using weighted heuristic scoring:
-       • Positive: Official audio/video, Topic channels, VEVO, duration match etc. Look <a href="./backend/src/services/youtubeMatcher.ts#L37">here</a> for details.
-       • Penalties: Covers, live/tour, reactions, karaoke, nightcore/sped-up edits etc.
+2. Audio Engine Branch
+   ├── Spotify Direct (Opt-In, Premium):
+   │   └── Streams 320kbps Vorbis via spotstream daemon directly into WebM/Opus.
+   └── YouTube Match (Default, Free):
+       └── Queries YouTube via innertube-rs using "Title + Artist".
+       └── Ranks candidate videos using weighted heuristic scoring:
+           • Positive: Official audio/video, Topic channels, VEVO, duration match etc.
+           • Penalties: Covers, live/tour, reactions, karaoke, nightcore/sped-up edits etc.
          │
 3. Stream Extraction & Playback
-   └── Native QuickJS engine deciphers YouTube audio signatures.
+   └── Native QuickJS engine deciphers YouTube audio signatures (or spotstream PCM pipe).
    └── Audio stream plays immediately through the player engine.
          │
 4. Background Queue & Instant Pre-buffering
-   └── Next up to 5 upcoming tracks in queue are automatically resolved & prefetched.
+   └── Next upcoming tracks in queue are automatically resolved & prefetched.
    └── Audio chunks are pre-buffered in memory so track transitions happen in 0ms.
    └── Mappings, metadata, and lyrics are persisted in local SQLite cache.
 </pre>
@@ -79,7 +83,8 @@
 | Icons | Lucide React |
 | Audio Visualizer | audiomotion-analyzer |
 | Resolver Engine | innertube-rs (Rust, QuickJS decipher) & ytdlp (fallback) |
-| Local Audio Scanner | lofty (Rust) |
+| Spotify Direct | spotstream (Rust, librespot) & FFmpeg |
+| Local Audio Scanner | music-metadata (Node.js) |
 | Local Database | SQLite (better-sqlite3) |
 | Lyrics | LRCLIB, Kuroshiro, Kuromoji |
 | Metadata & APIs | Spotify Web API, Last.fm API, GitHub Releases |
@@ -124,13 +129,13 @@ npm run tauri:build
 
 ```bash
 noctune/
-  backend/             # Express/Fastify API sidecar & legacy handlers
+  backend/             # Fastify API sidecar (routes, cache, audio proxy, Spotify daemon)
   frontend/            # React + Tailwind SPA
     src/components/    # Views (Home, Queue, Player, Search, Playlist, Settings)
     src/hooks/         # Audio engine, preloading pool, lyrics
     src/store/         # Zustand global state (player, theme)
     src/utils/         # Tauri IPC & HTTP API bridges
-  src-tauri/           # Tauri native core & Rust services (innertube-rs, db, lofty)
+  src-tauri/           # Tauri native core & Rust services (innertube-rs, spotify_service, youtube_channel)
 ```
 
 ## Debug Dashboard
@@ -146,6 +151,7 @@ Accessible from Settings, the **Debug Dashboard** provides tools for:
 
 - [Windows warning](#why-is-windows-gives-warning-when-installing-the-app-is-there-malwarevirus-in-it)
 - [Playlist import](#why-does-playlist-import-sometimes-returns-no-tracks-found-even-though-the-playlist-is-public)
+- [Spotify Direct streaming](#can-i-stream-directly-from-spotify)
 - [First track delay](#why-does-first-track-take-a-few-second-to-start)
 - [Playback delay](#why-doesnt-every-track-play-instantly)
 - [Wrong match](#why-did-it-play-a-different-version-of-my-song)
@@ -164,8 +170,10 @@ Accessible from Settings, the **Debug Dashboard** provides tools for:
 #### Why does playlist import sometimes returns "no tracks found" even though the playlist is public?  
 * For **YT**, make sure collaboration is turned on in the playlist settings, for some reason it works even if you set the privacy to Unlisted (not public but anyone with a link can access the playlist) rather than Public but with Collaboration turned off.  
 
-* For **Spotify**, even though the app use the official web API, its still doesn't allow personalization playlist like Daily Mix, Genre Mix or Artist Mix. It needs OAuth implementation on the app or some reverse engineering workaround and i'm not going to do both.  
-Just open the said Mix playlist and click on the plus button to save it to a library, then import the said library.
+* For **Spotify**, personalized playlists (like Daily Mix, Discover Weekly, or Artist Mix) can be imported by pairing your Spotify Premium account in **Settings ➔ Spotify Playback** (via RFC 8628 device code), which enables resolution via the Mercury protocol. If not paired, you can open the Mix playlist on Spotify, click the plus button to save it as a normal playlist in your library, and import that link instead.
+
+#### Can I stream directly from Spotify?
+* Yes, if you have Spotify Premium! Noctune includes opt-in **Spotify Direct** playback powered by `spotstream`. In **Settings ➔ Playback & Engines**, select **Spotify Direct**, click **Pair Spotify Account**, and verify the code on `spotify.com/pair`. Once paired and saved, Spotify tracks stream directly at 320kbps Vorbis without YouTube conversion. YouTube and local tracks continue using their respective engines.
 
 #### Why does first track take a few second to start?
 * The first track needs to be resolved from Spotify metadata (or youtube search) to a playable youtube stream. After that, the next few tracks are prefetched and cached, so playback is usually instant.

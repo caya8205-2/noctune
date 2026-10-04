@@ -4,6 +4,140 @@ This document tracks all implemented features, bug fixes, patches, and current s
 
 ---
 
+## v4.5.0 - 2026-10-05
+
+### Spotify Direct Playback (Opt-In) & Session Integration
+- [x] **Spotify Direct Playback Engine (Opt-In 320kbps Streaming)**
+  - **Direct Stream Architecture**: Added `spotifyPlayback` setting (`'youtube-match' | 'spotify-direct'`) in `env.ts` and settings routes. When enabled with paired credentials, `spotify:` tracks stream 320kbps Vorbis directly via spotstream and FFmpeg into WebM/Opus (160kbps VBR), bypassing YouTube matching.
+- [x] **Native Spotify Session in Tauri Core**
+  - **Long-Lived Session**: Integrated `spotstream` v0.1.0 and `librespot` in Rust Tauri core (`spotify_service.rs`) with persistent `SpotifySessionState` across IPC commands (`spotify_auth_status`, `spotify_start_pairing`, `spotify_poll_pairing`, `spotify_disconnect`, `spotify_track_info`, `spotify_playlist_info`, `spotify_get_radio_tracks`).
+- [x] **RFC 8628 Device Pairing**
+  - **Inline OAuth Flow**: Integrated RFC 8628 pairing flow in Settings, allowing one-time device code verification on `spotify.com/pair` and persisting credentials to disk.
+- [x] **Persistent Warm Streaming Daemon**
+  - **Sub-Second Latency**: Spawns `spotstream daemon --port 3135` and streams audio over localhost TCP sockets directly to FFmpeg, cutting playback start latency from ~4.5s down to ~1.3s. Pre-warmed on startup and cleanly stopped on exit or engine switch.
+- [x] **Non-Blocking Resolve & In-Memory Replay Cache**
+  - **Synchronous Player Store Resolve**: Player store builds Spotify Direct playback URLs synchronously without blocking on network round-trips. Completed streams (>64KB) are cached in memory (up to 3 tracks) for instant replay.
+- [x] **Personalized Playlist Import Fallback**
+  - **Mercury Protocol**: `getSpotifyPlaylistTracks()` falls back to Mercury protocol via `spotstream playlist` when the Web API encounters 404 on personalized mixes (Daily Mix, Discover Weekly).
+- [x] **Spotify Radio Recommendation Option**
+  - **Radio Engine**: Added `spotify-radio` option to recommendation engines, automatically suggested when switching to Spotify Direct.
+- [x] **Playback Stability & Source Badge**
+  - **Single Stream Protection**: Excluded Spotify Direct tracks from prebuffering to prevent session collisions and mid-song cutoffs. Added unified green `Spotify Direct (320k)` badge in Full Player and source description in sidebar.
+
+---
+
+## v4.4.3 - 2026-09-13
+
+### Update Notification & Stacking Fixes
+- [x] **Portal Toast Rendering & Root Stacking Context**
+  - **Root Portal Mount**: Rendered the update notification toast into `document.body` via React Portal with `z-[9999999]`, preventing clipping beneath Settings cards or the sidebar.
+- [x] **Pre-Update Backend Termination Hook**
+  - **Sidecar Release**: Implemented `kill_backend` Tauri command and NSIS `PREINSTALL` grace period to cleanly terminate the background process before file replacement.
+- [x] **Strict SemVer Version Comparison**
+  - **Accurate Update Gating**: Updater only downloads releases strictly greater than local version.
+
+### Debug Dashboard Visual & Layout Alignment
+- [x] **Typography-First Dashboard Hierarchy**
+  - **Layout Refinement**: Removed decorative icons from tab headers in `DebugApp.tsx`, expanded responsive padding to match SettingsView, and unified metric styles.
+
+---
+
+## v4.4.2 - 2026-09-13
+
+### Backend Stability & Node 22 LTS Migration
+- [x] **Eliminated Native SQLite GC Crash (SIGABRT)**
+  - **Node 22 LTS Target**: Resolved fatal assertion failure (`node::RemoveEnvironmentCleanupHook`) caused by Node 24.19+ V8 GC bugs on SQLite statement finalization by migrating standalone binary builds (`pkg`) and CI runtime targets to Node 22 LTS.
+- [x] **Release Asset & CI Build Pruning**
+  - **Asset Optimization**: Pruned intermediate archives from GitHub Releases and added smart cross-run artifact caching in CI workflows.
+
+---
+
+## v4.4.1 - 2026-09-12
+
+### In-App Background Updater & Streaming Polishing
+- [x] **Automated Background In-App Updater**
+  - **Tauri Plugin Updater**: Implemented seamless background update checks and one-click restart via `tauri-plugin-updater` and signed `latest.json` manifests.
+- [x] **Android Progressive Stream Priority in innertube-rs**
+  - **403 & Seek Truncation Elimination**: Prioritized Android progressive format (`itag 18`) over iOS adaptive formats (`itag 140`), fixing GoogleVideo 1MB range ceiling errors.
+- [x] **Prefetch Sliding Window Eviction & In-Flight Await**
+  - **Queue Concurrency**: Added sliding window eviction for skipped songs and `waitForInFlightPrefetch` to avoid duplicate cold resolves.
+- [x] **Stream Quality Matching & Spotify URI Parsing**
+  - **Cache Parity**: Fixed `cacheMatchesAudioQuality` check for `auto` preference and cleaned Spotify URI prefix parsing.
+
+---
+
+## v4.4.0 - 2026-09-11
+
+### Home & Visual Design Rework
+- [x] **Typography-First Section Headers**
+  - **Calm Interface Hierarchy**: Removed repetitive decorative icons across all Home sections and Stats panels, adopting a clean editorial header pattern.
+- [x] **Neutral Text-Only Shortcut Pills**
+  - **Unified Navigation Pills**: Replaced multicolored icon shortcut pills with neutral bordered chips.
+- [x] **Pointer-Based Queue Reordering**
+  - **Reliable Drag-and-Drop**: Replaced HTML5 drag-and-drop in QueueView with pointer-event hit-testing and live visual feedback.
+
+---
+
+## v4.3.1 - 2026-09-11
+
+### Process Lifecycle & Stability Hardening
+- [x] **Child Process Signal Isolation**
+  - **Detached Execution**: Isolated `innertube.exe` subprocesses with `detached: true` and `proc.unref()`, preventing child termination signals from killing the parent backend sidecar.
+- [x] **Discord RPC Signal Handler Exit**
+  - **Clean Shutdown**: Restored explicit `process.exit(0)` calls in `SIGINT`/`SIGTERM` handlers after RPC cleanup.
+
+---
+
+## v4.3.0 - 2026-09-03
+
+### Startup Reliability & UI Polish
+- [x] **In-App Startup Gate**
+  - **Cold-Start Protection**: Added a startup gate that verifies `/status` health before mounting views, preventing empty UI states.
+- [x] **Built-In Markdown Changelog Viewer**
+  - **Formatted Release History**: Replaced monospace pre block in changelog dropdown with an inline markdown parser.
+
+---
+
+## v4.2.0 - 2026-09-02
+
+### YouTube Community Posts & Privacy Controls
+- [x] **YouTube Channel Community Posts & Uncropped Artwork Lightbox**
+  - **Community Tab**: Added native posts feed in `ArtistView` via InnerTube `/browse` pagination, and full uncropped aspect ratio image lightbox (`=s0`).
+- [x] **User Telemetry Management & Token-Based Retraction**
+  - **Privacy Control**: Added device delete tokens (SHA-256) allowing users to delete or export ML dataset submissions directly from Debug Dashboard.
+
+---
+
+## v4.1.2 - 2026-09-01
+
+### Stability & Platform Polish
+- [x] **Production Sidecar Playback Signal Isolation**
+  - **Crash Prevention**: Removed premature exits from signal handlers during child process resolution.
+- [x] **Silent Windows Shutdown**
+  - **No Console Flashing**: Added `CREATE_NO_WINDOW` flag (`0x08000000`) to backend sidecar termination.
+
+---
+
+## v4.1.1 - 2026-08-31
+
+### Bundled innertube-rs Binary Integration
+- [x] **Bundled `innertube-rs` CLI Adapter**
+  - **Native Binary Adapter**: Bundled standalone `innertube-rs` v0.8.0 binary into app resources (`resources/innertube.exe`) and wired `innertubeCli.ts`.
+- [x] **Removed Deprecated `youtubei.js`**
+  - **Legacy Dependency Cleanup**: Completely purged `youtubei.js` from backend dependencies and resolution chains.
+
+---
+
+## v4.1.0 - 2026-08-29
+
+### Core Performance & Engine Overhaul
+- [x] **Pure Rust `innertube-rs` YouTube Audio Resolver**
+  - **Native Resolver**: Upgraded core YouTube audio stream resolver to native Rust `innertube-rs` with embedded QuickJS deciphering.
+- [x] **20-Track Smart Mixes & Coherence Tuning**
+  - **Playlist Polish**: Expanded Nightly Mix generation to 20 tracks with 12-hour caching and distinct artist clustering.
+
+---
+
 ## v4.0.0 - 2026-08-17
 
 ### YouTube Streaming & Audio Resolver Engine Overhaul (Breaking Changes)

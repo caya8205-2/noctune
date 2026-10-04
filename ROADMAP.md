@@ -1,31 +1,36 @@
-﻿## Roadmap (Towards v2.0.0)
+## Noctune Architecture Roadmap
 
-With the stable release of **v1.3.0**, Noctune's architecture is expanding into two distinct, parallel development tracks to target different core environments.
+Following the v4.x releases, Noctune's architecture continues evolving across two distinct tracks:
 
 ```text
-Noctune v1.3.0
+Noctune v4.5.0
   |-- Track 1: Noctune Mobile (Flutter + Dart)
-  |     `-- Bring local-first playback & sync to iOS & Android
+  |     `-- Local-first playback & sync on iOS & Android
   |
-  `-- Track 2: Noctune Nightly (Full-Rust Core)
-        `-- Rewrite Fastify Node.js server into native Tauri/Rust
+  `-- Track 2: Noctune Nightly (Full-Rust Core Migration)
+        `-- Phase out Fastify Node.js sidecar in favor of pure Tauri/Rust core
 ```
 
 ### Track 1: Noctune Mobile
-A cross-platform mobile application utilizing Flutter to bring Noctune's clean UI and local-first streaming mechanics to pockets.
+A cross-platform mobile application utilizing Flutter to bring Noctune's clean UI and local-first streaming mechanics to mobile devices.
 
 * **Framework:** Flutter (Dart)
 * **Audio Engine:** `just_audio` or `audioplayers` with native background playback services.
-* **Stream Resolving:** Porting the resolver pipeline using optimized mobile extractors (e.g., `youtubei.js` via a lightweight embedded engine or high-performance native Dart parsers).
-* **Local Storage:** SQLite via `drift` or key-value caching using `Hive`/`Isar` to mirror desktop performance.
-* **Sync Ecosystem:** Ability to export/import the local database (`noctune.db`) and match cache JSONs between Desktop and Mobile.
+* **Stream Resolving:** Porting the resolver pipeline using optimized mobile extractors or embedded native engines.
+* **Local Storage:** SQLite via `drift` or key-value caching using `Hive`/`Isar`.
+* **Sync Ecosystem:** Ability to export/import the local database (`noctune.db`) and match cache between Desktop and Mobile.
 
 ### Track 2: Noctune Nightly (Full-Rust Rewrite)
-An ultra-performance, low-overhead desktop build that completely eliminates the Node.js/Fastify background process.
+An ultra-performance, low-overhead desktop build that completely eliminates the Node.js/Fastify background sidecar process.
 
-* **Architecture:** Migrate the backend layer into the Tauri core process, making Rust the single source of truth for the backend.
-* **Native Resolving:** Replacing `youtubei.js` with pure Rust implementations (e.g., `rusty-ytdl` or native scrapers via `reqwest`).
-* **Database Migration:** Moving from `better-sqlite3` to native Rust asynchronous drivers like `sqlx` or `rusqlite`.
-* **State Management:** Inter-process communication (IPC) through Tauri commands directly calling Rust services, reducing memory footprints by up to 60%.
+* **Progress Completed:**
+  - Native YouTube audio resolving & deciphering via `innertube-rs` Rust crate (`src-tauri`).
+  - Native YouTube channel, playlist, and community post scraping via Rust (`src-tauri/src/youtube_channel.rs`).
+  - Native Spotify session, RFC 8628 pairing, and Mercury metadata resolution via `spotstream` & `librespot` in Tauri core (`src-tauri/src/spotify_service.rs`).
+* **Upcoming Milestones:**
+  - **In-Process Audio Streaming:** Calling `spotstream::player` directly in-process via Rust and encoding with `symphonia`, removing the external `ffmpeg` process.
+  - **Database Migration:** Moving from `better-sqlite3` (Node.js) to native Rust asynchronous drivers (`sqlx` or `rusqlite`).
+  - **Full Backend Retirement:** Migrating remaining Fastify endpoints (search orchestration, queue management, lyrics) to Tauri commands and Rust state, reducing memory footprint and removing Node runtime entirely.
 
 ---
+
