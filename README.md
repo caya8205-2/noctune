@@ -59,7 +59,7 @@
    └── YouTube Match (Default, Free):
        └── Queries YouTube via innertube-rs using "Title + Artist".
        └── Ranks candidate videos using weighted heuristic scoring:
-           • Positive: Official audio/video, Topic channels, VEVO, duration match etc.
+           • Positive: Official audio/video, Topic channels, VEVO, duration match etc. Look <a href="./backend/src/services/youtubeMatcher.ts#L37">here</a> for details.
            • Penalties: Covers, live/tour, reactions, karaoke, nightcore/sped-up edits etc.
          │
 3. Stream Extraction & Playback
