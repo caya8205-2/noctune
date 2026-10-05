@@ -121,6 +121,21 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
+const V451_HIGHLIGHTS = [
+  {
+    title: 'Resizable Track Details Sidebar',
+    desc: 'You can now resize the right-hand Track Details sidebar by dragging its left border (with double-click to snap back to default 320px width). Your custom width is automatically saved across sessions.',
+  },
+  {
+    title: 'Dynamic Settings Callouts & Clean Copy',
+    desc: 'Settings descriptions are cleaner and feature responsive amber callout notices that update dynamically depending on whether your Spotify account is paired.',
+  },
+  {
+    title: 'Debug Dashboard Spotify Direct Accuracy',
+    desc: 'Fixed an issue where the Debug Dashboard reported stale YouTube match cache details (such as 128kbps MP4 and expired stream URLs) for Spotify tracks played under Spotify Direct. The inspector now accurately reflects live 320kbps WebM stream status and direct playback cache details.',
+  },
+];
+
 const V450_HIGHLIGHTS = [
   {
     title: 'Direct Spotify Playback (320kbps)',
@@ -143,8 +158,6 @@ const V450_HIGHLIGHTS = [
     desc: 'Fixed a timing issue where certain songs could unexpectedly cut off mid-track and advance to the next song in the queue. Resolved player bar progress duration discrepancies where live stream buffering temporarily shrank the total song length.',
   },
 ];
-
-const DEFAULT_HIGHLIGHTS = V450_HIGHLIGHTS;
 
 function parseSemVer(v: string) {
   const clean = v.replace(/^v/, '').trim();
@@ -217,8 +230,6 @@ export function ChangelogModal() {
 
   if (!open) return null;
 
-  const highlights = DEFAULT_HIGHLIGHTS;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
@@ -248,21 +259,42 @@ export function ChangelogModal() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs leading-relaxed text-soft">
-          <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-3">
-            <h3 className="font-semibold text-white text-sm">
-              Highlights of this release:
-            </h3>
-            <ul className="space-y-2 text-muted">
-              {highlights.map((item, idx) => (
-                <li key={idx} className="flex items-start gap-2">
-                  <span className="text-accent font-bold mt-0.5">•</span>
-                  <span>
-                    <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
-                    {renderInlineMarkdown(item.desc)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.5.1</span>
+                <span className="text-xs font-semibold text-white">Patch Updates</span>
+              </div>
+              <ul className="space-y-2 text-muted">
+                {V451_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v451-${idx}`} className="flex items-start gap-2">
+                    <span className="text-accent font-bold mt-0.5">•</span>
+                    <span>
+                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                      {renderInlineMarkdown(item.desc)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="border-t border-white/10 pt-3.5">
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.5.0</span>
+                <span className="text-xs font-semibold text-white">Major Release Highlights</span>
+              </div>
+              <ul className="space-y-2 text-muted">
+                {V450_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v450-${idx}`} className="flex items-start gap-2">
+                    <span className="text-accent font-bold mt-0.5">•</span>
+                    <span>
+                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                      {renderInlineMarkdown(item.desc)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200/90">

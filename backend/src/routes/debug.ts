@@ -15,6 +15,7 @@ import {
 } from '../services/youtubeMatcher.js';
 import { clearAudioCacheForId, getExistingAudioCachePath, listAudioCacheDetailed } from '../services/audioFileCache.js';
 import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed, getPlaybackBlacklistDetailed, clearPlaybackBlacklist } from '../services/playbackBlacklist.js';
+import { isSpotstreamAvailable, isSpotifyDirectEnabled } from '../services/spotifyDirect.js';
 import { clearPrefetchForId, getPrefetched, isPrefetching } from '../services/prefetch.js';
 import { resolveTrack } from '../services/audioResolver.js';
 import {
@@ -164,17 +165,23 @@ export async function debugRoutes(app: FastifyInstance) {
         youtubeId = undefined;
       }
       const cleanSpotify = spotifyId?.replace(/^spotify:(track:)?/, '').trim();
-      const matchEntry = cleanSpotify ? getMatchCacheEntry(cleanSpotify) : null;
-      const resolvedYoutubeId = youtubeId ?? matchEntry?.youtubeId ?? undefined;
-      const preference = getEnvConfig().audioQualityPreference;
-      const learned = resolvedYoutubeId
-        ? getCachedById(resolvedYoutubeId)
-        : cleanSpotify
-          ? (getCachedBySpotifyId(cleanSpotify) || getCachedById(`spotify:${cleanSpotify}`))
-          : null;
+      const directEnabled = isSpotifyDirectEnabled();
+      const spotifyCached = cleanSpotify
+        ? (getCachedById(`spotify:${cleanSpotify}`) || getCachedBySpotifyId(cleanSpotify))
+        : null;
 
-      const isDirect = learned?.resolverSource === 'spotstream' ||
-                       (!resolvedYoutubeId && Boolean(cleanSpotify));
+      const isDirect = (directEnabled && Boolean(cleanSpotify)) || spotifyCached?.resolverSource === 'spotstream';
+
+      const matchEntry = isDirect ? null : (cleanSpotify ? getMatchCacheEntry(cleanSpotify) : null);
+      const resolvedYoutubeId = isDirect ? undefined : (youtubeId ?? matchEntry?.youtubeId ?? undefined);
+      const preference = getEnvConfig().audioQualityPreference;
+      const learned = isDirect
+        ? spotifyCached
+        : (resolvedYoutubeId
+          ? getCachedById(resolvedYoutubeId)
+          : cleanSpotify
+            ? spotifyCached
+            : null);
 
       return {
         spotifyId: cleanSpotify ?? null,

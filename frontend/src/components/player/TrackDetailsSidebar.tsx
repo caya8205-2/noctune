@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import clsx from 'clsx';
 import { useQuery } from '@tanstack/react-query';
 import { Album, Clock3, Disc3, ExternalLink, Maximize2, Music2, Radio, Sparkles, Tag, UserRound } from 'lucide-react';
 import { api, isValidYouTubeChannelId, resolveYouTubeChannelId, type CachedTrack, type SpotifyTrackMetadata, IS_TAURI } from '../../utils/api';
@@ -303,11 +304,62 @@ export function TrackDetailsContent() {
 }
 
 export function TrackDetailsSidebar() {
-  const { currentTrack } = usePlayerStore();
+  const { currentTrack, trackDetailsWidth, setTrackDetailsWidth } = usePlayerStore();
+  const [isResizing, setIsResizing] = useState(false);
+  const lastClickTimeRef = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastClickTimeRef.current < 350) {
+      lastClickTimeRef.current = 0;
+      setTrackDetailsWidth(320);
+      return;
+    }
+    lastClickTimeRef.current = now;
+
+    const startX = e.clientX;
+    const startWidth = trackDetailsWidth;
+    let hasDragged = false;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Dragging left (moveEvent.clientX < startX) expands width
+      const delta = startX - moveEvent.clientX;
+      if (!hasDragged && Math.abs(delta) > 2) {
+        hasDragged = true;
+        setIsResizing(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      }
+      if (hasDragged) {
+        setTrackDetailsWidth(startWidth + delta);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (hasDragged) {
+        setIsResizing(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleDoubleClick = () => {
+    setTrackDetailsWidth(320);
+  };
 
   if (!currentTrack) {
     return (
-      <aside className="hidden 2xl:flex w-80 flex-shrink-0 border-l border-base-800 bg-base-950/70 p-4 flex-col justify-center text-center text-muted">
+      <aside
+        style={{ width: trackDetailsWidth }}
+        className="hidden 2xl:flex flex-shrink-0 border-l border-base-800 bg-base-950/70 p-4 flex-col justify-center text-center text-muted"
+      >
         <Music2 size={28} className="mx-auto mb-3" strokeWidth={1.3} />
         <p className="text-sm">Track details will appear here.</p>
       </aside>
@@ -315,7 +367,30 @@ export function TrackDetailsSidebar() {
   }
 
   return (
-    <aside className="hidden lg:block w-72 xl:w-80 flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto">
+    <aside
+      style={{ width: trackDetailsWidth }}
+      className={clsx(
+        'group/track-details relative hidden lg:block flex-shrink-0 min-h-0 border-l border-base-800 bg-base-950/70 overflow-y-auto',
+        !isResizing && 'transition-[width] duration-200'
+      )}
+    >
+      {/* Draggable resize handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        className="absolute top-0 -left-1.5 z-30 h-full w-3 cursor-col-resize select-none"
+        title="Drag to resize track details (double-click to reset)"
+      >
+        <div
+          className={clsx(
+            'h-full w-[2px] mx-auto transition-colors duration-150',
+            isResizing
+              ? 'bg-accent shadow-[0_0_8px_rgba(var(--accent-rgb,20,184,166),0.6)]'
+              : 'bg-transparent group-hover/track-details:bg-white/10 hover:!bg-accent'
+          )}
+        />
+      </div>
+
       <div className="flex flex-col gap-4 p-4">
         <TrackDetailsContent />
       </div>

@@ -938,8 +938,8 @@ export function SettingsView() {
               </div>
               <p className="mt-1 text-xs text-muted leading-relaxed">
                 {spotifyPlayback === 'spotify-direct'
-                  ? 'Spotify Direct: Streams 320kbps Vorbis audio directly from Spotify CDN (Requires Spotify Premium & OAuth pairing). Note: This setting only applies to Spotify tracks — YouTube and local tracks will continue using their respective engines.'
-                  : 'YouTube Match (default): Matches Spotify track metadata to YouTube via scoring heuristic and streams via InnerTube-rs (No Spotify account required).'}
+                  ? 'Spotify: Streams 320kbps Vorbis audio directly from Spotify CDN.'
+                  : 'YouTube Match (default): Matches Spotify track metadata to YouTube via scoring heuristic and streams via InnerTube-rs.'}
               </p>
             </div>
             <select
@@ -957,11 +957,22 @@ export function SettingsView() {
               <option value="youtube-match" className="bg-base-900 text-white">
                 YouTube Match (default)
               </option>
-              <option value="spotify-direct" className="bg-base-900 text-white">
-                Spotify Direct (320kbps — Spotify tracks only)
+              <option
+                value="spotify-direct"
+                className={!spotifyAuthStatus?.authenticated ? 'bg-base-900 text-muted' : 'bg-base-900 text-white'}
+              >
+                Spotify
               </option>
             </select>
           </div>
+          {spotifyPlayback === 'spotify-direct' && (
+            <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
+              <Info size={13} className="mr-1 inline-block align-text-bottom" />
+              {!spotifyAuthStatus?.authenticated
+                ? 'Requires Spotify Premium account & OAuth pairing.'
+                : 'This setting only applies to Spotify tracks — YouTube and local tracks will continue using their respective engines.'}
+            </div>
+          )}
         </div>
 
         {/* 4. Recommendation Engine */}
@@ -975,9 +986,7 @@ export function SettingsView() {
                 {recommendationEngine === 'innertube-rs' || recommendationEngine === 'legacy'
                   ? 'InnerTube-rs Engine: Native YouTube watch next & related video recommendation graph (Fastest & most relevant).'
                   : recommendationEngine === 'spotify-radio'
-                  ? spotifyPlayback === 'youtube-match'
-                    ? 'Spotify Radio (Autoplay): Spotify recommendation graph via OAuth session. Note: Spotify Direct playback engine is recommended when using this engine.'
-                    : 'Spotify Radio (Autoplay): Native track radio and autoplay recommendations directly from Spotify via OAuth session.'
+                  ? 'Spotify Radio (Autoplay): Native track radio and autoplay recommendations directly from Spotify via OAuth session.'
                   : recommendationEngine === 'hybrid-ml'
                   ? 'ML Hybrid Collaborative: Combines local Markov chain transitions, metadata similarity, and play history.'
                   : 'Last.fm Similar Tracks: Uses Last.fm online graph API to suggest similar tracks.'}
@@ -994,9 +1003,9 @@ export function SettingsView() {
               </option>
               <option
                 value="spotify-radio"
-                className={spotifyPlayback === 'youtube-match' ? 'bg-base-900 text-muted' : 'bg-base-900 text-white'}
+                className={!spotifyAuthStatus?.authenticated ? 'bg-base-900 text-muted' : 'bg-base-900 text-white'}
               >
-                Spotify Radio (Autoplay){spotifyPlayback === 'youtube-match' ? ' — Requires Spotify Direct' : ''}
+                Spotify Radio (Autoplay)
               </option>
               <option value="lastfm" className="bg-base-900 text-white">
                 Last.fm Similar Tracks
@@ -1006,6 +1015,19 @@ export function SettingsView() {
               </option>
             </select>
           </div>
+          {recommendationEngine === 'spotify-radio' && (
+            !spotifyAuthStatus?.authenticated ? (
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
+                <Info size={13} className="mr-1 inline-block align-text-bottom" />
+                Requires Spotify Premium account & OAuth pairing.
+              </div>
+            ) : spotifyPlayback === 'youtube-match' ? (
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
+                <Info size={13} className="mr-1 inline-block align-text-bottom" />
+                Spotify playback engine is recommended when using this engine.
+              </div>
+            ) : null
+          )}
         </div>
 
         {/* 5. Spotify Connection / Pairing Box (Above Save Engine Settings) */}
@@ -1109,11 +1131,9 @@ export function SettingsView() {
         </div>
 
         {/* 7. Note info */}
-        <div className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-base-950/60 p-3.5 text-xs text-muted">
-          <Info size={16} className="text-accent flex-shrink-0 mt-0.5" />
-          <p className="leading-relaxed">
-            <strong className="text-white">Note:</strong> Changing recommendation engine affects which algorithm powers your active autoqueue, recommendations, and Nightly Mixes. On-the-go ML background training will continue logging your listening habits seamlessly in the background so your model keeps learning.
-          </p>
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
+          <Info size={13} className="mr-1 inline-block align-text-bottom" />
+          <strong className="font-semibold text-amber-200">Note:</strong> Changing recommendation engine affects which algorithm powers your active autoqueue, recommendations, and Nightly Mixes. On-the-go ML background training will continue logging your listening habits seamlessly in the background so your model keeps learning.
         </div>
       </section>
 

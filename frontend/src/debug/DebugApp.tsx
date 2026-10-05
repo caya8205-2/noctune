@@ -558,12 +558,14 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
     ? { label: 'Local storage', cls: 'text-sky-400 font-semibold' }
     : { label: 'Innertube (primary)', cls: 'text-emerald-400/80' };
 
+  const rawQuality = snapshot?.learned?.audioQuality;
+  const qualityDisplay = rawQuality && rawQuality !== 'unknown' ? rawQuality.replace(/^spotify-/, '') : '';
   const formatStr = snapshot?.learned?.audioFormat
-    ? `${snapshot.learned.audioFormat.toUpperCase()}${snapshot.learned.audioQuality && snapshot.learned.audioQuality !== 'unknown' ? ` · ${snapshot.learned.audioQuality}` : ''}`
+    ? `${snapshot.learned.audioFormat.toUpperCase()}${qualityDisplay ? ` · ${qualityDisplay}` : ''}`
     : (track as any).audioFormat
     ? `${String((track as any).audioFormat).toUpperCase()}`
     : isDirectSpotify
-    ? 'WEBM · spotify-320kbps'
+    ? 'WEBM · 320kbps'
     : '—';
 
   return (
@@ -812,7 +814,7 @@ function CurrentTrackSnapshot({ track }: { track: CachedTrack | null }) {
         </div>
         {isDirectSpotify ? (
           <div className="rounded-lg border border-white/[0.06] bg-base-900/40 p-3 text-xs text-muted">
-            No YouTube matching used — playback is streamed directly from Spotify (Spotify Direct).
+            No YouTube matching used — playback is streamed directly from Spotify.
           </div>
         ) : snapshot?.matchCache ? (
           <div className="space-y-2.5 rounded-lg border border-white/[0.06] bg-base-900/40 p-3">

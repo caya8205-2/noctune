@@ -61,10 +61,12 @@ interface PlayerState {
   showShortcutsHelp: boolean;
   sidebarCompact: boolean;
   sidebarWidth: number;
+  trackDetailsWidth: number;
   playbackNotice: string | null;
 
   toggleSidebarCompact: () => void;
   setSidebarWidth: (width: number) => void;
+  setTrackDetailsWidth: (width: number) => void;
 
   // ── Equalizer ──────────────────────────────────────────────────────────────
   eqEnabled: boolean;
@@ -177,6 +179,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   showShortcutsHelp: false,
   sidebarCompact: Boolean(localStorage.getItem('noctune:sidebar-compact') === 'true'),
   sidebarWidth: Math.max(180, Math.min(480, Number(localStorage.getItem('noctune:sidebar-width')) || 240)),
+  trackDetailsWidth: Math.max(240, Math.min(520, Number(localStorage.getItem('noctune:track-details-width')) || 320)),
   playbackNotice: null,
 
   toggleSidebarCompact: () =>
@@ -194,6 +197,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       localStorage.setItem('noctune:sidebar-width', String(clamped));
     } catch {}
     set({ sidebarWidth: clamped });
+  },
+
+  setTrackDetailsWidth: (width: number) => {
+    const clamped = Math.max(240, Math.min(520, Math.round(width)));
+    try {
+      localStorage.setItem('noctune:track-details-width', String(clamped));
+    } catch {}
+    set({ trackDetailsWidth: clamped });
   },
 
   setLoading: (v) => set({ isLoading: v }),

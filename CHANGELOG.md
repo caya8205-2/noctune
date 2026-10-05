@@ -2,6 +2,16 @@
 
 All notable Noctune changes are documented here.
 
+## v4.5.1 - 2026-10-05
+
+### Interface & Sidebar Enhancements
+- **Resizable Track Details Sidebar**: Made the right-hand Track Details sidebar draggable and resizable by dragging its left border, matching the navigation sidebar behavior. Width is persisted across sessions in `localStorage` (`noctune:track-details-width`, clamped between 240px and 520px, default 320px) with smooth 60fps interaction and instant double-click reset to default width.
+- **Dynamic Settings Callouts & Clean Copy**: Cleaned up hardcoded requirements text in Settings descriptions and replaced them with dynamic amber callout notices that automatically adapt depending on whether Spotify account pairing is active.
+
+### Debug Dashboard & Inspector Accuracy
+- **Spotify Direct Cache Priority in Debug Inspector**: Fixed an issue in `/debug/resolver-snapshot` where Spotify tracks played via Spotify Direct erroneously returned stale YouTube match cache metadata (e.g. `MP4 · 128kbps`, `cached 24d ago`, and `Stream URL: stale`) if the track had previously been resolved or matched to YouTube prior to Spotify Direct. The endpoint now checks `isSpotifyDirectEnabled()` and authoritative Spotify Direct cache (`spotify:<id>`), returning the active 320kbps WebM stream metadata and fresh URL expiry while properly omitting inactive YouTube matcher entries.
+- **Audio Quality Display Formatting**: Updated `CurrentTrackSnapshot` in `DebugApp.tsx` to strip internal `spotify-` prefixes from `audioQuality` (e.g. `spotify-320kbps` -> `320kbps`), accurately presenting `WEBM · 320kbps` for native Spotify Direct playback.
+
 ## v4.5.0 - 2026-10-05
 
 ### Spotify Direct Playback (Opt-In)
