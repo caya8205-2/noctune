@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 
+import { spawn } from 'node:child_process';
+
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const resourceDir = path.join(rootDir, 'src-tauri', 'resources');
 const platformMarkerPath = path.join(resourceDir, '.spotstream-platform');
@@ -48,7 +50,7 @@ async function resolveLatestVersion() {
     console.warn(`[prepare:spotstream] unable to fetch latest version from crates.io (${err.message}), falling back`);
   }
 
-  return 'v0.1.0';
+  return 'v0.2.0';
 }
 
 const SPOTSTREAM_VERSION = await resolveLatestVersion();
@@ -80,13 +82,69 @@ if (!alreadyPrepared) {
       await rename(temporaryPath, outputPath);
       downloadSuccess = true;
     } else {
-      console.warn(`[prepare:spotstream] download returned ${response.status} ${response.statusText}`);
+      console.warn(`[prepare:spotstream] direct binary download returned ${response.status} ${response.statusText}`);
     }
   } catch (err) {
-    console.warn(`[prepare:spotstream] download failed: ${err.message}`);
+    console.warn(`[prepare:spotstream] direct binary download failed: ${err.message}`);
   }
 
-  // Fallback to local sibling repository if available (useful during local development / offline build)
+  // Fallback 1: If direct raw binary is not available (e.g. v0.2.0 is pending and v0.1.0 used archive bundling),
+  // extract from v0.1.0 archive release asset (.zip on Windows, .tar.gz on Unix)
+  if (!downloadSuccess) {
+    const archiveInfo = {
+      win32: { name: 'spotstream-windows-x86_64.zip', type: 'zip' },
+      linux: { name: 'spotstream-linux-x86_64.tar.gz', type: 'tar' },
+      darwin: { name: process.arch === 'arm64' ? 'spotstream-macos-aarch64.tar.gz' : 'spotstream-macos-x86_64.tar.gz', type: 'tar' },
+    }[process.platform];
+
+    if (archiveInfo) {
+      const archiveUrl = `https://github.com/caya8205-2/spotstream/releases/download/v0.1.0/${archiveInfo.name}`;
+      console.log(`[prepare:spotstream] attempting archive fallback from ${archiveUrl}`);
+      try {
+        const archRes = await fetch(archiveUrl);
+        if (archRes.ok && archRes.body) {
+          const tempArchive = path.join(resourceDir, `spotstream-archive.${archiveInfo.type === 'zip' ? 'zip' : 'tar.gz'}`);
+          await pipeline(Readable.fromWeb(archRes.body), createWriteStream(tempArchive));
+
+          if (archiveInfo.type === 'zip') {
+            await new Promise((resolve, reject) => {
+              const ps = spawn('powershell', [
+                '-NoProfile',
+                '-Command',
+                `Expand-Archive -Path "${tempArchive}" -DestinationPath "${resourceDir}" -Force`,
+              ], { stdio: 'inherit' });
+              ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive exited with ${code}`)));
+            });
+          } else {
+            await new Promise((resolve, reject) => {
+              const proc = spawn('tar', ['-xzf', tempArchive, '-C', resourceDir], { stdio: 'inherit' });
+              proc.on('close', async (code) => {
+                if (code !== 0) return reject(new Error(`tar exited with ${code}`));
+                try {
+                  const extracted = path.join(resourceDir, 'spotstream');
+                  if (outputPath !== extracted && existsSync(extracted)) {
+                    await rename(extracted, outputPath).catch(() => {});
+                  }
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              });
+            });
+          }
+          await rm(tempArchive, { force: true });
+          if (existsSync(outputPath)) {
+            console.log(`[prepare:spotstream] successfully extracted fallback binary from ${archiveInfo.name}`);
+            downloadSuccess = true;
+          }
+        }
+      } catch (err) {
+        console.warn(`[prepare:spotstream] archive fallback failed: ${err.message}`);
+      }
+    }
+  }
+
+  // Fallback 2: Local sibling repository (useful during local development / offline build)
   if (!downloadSuccess) {
     const localSiblingBin = path.join(
       rootDir,
