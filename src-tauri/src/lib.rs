@@ -19,8 +19,6 @@ use tauri::{Emitter, Manager};
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
 #[cfg(not(debug_assertions))]
-use tauri::Manager;
-#[cfg(not(debug_assertions))]
 use tauri::path::BaseDirectory;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
@@ -121,8 +119,8 @@ fn kill_stale_backend(app_data_dir: &std::path::Path) {
 }
 
 #[cfg(not(debug_assertions))]
-fn kill_backend_sidecar(manager: &impl tauri::Manager) {
-    if let Some(state) = manager.try_state::<BackendProcess>() {
+fn kill_backend_sidecar(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<BackendProcess>() {
         let mut child_lock = state.0.lock().unwrap();
         if let Some(child) = child_lock.take() {
             let pid = child.pid();
