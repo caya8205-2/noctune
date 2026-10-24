@@ -146,7 +146,13 @@ function AppInner() {
       }
     }
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().close();
+    const closeToTray = localStorage.getItem('noctune:close-to-tray') !== 'false';
+    if (closeToTray) {
+      await getCurrentWindow().hide();
+    } else {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('exit_app');
+    }
   }
 
   async function handleMinimize() {
@@ -189,6 +195,34 @@ function AppInner() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [setView]);
+
+  // Listen to Tauri Tray events
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let unlistenPlay: (() => void) | undefined;
+    let unlistenNext: (() => void) | undefined;
+    let unlistenPrev: (() => void) | undefined;
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('noctune:tray-play-pause', () => {
+        usePlayerStore.getState().togglePlay();
+      }).then((u) => { unlistenPlay = u; });
+
+      listen('noctune:tray-next', () => {
+        usePlayerStore.getState().next();
+      }).then((u) => { unlistenNext = u; });
+
+      listen('noctune:tray-prev', () => {
+        usePlayerStore.getState().prev();
+      }).then((u) => { unlistenPrev = u; });
+    });
+
+    return () => {
+      unlistenPlay?.();
+      unlistenNext?.();
+      unlistenPrev?.();
+    };
+  }, [IS_TAURI]);
 
   // Clear Discord RPC before the app closes so the activity doesn't linger.
   useEffect(() => {

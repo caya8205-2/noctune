@@ -114,6 +114,12 @@ export function SettingsView() {
   const [spotifyPairingError, setSpotifyPairingError] = useState<string | null>(null);
   const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy' | 'spotify-radio'>('innertube-rs');
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
+  const [closeToTray, setCloseToTray] = useState(() => localStorage.getItem("noctune:close-to-tray") !== "false");
+
+  const handleCloseToTrayToggle = (enabled: boolean) => {
+    setCloseToTray(enabled);
+    localStorage.setItem("noctune:close-to-tray", String(enabled));
+  };
   const [downloadDir, setDownloadDir] = useState('');
   const [downloadDirSaving, setDownloadDirSaving] = useState(false);
   const [downloadDirSaved, setDownloadDirSaved] = useState(false);
@@ -886,6 +892,34 @@ export function SettingsView() {
             >
               <span
                 className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
+                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                  : 'translate-x-1 bg-muted'
+                  }`}
+              />
+            </span>
+          </button>
+        )}
+
+        {/* Close to System Tray */}
+        {IS_TAURI && (
+          <button
+            type="button"
+            onClick={() => handleCloseToTrayToggle(!closeToTray)}
+            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+          >
+            <span>
+              <span className="block text-sm font-medium text-white">Close to System Tray</span>
+              <span className="block text-xs text-muted mt-1">Keep music playing in background when closing the window. Access or exit via tray icon.</span>
+            </span>
+            <span
+              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${closeToTray
+                ? 'border-accent/50 bg-accent/25'
+                : 'border-base-600 bg-base-800'
+                }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${closeToTray
                   ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
                   : 'translate-x-1 bg-muted'
                   }`}

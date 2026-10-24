@@ -103,11 +103,9 @@ export function LocalFilesView() {
 
   const scanMutation = useMutation({
     mutationFn: (path: string) => {
-      console.log('[local-files] Mutation starting for:', path);
       return api.scanLocalFiles(path);
     },
     onSuccess: (data) => {
-      console.log('[local-files] Mutation success:', data);
       if (data && typeof data === 'object' && 'failed' in data && (data.failed as number) > 0) {
         const failed = data.failed;
         const scanned = data.scanned ?? 0;
