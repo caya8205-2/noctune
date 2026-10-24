@@ -4,6 +4,32 @@ This document tracks all implemented features, bug fixes, patches, and current s
 
 ---
 
+## v4.6.0 - 2026-10-24
+
+### Desktop & System Integration
+- [x] **Native System Tray & Background Playback**
+  - **Minimize to Tray**: Added native system tray icon with left-click window toggle and context menu (Show, Play/Pause, Next, Previous, Exit). Closing the window minimizes to tray by default.
+  - **Close to Tray Preference**: Added configurable toggle in Settings (Playback & engines).
+  - **Windows SMTC Seek & Timeline**: Added seekto action and live position state synchronization via Web MediaSession.
+
+### Playback & Audio Pipeline
+- [x] **Dual-Element Audio Crossfade Engine**
+  - **Synchronized Audio Elements**: Implemented dual audio pipelines (audioA & audioB) pre-connected to Web Audio AnalyserNode to prevent freeze and preserve visualizer and EQ during crossfades.
+- [x] **Industry-Standard Previous Track Restart**
+  - **Progress Check**: Clicking Prev with progress > 3s restarts current track (0:00).
+- [x] **Shuffle Duplicate Loop Elimination**
+  - **Candidate Exclusion**: Excluded current track index from randomized shuffle selection.
+
+### Queue & Database Reliability
+- [x] **Queue Removal Active Track Desync Fix**
+  - **Immediate Transition**: Removing active track immediately advances to next song or stops player cleanly.
+- [x] **Japanese Lyric Normalization & Mojibake Resolution**
+  - **Bracket Normalization**: Cleaned UTF-8 mojibake bracket artifacts to properly match titles with 【...】 on LRCLIB.
+- [x] **SQLite Connection Safety & Batch Querying**
+  - **Connection Resource Safety**: Wrapped SQLite operations in withDb with guaranteed cleanup and batched getAllPlaylists.
+
+---
+
 ## v4.5.0 - 2026-10-05
 
 ### Spotify Direct Playback (Opt-In) & Session Integration

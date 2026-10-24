@@ -13,6 +13,9 @@ use spotify_service::{
 use youtube_channel::{get_youtube_channel, get_youtube_playlist, get_channel_posts};
 
 use std::process::Command;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager};
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
 #[cfg(not(debug_assertions))]
@@ -48,6 +51,13 @@ fn open_external_url(url: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    #[cfg(not(debug_assertions))]
+    kill_backend_sidecar(&app);
+    app.exit(0);
 }
 
 #[tauri::command]
@@ -111,8 +121,8 @@ fn kill_stale_backend(app_data_dir: &std::path::Path) {
 }
 
 #[cfg(not(debug_assertions))]
-fn kill_backend_sidecar(app: &tauri::Window) {
-    if let Some(state) = app.try_state::<BackendProcess>() {
+fn kill_backend_sidecar(manager: &impl tauri::Manager) {
+    if let Some(state) = manager.try_state::<BackendProcess>() {
         let mut child_lock = state.0.lock().unwrap();
         if let Some(child) = child_lock.take() {
             let pid = child.pid();
@@ -141,6 +151,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_external_url,
             kill_backend,
+            exit_app,
             get_youtube_channel,
             get_youtube_playlist,
             get_channel_posts,
@@ -157,6 +168,76 @@ pub fn run() {
             spotify_get_radio_tracks
         ])
         .setup(|_app| {
+            if let Some(icon) = _app.default_window_icon() {
+                let show_i = MenuItemBuilder::with_id("show", "Show Noctune").build(_app)?;
+                let play_i = MenuItemBuilder::with_id("play_pause", "Play / Pause").build(_app)?;
+                let next_i = MenuItemBuilder::with_id("next", "Next Track").build(_app)?;
+                let prev_i = MenuItemBuilder::with_id("prev", "Previous Track").build(_app)?;
+                let quit_i = MenuItemBuilder::with_id("quit", "Exit Noctune").build(_app)?;
+
+                let menu = MenuBuilder::new(_app)
+                    .item(&show_i)
+                    .separator()
+                    .item(&play_i)
+                    .item(&next_i)
+                    .item(&prev_i)
+                    .separator()
+                    .item(&quit_i)
+                    .build()?;
+
+                let _tray = TrayIconBuilder::with_id("main-tray")
+                    .icon(icon.clone())
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .tooltip("Noctune")
+                    .on_menu_event(|app, event| {
+                        match event.id.as_ref() {
+                            "show" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.show();
+                                    let _ = window.unminimize();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                            "play_pause" => {
+                                let _ = app.emit("noctune:tray-play-pause", ());
+                            }
+                            "next" => {
+                                let _ = app.emit("noctune:tray-next", ());
+                            }
+                            "prev" => {
+                                let _ = app.emit("noctune:tray-prev", ());
+                            }
+                            "quit" => {
+                                #[cfg(not(debug_assertions))]
+                                kill_backend_sidecar(app);
+                                app.exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                if window.is_visible().unwrap_or(false) {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.unminimize();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                    })
+                    .build(_app)?;
+            }
+
             // Only spawn the backend sidecar in production builds.
             // In dev mode the backend is started separately via `npm run dev`.
             #[cfg(not(debug_assertions))]
@@ -268,13 +349,12 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|_window, _event| {
-            #[cfg(not(debug_assertions))]
-            if _window.label() == "main" && matches!(_event, tauri::WindowEvent::CloseRequested { .. }) {
-                let window = _window.clone();
-                tauri::async_runtime::spawn(async move {
-                    kill_backend_sidecar(&window);
-                });
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .run(tauri::generate_context!())

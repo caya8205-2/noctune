@@ -76,7 +76,8 @@ export function seekAudio(seconds: number) {
  */
 export function useAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const secondaryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const skipNextTrackLoadRef = useRef<string | null>(null);
   const preloadedAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const crossfadeActiveRef = useRef(false);
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
@@ -119,163 +120,189 @@ export function useAudio() {
     }
   };
 
-  // Create audio element once
+  // Create dual persistent audio elements for gapless and seamless crossfade
   useEffect(() => {
-    const audio = new Audio();
-    audio.id = 'noctune-audio';
-    // Initialize Web Audio pipeline early (before playback) for visualizer
+    const audioA = new Audio();
+    audioA.id = 'noctune-audio-a';
+    const audioB = new Audio();
+    audioB.id = 'noctune-audio-b';
+
     try {
       const visCtx = new AudioContext();
       const visAnalyser = visCtx.createAnalyser();
       visAnalyser.fftSize = 256;
       visAnalyser.smoothingTimeConstant = 0.8;
-      const visSrc = visCtx.createMediaElementSource(audio);
-      visSrc.connect(visAnalyser);
-      // Insert EQ filters between analyser and destination (dry/wet routing)
+
+      const srcA = visCtx.createMediaElementSource(audioA);
+      srcA.connect(visAnalyser);
+      const srcB = visCtx.createMediaElementSource(audioB);
+      srcB.connect(visAnalyser);
+
       createEqualizerNodes(visCtx, visAnalyser);
       (window as any).__noctune_analyser = visAnalyser;
       (window as any).__noctune_audioCtx = visCtx;
     } catch {}
-    audio.preload = 'auto';
-    audioRef.current = audio;
-    activeAudio = audio;
 
-    audio.addEventListener('timeupdate', () => {
-      setProgress(audio.currentTime);
-    });
+    const setupAudio = (audio: HTMLAudioElement) => {
+      audio.preload = 'auto';
 
-    audio.addEventListener('durationchange', () => {
-      if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        const currentMetaDuration = usePlayerStore.getState().currentTrack?.duration;
-        // Don't let partial WebM streaming buffer shrink an already known track duration
-        if (!currentMetaDuration || currentMetaDuration <= 0) {
-          setDuration(audio.duration);
-        } else if (audio.duration >= currentMetaDuration - 1) {
-          setDuration(audio.duration);
+      audio.addEventListener('timeupdate', () => {
+        if (activeAudio === audio) {
+          setProgress(audio.currentTime);
         }
-      }
-    });
+      });
 
-    audio.addEventListener('ended', () => {
-      handleTrackEndedRef.current();
-    });
+      audio.addEventListener('durationchange', () => {
+        if (activeAudio === audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+          const currentMetaDuration = usePlayerStore.getState().currentTrack?.duration;
+          if (!currentMetaDuration || currentMetaDuration <= 0) {
+            setDuration(audio.duration);
+          } else if (audio.duration >= currentMetaDuration - 1) {
+            setDuration(audio.duration);
+          }
+        }
+      });
 
-    audio.addEventListener('playing', () => {
-      if (audio.currentTime < 2) {
-        trackEndedTriggeredRef.current = false;
-      }
-      setIsPlaying(true);
-      setLoading(false);
-    });
+      audio.addEventListener('ended', () => {
+        if (activeAudio === audio) {
+          handleTrackEndedRef.current();
+        }
+      });
 
-    audio.addEventListener('waiting', () => {
-      const state = usePlayerStore.getState();
-      const trackDuration = state.currentTrack?.duration || state.duration || audio.duration;
-      // If playback stalls near the end of the track (e.g. at 4:13 / 4:16 when the stream ended),
-      // advance to next track instead of showing a perpetual loading spinner
-      if (
-        !trackEndedTriggeredRef.current &&
-        Number.isFinite(trackDuration) &&
-        trackDuration > 10 &&
-        audio.currentTime >= Math.max(0, trackDuration - 4.5)
-      ) {
-        console.info('[audio] Stream ended near completion (waiting at end-of-track), advancing to next track');
-        handleTrackEndedRef.current();
-        return;
-      }
-      setLoading(true);
-    });
-
-    audio.addEventListener('seeked', () => {
-      trackEndedTriggeredRef.current = false;
-    });
-
-    audio.addEventListener('canplay', () => setLoading(false));
-    audio.addEventListener('error', (e) => {
-      const target = e.target as HTMLAudioElement;
-      const error = target.error;
-      if (
-        suppressNextErrorRef.current ||
-        !target.currentSrc ||
-        error?.code === 1 || // MediaError.MEDIA_ERR_ABORTED: intentional src change or abort
-        error?.message?.toLowerCase().includes('empty src')
-      ) {
-        suppressNextErrorRef.current = false;
-        return;
-      }
-      console.error('[audio] error', e, target.error);
-      setLoading(false);
-
-      const track = usePlayerStore.getState().currentTrack;
-      if (!track || track.localAudioPath) {
-        setIsPlaying(false);
-        return;
-      }
-
-      const attemptCount = (recoveryAttemptsRef.current[track.id] || 0) + 1;
-      recoveryAttemptsRef.current[track.id] = attemptCount;
-      if (attemptCount > 2) {
-        console.warn(`[audio] max recovery attempts reached for ${track.id}`);
-        setIsPlaying(false);
-        return;
-      }
-
-      const resumeAt = Math.max(
-        0,
-        target.currentTime || usePlayerStore.getState().progress || 0
-      );
-      setLoading(true);
-      api.resolve(track.id, track.query)
-        .then((resolved) => {
-          const latestTrack = usePlayerStore.getState().currentTrack;
-          if (!latestTrack || latestTrack.id !== track.id) return;
-          const newYtId = resolved.youtubeId || resolved.id;
-          usePlayerStore.setState({
-            currentTrack: {
-              ...resolved,
-              title: latestTrack.title,
-              artist: latestTrack.artist,
-              duration: latestTrack.duration,
-              thumbnail: latestTrack.thumbnail,
-              query: latestTrack.query,
-              spotifyId: latestTrack.spotifyId,
-              spotifyUrl: latestTrack.spotifyUrl,
-              youtubeId: newYtId,
-              youtubeTitle: latestTrack.youtubeTitle,
-              youtubeArtist: latestTrack.youtubeArtist,
-            },
-          });
-          const streamPath = `/player/stream/${newYtId}?retry=${Date.now()}`;
-          return apiUrl(streamPath)
-            .then((src) => {
-              target.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
-              target.src = src;
-              target.load();
-              return waitForAudioReady(target);
-            })
-            .then(() => {
-              if (resumeAt > 1) {
-                target.currentTime = Math.min(resumeAt, target.duration || resumeAt);
-                usePlayerStore.getState().setProgress(resumeAt);
-              }
-            })
-            .then(() => playAudio(target));
-        })
-        .catch((err) => {
-          console.warn('[audio] recovery failed:', err);
-          setIsPlaying(false);
-          usePlayerStore.getState().markTrackUnavailable(track.id, 'Playback failed');
+      audio.addEventListener('playing', () => {
+        if (activeAudio === audio) {
+          if (audio.currentTime < 2) {
+            trackEndedTriggeredRef.current = false;
+          }
+          setIsPlaying(true);
           setLoading(false);
-        });
-    });
+        }
+      });
+
+      audio.addEventListener('waiting', () => {
+        if (activeAudio !== audio) return;
+        const state = usePlayerStore.getState();
+        const trackDuration = state.currentTrack?.duration || state.duration || audio.duration;
+        if (
+          !trackEndedTriggeredRef.current &&
+          Number.isFinite(trackDuration) &&
+          trackDuration > 10 &&
+          audio.currentTime >= Math.max(0, trackDuration - 4.5)
+        ) {
+          console.info('[audio] Stream ended near completion (waiting at end-of-track), advancing to next track');
+          handleTrackEndedRef.current();
+          return;
+        }
+        setLoading(true);
+      });
+
+      audio.addEventListener('seeked', () => {
+        if (activeAudio === audio) {
+          trackEndedTriggeredRef.current = false;
+        }
+      });
+
+      audio.addEventListener('canplay', () => {
+        if (activeAudio === audio) setLoading(false);
+      });
+
+      audio.addEventListener('error', (e) => {
+        if (activeAudio !== audio) return;
+        const target = e.target as HTMLAudioElement;
+        const error = target.error;
+        if (
+          suppressNextErrorRef.current ||
+          !target.currentSrc ||
+          error?.code === 1 ||
+          error?.message?.toLowerCase().includes('empty src')
+        ) {
+          suppressNextErrorRef.current = false;
+          return;
+        }
+        console.error('[audio] error', e, target.error);
+        setLoading(false);
+
+        const track = usePlayerStore.getState().currentTrack;
+        if (!track || track.localAudioPath) {
+          setIsPlaying(false);
+          return;
+        }
+
+        const attemptCount = (recoveryAttemptsRef.current[track.id] || 0) + 1;
+        recoveryAttemptsRef.current[track.id] = attemptCount;
+        if (attemptCount > 2) {
+          console.warn(`[audio] max recovery attempts reached for ${track.id}`);
+          setIsPlaying(false);
+          return;
+        }
+
+        const resumeAt = Math.max(
+          0,
+          target.currentTime || usePlayerStore.getState().progress || 0
+        );
+        setLoading(true);
+        api.resolve(track.id, track.query)
+          .then((resolved) => {
+            const latestTrack = usePlayerStore.getState().currentTrack;
+            if (!latestTrack || latestTrack.id !== track.id) return;
+            const newYtId = resolved.youtubeId || resolved.id;
+            usePlayerStore.setState({
+              currentTrack: {
+                ...resolved,
+                title: latestTrack.title,
+                artist: latestTrack.artist,
+                duration: latestTrack.duration,
+                thumbnail: latestTrack.thumbnail,
+                query: latestTrack.query,
+                spotifyId: latestTrack.spotifyId,
+                spotifyUrl: latestTrack.spotifyUrl,
+                youtubeId: newYtId,
+                youtubeTitle: latestTrack.youtubeTitle,
+                youtubeArtist: latestTrack.youtubeArtist,
+              },
+            });
+            const streamPath = `/player/stream/${newYtId}?retry=${Date.now()}`;
+            return apiUrl(streamPath)
+              .then((src) => {
+                target.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+                target.src = src;
+                target.load();
+                return waitForAudioReady(target);
+              })
+              .then(() => {
+                if (resumeAt > 1) {
+                  target.currentTime = Math.min(resumeAt, target.duration || resumeAt);
+                  usePlayerStore.getState().setProgress(resumeAt);
+                }
+              })
+              .then(() => playAudio(target));
+          })
+          .catch((err) => {
+            console.warn('[audio] recovery failed:', err);
+            setIsPlaying(false);
+            usePlayerStore.getState().markTrackUnavailable(track.id, 'Playback failed');
+            setLoading(false);
+          });
+      });
+    };
+
+    setupAudio(audioA);
+    setupAudio(audioB);
+
+    audioRef.current = audioA;
+    secondaryAudioRef.current = audioB;
+    activeAudio = audioA;
 
     return () => {
       suppressNextErrorRef.current = true;
-      audio.pause();
-      audio.removeAttribute('src');
-      audio.load();
+      for (const el of [audioA, audioB]) {
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+      }
       audioRef.current = null;
-      if (activeAudio === audio) activeAudio = null;
+      secondaryAudioRef.current = null;
+      activeAudio = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -284,6 +311,13 @@ export function useAudio() {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
     trackEndedTriggeredRef.current = false;
+
+    // If crossfade already pre-loaded and transitioned this track, skip reloading
+    if (skipNextTrackLoadRef.current === currentTrack.id) {
+      skipNextTrackLoadRef.current = null;
+      return;
+    }
+
     if (
       currentTrack.id.startsWith('spotify:') &&
       !currentTrack.youtubeId &&
@@ -295,7 +329,7 @@ export function useAudio() {
 
     let cancelled = false;
     const targetId = (currentTrack.youtubeId || currentTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
-    
+
     // Check if we already have a prebuffered audio element in memory
     const prebufferedAudio = preloadedAudiosRef.current.get(targetId) || preloadedAudiosRef.current.get(currentTrack.id);
     if (prebufferedAudio && prebufferedAudio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -349,7 +383,7 @@ export function useAudio() {
   useEffect(() => {
     if (!queue || queue.length === 0 || queueIndex < 0) return;
     const upcoming = queue.slice(queueIndex + 1, queueIndex + 4);
-    
+
     // Clean old prebuffered audios not in upcoming
     const upcomingIds = new Set(
       upcoming
@@ -371,17 +405,12 @@ export function useAudio() {
       for (const track of upcoming) {
         const cleanId = (track.youtubeId || track.id).replace(/^(youtube|ytdlp):/, '').trim();
         if (!cleanId || preloadedAudiosRef.current.has(cleanId)) continue;
+        if (track.id.startsWith('spotify:') && !track.youtubeId) continue;
 
-        // Do not prebuffer Spotify tracks concurrently over HTTP: Spotify accounts permit only one active playback stream per session
-        if (cleanId.startsWith('spotify:')) {
-          continue;
-        }
-
+        const preAudio = new Audio();
+        preAudio.preload = 'auto';
         apiUrl('/player/stream/' + cleanId)
           .then((src) => {
-            if (preloadedAudiosRef.current.has(cleanId)) return;
-            const preAudio = new Audio();
-            preAudio.preload = 'auto';
             preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
             preAudio.src = src;
             preAudio.load();
@@ -408,12 +437,15 @@ export function useAudio() {
 
   // Sync volume
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = outputVolume(volume);
+    if (audioRef.current && !crossfadeActiveRef.current) {
+      audioRef.current.volume = outputVolume(volume);
+    }
   }, [volume]);
 
   // Sync playback rate
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+    if (secondaryAudioRef.current) secondaryAudioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
   // Sleep timer
@@ -440,7 +472,8 @@ export function useAudio() {
   // Crossfade: when nearing end of track, start next track and fade
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
+    const nextAudio = secondaryAudioRef.current;
+    if (!audio || !nextAudio || !currentTrack) return;
 
     const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
     if (!crossfadeDuration || crossfadeDuration <= 0) return;
@@ -462,24 +495,21 @@ export function useAudio() {
     const nextTrack = state.queue[nextIdx];
     const crossfadeMs = crossfadeDuration * 1000;
     const startVolume = outputVolume(state.volume);
-    const nextAudio = new Audio();
-    nextAudioRef.current = nextAudio;
     nextAudio.crossOrigin = 'anonymous';
-    nextAudio.preload = 'auto';
     nextAudio.volume = 0;
     nextAudio.playbackRate = state.playbackRate;
 
-    apiUrl('/player/stream/' + nextTrack.id).then((src) => {
+    const targetId = (nextTrack.youtubeId || nextTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
+    apiUrl('/player/stream/' + targetId).then((src) => {
       nextAudio.src = src;
       nextAudio.load();
       return waitForAudioReady(nextAudio).then(() => {
-        nextAudio.play().catch(() => {});
+        playAudio(nextAudio).catch(() => {});
         // Start crossfade
         const fadeStart = Date.now();
         const fadeInterval = window.setInterval(() => {
           const elapsed = Date.now() - fadeStart;
           const t = Math.min(1, elapsed / crossfadeMs);
-          // Use sine easing for smoother crossfade
           const currentGain = Math.cos(t * Math.PI / 2);
           const nextGain = Math.sin(t * Math.PI / 2);
           audio.volume = startVolume * currentGain;
@@ -487,19 +517,19 @@ export function useAudio() {
 
           if (t >= 1) {
             window.clearInterval(fadeInterval);
-            // Swap: next becomes active
             audio.pause();
             audio.removeAttribute('src');
             audio.load();
-            // Point activeAudio to the next audio element
+
+            // Swap pointers: secondary becomes primary
             activeAudio = nextAudio;
             audioRef.current = nextAudio;
-            nextAudioRef.current = audio; // old audio becomes "next" for reuse
+            secondaryAudioRef.current = audio;
             crossfadeActiveRef.current = false;
             lastCrossfadedTrackIdRef.current = null;
-            // Restore volume on the new active audio
             nextAudio.volume = startVolume;
-            // Advance queue state
+
+            skipNextTrackLoadRef.current = nextTrack.id;
             usePlayerStore.getState().next();
           }
         }, 50);
@@ -539,7 +569,7 @@ export function useAudio() {
         : [],
     });
 
-    const actions = ['play','pause','previoustrack','nexttrack','seekforward','seekbackward'] as const;
+    const actions = ['play','pause','previoustrack','nexttrack','seekforward','seekbackward','seekto'] as const;
     for (const a of actions) {
       navigator.mediaSession.setActionHandler(a, null);
     }
@@ -554,6 +584,11 @@ export function useAudio() {
     navigator.mediaSession.setActionHandler('seekbackward', () => {
       const s = usePlayerStore.getState();
       seekAudio(Math.max(0, s.progress - 10));
+    });
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (typeof details.seekTime === 'number' && Number.isFinite(details.seekTime)) {
+        seekAudio(details.seekTime);
+      }
     });
   }, [currentTrack]);
 
@@ -576,21 +611,25 @@ export function useAudio() {
     return () => window.clearInterval(interval);
   }, [currentTrack?.id, isPlaying]);
 
-  // Update playback state
+  // Update playback state & timeline position for native OS controls
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-  }, [isPlaying]);
+
+    if ('setPositionState' in navigator.mediaSession && currentTrack) {
+      const state = usePlayerStore.getState();
+      const trackDuration = currentTrack.duration || state.duration || 0;
+      if (trackDuration > 0 && Number.isFinite(state.progress)) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: trackDuration,
+            playbackRate: state.playbackRate || 1.0,
+            position: Math.min(trackDuration, Math.max(0, state.progress)),
+          });
+        } catch {}
+      }
+    }
+  }, [isPlaying, currentTrack?.id]);
 
   return { seek };
 }
-
-
-
-
-
-
-
-
-
-

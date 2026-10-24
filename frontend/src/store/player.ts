@@ -518,7 +518,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         return queueIndex;
       }
       if (shuffle) {
-        return Math.floor(Math.random() * queue.length);
+        if (queue.length <= 1) return 0;
+        const rand = Math.floor(Math.random() * (queue.length - 1));
+        return rand >= queueIndex ? rand + 1 : rand;
       }
       const candidate = nextIdx + 1;
       if (candidate >= queue.length) {
@@ -528,7 +530,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     };
     if (shuffle) {
       shufflePlayedCount += 1;
-      nextIdx = Math.floor(Math.random() * queue.length);
+      if (queue.length <= 1) {
+        nextIdx = 0;
+      } else {
+        const rand = Math.floor(Math.random() * (queue.length - 1));
+        nextIdx = rand >= queueIndex ? rand + 1 : rand;
+      }
     } else {
       shufflePlayedCount = 0;
       nextIdx = queueIndex + 1;
@@ -554,8 +561,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   prev: async () => {
-    const { queue, queueIndex } = get();
+    const { queue, queueIndex, progress } = get();
     if (queue.length === 0) return;
+
+    // Industry standard: if progress > 3s, restart current track from beginning
+    if (progress > 3) {
+      set({ progress: 0 });
+      window.dispatchEvent(new CustomEvent('noctune:seek', { detail: 0 }));
+      return;
+    }
+
     const prevIdx = queueIndex > 0 ? queueIndex - 1 : 0;
     if (prevIdx === queueIndex) {
       set({ progress: 0 });
@@ -666,15 +681,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   removeFromQueue: (index) => {
-    set((s) => {
-      if (index < 0 || index >= s.queue.length) return s;
-      const nextQueue = s.queue.filter((_, i) => i !== index);
-      let nextQueueIndex = s.queueIndex;
-      if (index < s.queueIndex) nextQueueIndex = s.queueIndex - 1;
-      if (index === s.queueIndex) nextQueueIndex = Math.min(index, nextQueue.length - 1);
-      if (nextQueue.length === 0) nextQueueIndex = -1;
-      return { queue: nextQueue, queueIndex: nextQueueIndex };
-    });
+    const s = get();
+    if (index < 0 || index >= s.queue.length) return;
+    const isRemovingCurrent = index === s.queueIndex;
+    const nextQueue = s.queue.filter((_, i) => i !== index);
+
+    if (isRemovingCurrent) {
+      if (nextQueue.length === 0) {
+        set({ queue: [], queueIndex: -1, currentTrack: null, isPlaying: false, progress: 0 });
+        get().saveQueueState();
+      } else {
+        const nextTrackIdx = Math.min(index, nextQueue.length - 1);
+        const nextTrack = nextQueue[nextTrackIdx];
+        set({ queue: nextQueue, queueIndex: nextTrackIdx });
+        get().saveQueueState();
+        void get().playTrack(nextTrack, nextQueue);
+      }
+      return;
+    }
+
+    let nextQueueIndex = s.queueIndex;
+    if (index < s.queueIndex) nextQueueIndex = s.queueIndex - 1;
+    set({ queue: nextQueue, queueIndex: nextQueueIndex });
     get().saveQueueState();
   },
 

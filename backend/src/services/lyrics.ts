@@ -28,6 +28,7 @@ interface LrclibLyrics {
 function normalize(value: string): string {
   return value
     .toLowerCase()
+    .replace(/[【】]/g, ' ')
     .replace(/\[[^\]]*]/g, ' ')
     .replace(/\([^)]*(official|mv|music video|lyrics?|audio|visualizer)[^)]*\)/gi, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -49,7 +50,7 @@ function compactTitle(value: string): string {
 
 function titleCandidates(title: string): string[] {
   const bracketless = title
-    .replace(/[ã€ã€‘]/g, ' ')
+    .replace(/[【】]/g, ' ')
     .replace(/\[[^\]]*]/g, ' ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\b(sung|covered|performed)\s+by\b.*$/i, ' ')
