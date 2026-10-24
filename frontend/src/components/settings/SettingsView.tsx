@@ -222,7 +222,12 @@ export function SettingsView() {
       if (updated.recommendationEngine) {
         setRecommendationEngine(updated.recommendationEngine);
       }
-      setData(updated);
+      setData((prev) => ({
+        ...prev,
+        ...updated,
+        cache: updated.cache ?? prev?.cache,
+        resolver: updated.resolver ?? prev?.resolver,
+      }));
       setEngineSaved(true);
       setTimeout(() => setEngineSaved(false), 2500);
 
@@ -258,7 +263,12 @@ export function SettingsView() {
         body: JSON.stringify(body),
       });
       const updated = (await res.json()) as SettingsData;
-      setData(updated);
+      setData((prev) => ({
+        ...prev,
+        ...updated,
+        cache: updated.cache ?? prev?.cache,
+        resolver: updated.resolver ?? prev?.resolver,
+      }));
       setClientSecret('');
       setTestResult(null);
       setSaved(true);
@@ -492,7 +502,12 @@ export function SettingsView() {
       });
       const updated = (await res.json()) as SettingsData;
       if (!res.ok) throw new Error('Save audio quality failed');
-      setData(updated);
+      setData((prev) => ({
+        ...prev,
+        ...updated,
+        cache: updated.cache ?? prev?.cache,
+        resolver: updated.resolver ?? prev?.resolver,
+      }));
       setAudioQualityPreference(updated.audioQualityPreference ?? preference);
     } catch (err) {
       setAudioQualityPreference(previous);
@@ -566,7 +581,12 @@ export function SettingsView() {
         body: JSON.stringify({ discordRpcEnabled: enabled }),
       });
       const updated = (await res.json()) as SettingsData;
-      setData(updated);
+      setData((prev) => ({
+        ...prev,
+        ...updated,
+        cache: updated.cache ?? prev?.cache,
+        resolver: updated.resolver ?? prev?.resolver,
+      }));
       setDiscordRpcEnabled(updated.discordRpcEnabled ?? enabled);
     } catch (err) {
       console.error('Failed to toggle Discord RPC:', err);
@@ -1284,27 +1304,35 @@ export function SettingsView() {
           </div>
         )}
 
-        {data?.cache && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-              <p className="text-xs text-muted">Tracks</p>
-              <p className="text-sm font-semibold text-white mt-1">{data.cache.learning.total} cached</p>
-              <p className="text-[11px] text-muted mt-1">{data.cache.learning.totalQueries} queries</p>
-            </div>
-            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-              <p className="text-xs text-muted">Lyrics</p>
-              <p className="text-sm font-semibold text-white mt-1">{data.cache.lyrics.total} cached</p>
-              <p className="text-[11px] text-muted mt-1">{data.cache.lyrics.hits} hits / {data.cache.lyrics.misses} misses</p>
-            </div>
-            <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
-              <p className="text-xs text-muted">Audio</p>
-              <p className="text-sm font-semibold text-white mt-1">
-                {data.cache.audio.files} files
-              </p>
-              <p className="text-[11px] text-muted mt-1">{formatBytes(data.cache.audio.bytes)}</p>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Tracks</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {data?.cache?.learning?.total != null ? `${data.cache.learning.total} cached` : '—'}
+            </p>
+            <p className="text-[11px] text-muted mt-1">
+              {data?.cache?.learning?.totalQueries != null ? `${data.cache.learning.totalQueries} queries` : 'Loading...'}
+            </p>
           </div>
-        )}
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Lyrics</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {data?.cache?.lyrics?.total != null ? `${data.cache.lyrics.total} cached` : '—'}
+            </p>
+            <p className="text-[11px] text-muted mt-1">
+              {data?.cache?.lyrics ? `${data.cache.lyrics.hits} hits / ${data.cache.lyrics.misses} misses` : 'Loading...'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
+            <p className="text-xs text-muted">Audio</p>
+            <p className="text-sm font-semibold text-white mt-1">
+              {data?.cache?.audio?.files != null ? `${data.cache.audio.files} files` : '—'}
+            </p>
+            <p className="text-[11px] text-muted mt-1">
+              {data?.cache?.audio ? formatBytes(data.cache.audio.bytes) : 'Loading...'}
+            </p>
+          </div>
+        </div>
 
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-3 flex items-end gap-3">
           <div className="flex-1">

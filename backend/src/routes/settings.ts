@@ -132,6 +132,15 @@ export async function settingsRoutes(app: FastifyInstance) {
             apiKey: updated.apiKey ?? '',
             allowLocalhostBypass: updated.allowLocalhostBypass ?? true,
             downloadDir: updated.downloadDir,
+            cache: {
+                learning: getCacheStats(),
+                lyrics: getLyricsCacheStats(),
+                audio: getAudioCacheStats(),
+            },
+            resolver: {
+                failedIds: getPlaybackBlacklist().length,
+                matchCache: getMatchCacheStats(),
+            },
             spotify: {
                 clientId: '',
                 clientSecretMasked: '',
