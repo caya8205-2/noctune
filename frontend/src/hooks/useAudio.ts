@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { api, apiUrl, IS_TAURI } from '../utils/api';
+import { api, apiUrl, IS_TAURI, getSpotifyPlaybackSettingSync } from '../utils/api';
 import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
@@ -347,9 +347,11 @@ export function useAudio() {
       cancelCrossfade();
     }
 
+    const isSpotifyDirect = getSpotifyPlaybackSettingSync() === 'spotify-direct';
     if (
       currentTrack.id.startsWith('spotify:') &&
       !currentTrack.youtubeId &&
+      !isSpotifyDirect &&
       (currentTrack as any).resolverSource !== 'spotstream' &&
       !(currentTrack as any).audioUrl?.includes('spotify:')
     ) {
@@ -406,7 +408,12 @@ export function useAudio() {
     return () => {
       cancelled = true;
     };
-  }, [currentTrack?.id, currentTrack?.youtubeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    currentTrack?.id,
+    currentTrack?.youtubeId,
+    (currentTrack as any)?.resolverSource,
+    (currentTrack as any)?.audioUrl,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Prebuffer audio elements in background for next tracks in queue
   useEffect(() => {

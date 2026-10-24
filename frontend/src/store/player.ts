@@ -249,6 +249,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       ...track,
       spotifyId: track.spotifyId ?? cleanSpotifyIdInitial,
       source: isDirectSpotifySetting ? ('spotify_direct' as const) : (track as any).source,
+      resolverSource: isDirectSpotifySetting ? ('spotstream' as const) : (track as any).resolverSource,
+      audioUrl: isDirectSpotifySetting ? `/player/stream/spotify:${cleanSpotifyIdInitial}` : (track as any).audioUrl,
       queueSource: source,
       originalSource: track.originalSource ?? (source === 'history' ? undefined : source),
     };
