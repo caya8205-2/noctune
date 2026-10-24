@@ -2,6 +2,16 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.2 - 2026-10-24
+
+### Stats & History Preservation
+- **Decoupled History Clearance from Listening Stats**: Fixed a critical defect where clicking "Clear" in History View erroneously reset all-time play counts (`playCount = 0`) across the entire library, wiping out user stats, top tracks, top artists, and daily listening activity. Clearing history now safely hides tracks from the recent playback view while keeping lifetime play counts and analytics 100% intact.
+- **Individual History Removal Safety**: Removing single tracks from history now conceals them from the recent list without erasing their play counts or removing them from top played statistics.
+
+### Settings & Cache Management
+- **Persistent Cache Statistics Cards**: Fixed an issue in SettingsView where saving any setting (engine preferences, stream quality, or Discord RPC) caused the Cache statistics tiles (Tracks, Lyrics, Audio storage) to vanish from the UI. `PATCH /settings` now returns complete cache and resolver stats, and state updates merge previous data safely.
+- **Resilient Cache Metric Display**: Rendered cache metric tiles unconditionally in the DOM with loading fallbacks, preventing layout jumps or empty gaps while settings synchronize.
+
 ## v4.6.1 - 2026-10-24
 
 ### Playback & Audio Transitions

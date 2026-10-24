@@ -121,22 +121,22 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V461_HIGHLIGHTS = [
+  const V462_HIGHLIGHTS = [
     {
-      title: 'Seamless Gapless Crossfade',
-      desc: 'Re-anchored crossfade evaluation to real-time playback progress near track completion with strict duration validation, completely eliminating premature start-of-track triggers, double audio, and accidental track skips.',
+      title: 'Decoupled History Clearance from Listening Stats',
+      desc: 'Fixed a defect where clearing History previously zeroed out lifetime play counts (playCount = 0) across all tracks, resetting your stats. History clearance now safely conceals tracks from the recent playback view while keeping all-time plays, top tracks, and daily listening activity 100% intact.',
     },
     {
-      title: 'Zero-Latency Crossfade Track Handoff',
-      desc: 'Added atomic store transitions that update track info, queue progress, and history while maintaining continuous active playback, eliminating the micro-pause and loading spinner stutter when switching tracks.',
+      title: 'Resilient Settings Cache Statistics',
+      desc: 'Fixed an issue in SettingsView where saving any setting (engine preferences, stream quality, or Discord RPC) caused the Cache statistics tiles (Tracks, Lyrics, and Audio storage) to disappear. Updated backend and frontend state management to ensure cache tiles remain permanently visible.',
     },
     {
-      title: 'Spotify Direct Stream Safety & Clean Cache',
+      title: 'Gapless Crossfade & Zero-Latency Handoff',
+      desc: 'Re-anchored crossfade evaluation to real-time playback progress near track completion with atomic store handoffs, completely eliminating premature start-of-track triggers, double audio, and playback stutters.',
+    },
+    {
+      title: 'Spotify Direct Stream Safety & Cache Integrity',
       desc: 'Prevented concurrent stream collisions on the spotstream daemon and gated in-memory audio caching exclusively to complete natural track finishes, eliminating corrupted or truncated playback.',
-    },
-    {
-      title: 'Instant Playback Gating Elimination',
-      desc: 'Populated optimistic track representations with Spotify Direct resolver metadata and stream URLs, allowing direct streams to start playing immediately in 0ms without getting blocked by legacy YouTube resolution checks.',
     },
   ];
 
@@ -164,21 +164,6 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   {
     title: 'Japanese Lyric Matching & Database Optimizations',
     desc: 'Fixed a character encoding issue with Japanese bracket titles (such as 【MV】) that caused lyric searches on LRCLIB to fail. Optimized internal library loading with batched SQLite queries.',
-  },
-];
-
-const V451_HIGHLIGHTS = [
-  {
-    title: 'Resizable Track Details Sidebar',
-    desc: 'You can now resize the right-hand Track Details sidebar by dragging its left border (with double-click to snap back to default 320px width). Your custom width is automatically saved across sessions.',
-  },
-  {
-    title: 'Dynamic Settings Callouts & Clean Copy',
-    desc: 'Settings descriptions are cleaner and feature responsive amber callout notices that update dynamically depending on whether your Spotify account is paired.',
-  },
-  {
-    title: 'Debug Dashboard Spotify Direct Accuracy',
-    desc: 'Fixed an issue where the Debug Dashboard reported stale YouTube match cache details (such as 128kbps MP4 and expired stream URLs) for Spotify tracks played under Spotify Direct. The inspector now accurately reflects live 320kbps WebM stream status and direct playback cache details.',
   },
 ];
 
@@ -285,12 +270,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.1</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.2</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V461_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v461-${idx}`} className="flex items-start gap-2">
+                {V462_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v462-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
@@ -309,24 +294,6 @@ export function ChangelogModal() {
               <ul className="space-y-2 text-muted">
                 {V460_HIGHLIGHTS.map((item, idx) => (
                   <li key={`v460-${idx}`} className="flex items-start gap-2">
-                    <span className="text-accent font-bold mt-0.5">•</span>
-                    <span>
-                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
-                      {renderInlineMarkdown(item.desc)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="border-t border-white/10 pt-3.5">
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.5.1</span>
-                <span className="text-xs font-semibold text-white">Patch Updates</span>
-              </div>
-              <ul className="space-y-2 text-muted">
-                {V451_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v451-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
