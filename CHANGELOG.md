@@ -2,6 +2,18 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.1 - 2026-10-24
+
+### Playback & Audio Transitions
+- **Seamless Gapless Crossfade**: Re-anchored crossfade evaluation to playback timeline progress (`timeupdate`) near the end of a track with strict `Number.isFinite` duration validation. Completely eliminates premature start-of-track crossfades, double-audio bugs, and unintended track skips.
+- **Hiccup-Free UI Handoff**: Added an atomic `transitionTrack` store action that updates track metadata, queue index, and history seamlessly while preserving active playback (`isPlaying: true`), eliminating the micro-pause/audio stutter when the UI switches tracks.
+- **Crossfade Cancellation Safety**: Added automatic crossfade cancellation on manual track selection or scrubber seeking, instantly resetting secondary audio elements and restoring full output volume.
+
+### Spotify Direct Reliability
+- **Stream Collision Prevention**: Added an active stream mutex in the backend to ensure previous TCP connections and FFmpeg transcoders on the `spotstream` daemon are cleanly terminated before starting a new track, preventing overlapping audio packets and session collisions when switching tracks mid-song.
+- **In-Memory Cache Integrity**: Gated in-memory WebM audio caching exclusively on complete tracks reaching natural EOF silence, preventing partial or mid-stream aborted tracks from polluting RAM cache, with automatic eviction for truncated buffers.
+- **Instant Playback Gating Elimination**: Populated optimistic track representations with Spotify Direct resolver metadata (`spotstream`) and stream URLs, allowing direct streams to start playing immediately in 0ms without getting blocked by legacy YouTube resolution checks.
+
 ## v4.6.0 - 2026-10-24
 
 ### Desktop & System Integration

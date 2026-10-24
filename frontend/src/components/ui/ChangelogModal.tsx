@@ -119,9 +119,28 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   }
 
   return <ul className="space-y-1.5">{elements}</ul>;
-}
+  }
 
-const V460_HIGHLIGHTS = [
+  const V461_HIGHLIGHTS = [
+    {
+      title: 'Seamless Gapless Crossfade',
+      desc: 'Re-anchored crossfade evaluation to real-time playback progress near track completion with strict duration validation, completely eliminating premature start-of-track triggers, double audio, and accidental track skips.',
+    },
+    {
+      title: 'Zero-Latency Crossfade Track Handoff',
+      desc: 'Added atomic store transitions that update track info, queue progress, and history while maintaining continuous active playback, eliminating the micro-pause and loading spinner stutter when switching tracks.',
+    },
+    {
+      title: 'Spotify Direct Stream Safety & Clean Cache',
+      desc: 'Prevented concurrent stream collisions on the spotstream daemon and gated in-memory audio caching exclusively to complete natural track finishes, eliminating corrupted or truncated playback.',
+    },
+    {
+      title: 'Instant Playback Gating Elimination',
+      desc: 'Populated optimistic track representations with Spotify Direct resolver metadata and stream URLs, allowing direct streams to start playing immediately in 0ms without getting blocked by legacy YouTube resolution checks.',
+    },
+  ];
+
+  const V460_HIGHLIGHTS = [
   {
     title: 'Native System Tray & Background Listening',
     desc: 'Noctune now lives in your system tray! Closing the window keeps music playing in the background without cluttering your taskbar. Single-click the tray icon to restore the window, or right-click for quick playback controls (Play/Pause, Next, Previous, and Exit). You can toggle this behavior anytime in Settings.',
@@ -160,29 +179,6 @@ const V451_HIGHLIGHTS = [
   {
     title: 'Debug Dashboard Spotify Direct Accuracy',
     desc: 'Fixed an issue where the Debug Dashboard reported stale YouTube match cache details (such as 128kbps MP4 and expired stream URLs) for Spotify tracks played under Spotify Direct. The inspector now accurately reflects live 320kbps WebM stream status and direct playback cache details.',
-  },
-];
-
-const V450_HIGHLIGHTS = [
-  {
-    title: 'Direct Spotify Playback (320kbps)',
-    desc: 'Stream Spotify tracks natively in original 320kbps Vorbis audio directly from Spotify servers without YouTube search or audio matching. Pair your Spotify Premium account seamlessly in Settings with instant device login. Features an ultra-responsive background engine delivering sub-second track transitions, instant in-memory replay cache, and bundled engine binaries included directly in the installer.',
-  },
-  {
-    title: 'Personalized Playlists & Spotify Radio',
-    desc: 'Import your personal and algorithmic Spotify playlists—including Discover Weekly, Daily Mixes, and personalized radio stations—that were previously inaccessible. Introduces a dedicated Spotify Radio recommendation mode in Settings to generate smart queues based on your active seed tracks.',
-  },
-  {
-    title: 'Resizable Navigation Sidebar',
-    desc: 'Easily customize the desktop layout by clicking and dragging the navigation sidebar border to any preferred width. Double-click the resize border to instantly snap back to the default width, with your custom size automatically saved across restarts.',
-  },
-  {
-    title: 'Settings & Debug Interface Refinements',
-    desc: 'Reorganized audio engines and playback settings into a cleaner layout with real-time connection status indicators, unsaved change badges, and streamlined engine identifiers in the debug dashboard.',
-  },
-  {
-    title: 'Playback Timing & Progress Accuracy',
-    desc: 'Fixed a timing issue where certain songs could unexpectedly cut off mid-track and advance to the next song in the queue. Resolved player bar progress duration discrepancies where live stream buffering temporarily shrank the total song length.',
   },
 ];
 
@@ -289,7 +285,25 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.0</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.1</span>
+                <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
+              </div>
+              <ul className="space-y-2 text-muted">
+                {V461_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v461-${idx}`} className="flex items-start gap-2">
+                    <span className="text-accent font-bold mt-0.5">•</span>
+                    <span>
+                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                      {renderInlineMarkdown(item.desc)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="border-t border-white/10 pt-3.5">
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.6.0</span>
                 <span className="text-xs font-semibold text-white">Minor Feature Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
@@ -313,24 +327,6 @@ export function ChangelogModal() {
               <ul className="space-y-2 text-muted">
                 {V451_HIGHLIGHTS.map((item, idx) => (
                   <li key={`v451-${idx}`} className="flex items-start gap-2">
-                    <span className="text-accent font-bold mt-0.5">•</span>
-                    <span>
-                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
-                      {renderInlineMarkdown(item.desc)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="border-t border-white/10 pt-3.5">
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.5.0</span>
-                <span className="text-xs font-semibold text-white">Major Release Highlights</span>
-              </div>
-              <ul className="space-y-2 text-muted">
-                {V450_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v450-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
