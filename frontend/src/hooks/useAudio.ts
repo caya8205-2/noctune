@@ -628,7 +628,7 @@ export function useAudio() {
               nextAudio.volume = startVolume;
 
               skipNextTrackLoadRef.current = nextTrack.id;
-              void usePlayerStore.getState().playTrack(nextTrack, state.queue);
+              usePlayerStore.getState().transitionTrack(nextTrack, nextIdx);
             }
           }, 50);
         })

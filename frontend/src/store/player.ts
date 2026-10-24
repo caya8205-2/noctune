@@ -75,6 +75,7 @@ interface PlayerState {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   playTrack: (track: Track, queue?: Track[], options?: { autoQueue?: boolean; queueSource?: Track['queueSource'] }) => Promise<void>;
+  transitionTrack: (track: Track, targetIndex: number) => void;
   togglePlay: () => void;
   setVolume: (v: number) => void;
   toggleMute: () => void;
@@ -500,6 +501,42 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           get().next();
         }, 150);
       }
+    }
+  },
+
+  transitionTrack: (track, targetIndex) => {
+    const state = get();
+    const queue = state.queue;
+    const isDirectSpotifySetting = track.id.startsWith('spotify:') && getSpotifyPlaybackSettingSync() === 'spotify-direct';
+    const cleanSpotifyIdInitial = track.id.startsWith('spotify:') ? track.id.replace(/^spotify:(track:)?/, '') : undefined;
+    const playableTrack = {
+      ...track,
+      spotifyId: track.spotifyId ?? cleanSpotifyIdInitial,
+      source: isDirectSpotifySetting ? ('spotify_direct' as const) : (track as any).source,
+      resolverSource: isDirectSpotifySetting ? ('spotstream' as const) : (track as any).resolverSource,
+      audioUrl: isDirectSpotifySetting ? `/player/stream/spotify:${cleanSpotifyIdInitial}` : (track as any).audioUrl,
+      youtubeId: isDirectSpotifySetting ? undefined : track.youtubeId,
+      queueSource: track.queueSource,
+      originalSource: track.originalSource,
+    };
+
+    set({
+      currentTrack: playableTrack as any,
+      isPlaying: true,
+      isLoading: false,
+      progress: 0,
+      duration: playableTrack.duration || 0,
+      queueIndex: targetIndex,
+    });
+
+    recordPlaybackHistory(playableTrack as any);
+    get().saveQueueState();
+    get().pushQueueHistory(playableTrack as any);
+    void get().topUpQueue();
+
+    const nextTracks = getNextCandidateTracks(queue, targetIndex, state.shuffle, 5);
+    if (nextTracks.length > 0) {
+      api.prefetchTracks(nextTracks).catch(() => {});
     }
   },
 
