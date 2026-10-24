@@ -42,6 +42,7 @@ import {
 } from '../services/audioFileCache.js';
 import { getEnvConfig } from '../services/env.js';
 import { clearPlaybackBlacklistForId, isPlaybackBlacklisted, markPlaybackFailed } from '../services/playbackBlacklist.js';
+import { clearSpotifyMemoryCache } from '../services/spotifyDirect.js';
 
 const PlayParams = z.object({ videoId: z.string().min(5).max(64) });
 const audioCacheQueue = new PQueue({ concurrency: 2 });
@@ -1253,6 +1254,10 @@ export async function playerRoutes(app: FastifyInstance) {
 
     const matchCache = track.spotifyId ? clearMatchCacheForSpotifyId(track.spotifyId) : { cleared: 0 };
     if (matchCache.youtubeId && isYoutubeVideoId(matchCache.youtubeId)) videoIds.add(matchCache.youtubeId);
+
+    if (track.spotifyId || track.id?.startsWith('spotify:')) {
+      clearSpotifyMemoryCache();
+    }
 
     const ids = [...videoIds];
     const audio = ids.reduce(

@@ -81,10 +81,31 @@ export function useAudio() {
   const preloadedAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const crossfadeActiveRef = useRef(false);
   const lastCrossfadedTrackIdRef = useRef<string | null>(null);
+  const fadeIntervalRef = useRef<number | null>(null);
+  const checkCrossfadeRef = useRef<(audio: HTMLAudioElement) => void>(() => {});
   const suppressNextErrorRef = useRef(false);
   const recoveryAttemptsRef = useRef<Record<string, number>>({});
   const trackEndedTriggeredRef = useRef(false);
   const handleTrackEndedRef = useRef<() => void>(() => {});
+
+  const cancelCrossfade = useCallback(() => {
+    if (fadeIntervalRef.current) {
+      window.clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+    crossfadeActiveRef.current = false;
+    skipNextTrackLoadRef.current = null;
+    const secondary = secondaryAudioRef.current;
+    if (secondary) {
+      secondary.pause();
+      secondary.removeAttribute('src');
+      secondary.load();
+    }
+    const primary = audioRef.current;
+    if (primary) {
+      primary.volume = outputVolume(usePlayerStore.getState().volume);
+    }
+  }, []);
 
   const {
     currentTrack,
@@ -149,6 +170,7 @@ export function useAudio() {
       audio.addEventListener('timeupdate', () => {
         if (activeAudio === audio) {
           setProgress(audio.currentTime);
+          checkCrossfadeRef.current(audio);
         }
       });
 
@@ -165,6 +187,7 @@ export function useAudio() {
 
       audio.addEventListener('ended', () => {
         if (activeAudio === audio) {
+          if (crossfadeActiveRef.current) return;
           handleTrackEndedRef.current();
         }
       });
@@ -294,6 +317,7 @@ export function useAudio() {
     activeAudio = audioA;
 
     return () => {
+      cancelCrossfade();
       suppressNextErrorRef.current = true;
       for (const el of [audioA, audioB]) {
         el.pause();
@@ -304,7 +328,7 @@ export function useAudio() {
       secondaryAudioRef.current = null;
       activeAudio = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cancelCrossfade]);
 
   // Swap src when track changes
   useEffect(() => {
@@ -316,6 +340,11 @@ export function useAudio() {
     if (skipNextTrackLoadRef.current === currentTrack.id) {
       skipNextTrackLoadRef.current = null;
       return;
+    }
+
+    // Cancel any active crossfade on manual track switch
+    if (crossfadeActiveRef.current) {
+      cancelCrossfade();
     }
 
     if (
@@ -430,8 +459,14 @@ export function useAudio() {
     if (isPlaying) {
       if (!currentTrack || !audio.currentSrc) return;
       playAudio(audio).catch(() => {});
+      if (crossfadeActiveRef.current && secondaryAudioRef.current?.currentSrc) {
+        playAudio(secondaryAudioRef.current).catch(() => {});
+      }
     } else {
       audio.pause();
+      if (secondaryAudioRef.current) {
+        secondaryAudioRef.current.pause();
+      }
     }
   }, [isPlaying, currentTrack]);
 
@@ -469,87 +504,146 @@ export function useAudio() {
     return () => window.clearInterval(timer);
   }, [sleepTimerEnd, setIsPlaying]);
 
-  // Crossfade: when nearing end of track, start next track and fade
+  // Crossfade: evaluate during timeupdate near end of track and fade into next track
   useEffect(() => {
-    const audio = audioRef.current;
-    const nextAudio = secondaryAudioRef.current;
-    if (!audio || !nextAudio || !currentTrack) return;
+    checkCrossfadeRef.current = (audio: HTMLAudioElement) => {
+      const state = usePlayerStore.getState();
+      const crossfadeDuration = state.crossfadeDuration;
+      if (!crossfadeDuration || crossfadeDuration <= 0) return;
+      if (crossfadeActiveRef.current) return;
 
-    const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
-    if (!crossfadeDuration || crossfadeDuration <= 0) return;
-    if (crossfadeActiveRef.current) return;
-    if (lastCrossfadedTrackIdRef.current === currentTrack.id) return;
+      const track = state.currentTrack;
+      if (!track) return;
+      if (lastCrossfadedTrackIdRef.current === track.id) return;
 
-    const remaining = audio.duration - audio.currentTime;
-    if (remaining > crossfadeDuration || remaining < 0.5) return;
+      // Guard: Audio must be actively playing, and duration must be finite, valid, and > crossfadeDuration + 2s
+      if (!state.isPlaying || !Number.isFinite(audio.duration) || audio.duration <= crossfadeDuration + 2) {
+        return;
+      }
 
-    // Don't crossfade if repeat-one or no next track
-    const state = usePlayerStore.getState();
-    if (state.repeat === 'one') return;
-    const nextIdx = state.queueIndex + 1;
-    if (nextIdx >= state.queue.length) return;
+      const remaining = audio.duration - audio.currentTime;
+      // Guard: Remaining must be a valid finite number within the crossfade window
+      if (!Number.isFinite(remaining) || remaining > crossfadeDuration || remaining < 0.3) {
+        return;
+      }
 
-    lastCrossfadedTrackIdRef.current = currentTrack.id;
-    crossfadeActiveRef.current = true;
+      // Don't crossfade if repeat-one or single-track queue
+      if (state.repeat === 'one') return;
+      if (state.queue.length <= 1) return;
 
-    const nextTrack = state.queue[nextIdx];
-    const crossfadeMs = crossfadeDuration * 1000;
-    const startVolume = outputVolume(state.volume);
-    nextAudio.crossOrigin = 'anonymous';
-    nextAudio.volume = 0;
-    nextAudio.playbackRate = state.playbackRate;
+      // Pick next track index
+      let nextIdx: number;
+      if (state.shuffle) {
+        const rand = Math.floor(Math.random() * (state.queue.length - 1));
+        nextIdx = rand >= state.queueIndex ? rand + 1 : rand;
+      } else {
+        nextIdx = state.queueIndex + 1;
+        if (nextIdx >= state.queue.length) {
+          if (state.repeat === 'all') nextIdx = 0;
+          else return;
+        }
+      }
 
-    const targetId = (nextTrack.youtubeId || nextTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
-    apiUrl('/player/stream/' + targetId).then((src) => {
-      nextAudio.src = src;
-      nextAudio.load();
-      return waitForAudioReady(nextAudio).then(() => {
-        playAudio(nextAudio).catch(() => {});
-        // Start crossfade
-        const fadeStart = Date.now();
-        const fadeInterval = window.setInterval(() => {
-          const elapsed = Date.now() - fadeStart;
-          const t = Math.min(1, elapsed / crossfadeMs);
-          const currentGain = Math.cos(t * Math.PI / 2);
-          const nextGain = Math.sin(t * Math.PI / 2);
-          audio.volume = startVolume * currentGain;
-          nextAudio.volume = startVolume * nextGain;
+      const nextTrack = state.queue[nextIdx];
+      if (!nextTrack) return;
 
-          if (t >= 1) {
-            window.clearInterval(fadeInterval);
-            audio.pause();
-            audio.removeAttribute('src');
-            audio.load();
+      // Spotify Direct single active stream constraint:
+      // Spotify accounts permit only one active playback stream per session.
+      // Concurrently streaming two Spotify Direct tracks terminates the active session.
+      const isCurrentSpotify = track.id.startsWith('spotify:') &&
+        ((track as any).resolverSource === 'spotstream' || !(track as any).youtubeId);
+      const isNextSpotify = nextTrack.id.startsWith('spotify:') &&
+        ((nextTrack as any).resolverSource === 'spotstream' || !nextTrack.youtubeId);
+      if (isCurrentSpotify || isNextSpotify) {
+        return;
+      }
 
-            // Swap pointers: secondary becomes primary
-            activeAudio = nextAudio;
-            audioRef.current = nextAudio;
-            secondaryAudioRef.current = audio;
-            crossfadeActiveRef.current = false;
-            lastCrossfadedTrackIdRef.current = null;
-            nextAudio.volume = startVolume;
+      const nextAudio = secondaryAudioRef.current;
+      if (!nextAudio) return;
 
-            skipNextTrackLoadRef.current = nextTrack.id;
-            usePlayerStore.getState().next();
-          }
-        }, 50);
-      });
-    }).catch((err) => {
-      console.warn('[audio] crossfade failed:', err);
-      crossfadeActiveRef.current = false;
-      lastCrossfadedTrackIdRef.current = null;
-    });
-  }, [currentTrack?.id]);
+      lastCrossfadedTrackIdRef.current = track.id;
+      crossfadeActiveRef.current = true;
+
+      const crossfadeMs = crossfadeDuration * 1000;
+      const startVolume = outputVolume(state.volume);
+      nextAudio.crossOrigin = 'anonymous';
+      nextAudio.volume = 0;
+      nextAudio.playbackRate = state.playbackRate;
+
+      const targetId = (nextTrack.youtubeId || nextTrack.id).replace(/^(youtube|ytdlp):/, '').trim();
+      apiUrl('/player/stream/' + targetId)
+        .then((src) => {
+          if (!crossfadeActiveRef.current || audioRef.current !== audio) return;
+          nextAudio.src = src;
+          nextAudio.load();
+          return waitForAudioReady(nextAudio);
+        })
+        .then(() => {
+          if (!crossfadeActiveRef.current || audioRef.current !== audio) return;
+          return playAudio(nextAudio);
+        })
+        .then(() => {
+          if (!crossfadeActiveRef.current || audioRef.current !== audio) return;
+
+          const fadeStart = Date.now();
+          fadeIntervalRef.current = window.setInterval(() => {
+            if (!crossfadeActiveRef.current || audioRef.current !== audio) {
+              if (fadeIntervalRef.current) {
+                window.clearInterval(fadeIntervalRef.current);
+                fadeIntervalRef.current = null;
+              }
+              return;
+            }
+
+            const elapsed = Date.now() - fadeStart;
+            const t = Math.min(1, elapsed / crossfadeMs);
+            const currentGain = Math.cos((t * Math.PI) / 2);
+            const nextGain = Math.sin((t * Math.PI) / 2);
+            audio.volume = startVolume * currentGain;
+            nextAudio.volume = startVolume * nextGain;
+
+            if (t >= 1) {
+              if (fadeIntervalRef.current) {
+                window.clearInterval(fadeIntervalRef.current);
+                fadeIntervalRef.current = null;
+              }
+
+              audio.pause();
+              audio.removeAttribute('src');
+              audio.load();
+
+              // Swap pointers: secondary becomes primary
+              activeAudio = nextAudio;
+              audioRef.current = nextAudio;
+              secondaryAudioRef.current = audio;
+              crossfadeActiveRef.current = false;
+              lastCrossfadedTrackIdRef.current = null;
+              nextAudio.volume = startVolume;
+
+              skipNextTrackLoadRef.current = nextTrack.id;
+              void usePlayerStore.getState().playTrack(nextTrack, state.queue);
+            }
+          }, 50);
+        })
+        .catch((err) => {
+          console.warn('[audio] crossfade failed:', err);
+          cancelCrossfade();
+        });
+    };
+  }, [cancelCrossfade]);
 
   useEffect(() => {
     function handleSeek(event: Event) {
       const seconds = (event as CustomEvent<number>).detail;
-      if (typeof seconds === 'number') seekAudio(seconds);
+      if (typeof seconds === 'number') {
+        cancelCrossfade();
+        seekAudio(seconds);
+      }
     }
 
     window.addEventListener('noctune:seek', handleSeek);
     return () => window.removeEventListener('noctune:seek', handleSeek);
-  }, []);
+  }, [cancelCrossfade]);
 
   // Seek (only when progress changes externally — not from timeupdate)
   const seek = useCallback((seconds: number) => {

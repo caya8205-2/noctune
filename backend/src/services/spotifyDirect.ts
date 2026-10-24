@@ -21,6 +21,7 @@ interface MemoryAudioBuffer {
 
 const memoryAudioCache = new Map<string, MemoryAudioBuffer>();
 const MAX_MEMORY_TRACKS = 3;
+let activeSpotifyStreamKill: (() => void) | null = null;
 
 export function clearSpotifyMemoryCache(): void {
   memoryAudioCache.clear();
@@ -230,21 +231,39 @@ export interface SpotifyAudioStreamResult {
 export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?: number): SpotifyAudioStreamResult {
   const cleanId = cleanSpotifyId(rawId);
 
+  // Abort any currently active Spotify Direct stream before launching a new one,
+  // preventing concurrent TCP connections from colliding on the spotstream daemon.
+  if (activeSpotifyStreamKill) {
+    try {
+      activeSpotifyStreamKill();
+    } catch {}
+    activeSpotifyStreamKill = null;
+  }
+
+  const durationSec = expectedDurationSeconds ?? (getCachedBySpotifyId(cleanId)?.duration || 0);
+
   // 1. Check in-memory stream cache first for instant 0ms playback
   const cached = memoryAudioCache.get(cleanId);
   if (cached && cached.buffer.length > 64000) {
-    console.info(`[spotifyDirect:${cleanId}] Serving INSTANTLY from in-memory RAM cache (${cached.buffer.length} bytes)`);
-    const stream = Readable.from(cached.buffer);
-    return {
-      stream,
-      contentType: cached.contentType,
-      contentLength: cached.buffer.length,
-      destroy: () => stream.destroy(),
-    };
+    // If expected duration is known (>10s), verify that cached buffer is reasonably complete
+    // (at 160kbps WebM Opus, a track averages ~18-20 KB/sec, so minimum acceptable is duration * 10KB).
+    const minAcceptableBytes = durationSec > 10 ? durationSec * 10000 : 64000;
+    if (cached.buffer.length >= minAcceptableBytes) {
+      console.info(`[spotifyDirect:${cleanId}] Serving INSTANTLY from in-memory RAM cache (${cached.buffer.length} bytes)`);
+      const stream = Readable.from(cached.buffer);
+      return {
+        stream,
+        contentType: cached.contentType,
+        contentLength: cached.buffer.length,
+        destroy: () => stream.destroy(),
+      };
+    } else {
+      console.warn(`[spotifyDirect:${cleanId}] Evicting truncated memory cache (${cached.buffer.length} bytes, expected >= ${minAcceptableBytes})`);
+      memoryAudioCache.delete(cleanId);
+    }
   }
 
   // Calculate expected PCM bytes (44.1kHz * 2 channels * 2 bytes/sample = 176,400 bytes/sec)
-  const durationSec = expectedDurationSeconds ?? (getCachedBySpotifyId(cleanId)?.duration || 0);
   const expectedPcmBytes = durationSec > 0 ? durationSec * 176400 : 0;
 
   // If daemon is warm and ready, stream via high-speed TCP socket without AP reconnect overhead
@@ -282,6 +301,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
 
     let silenceTimer: NodeJS.Timeout | null = null;
     let totalBytesReceived = 0;
+    let isCompletedCleanly = false;
 
     socket.on('data', (chunk: Buffer) => {
       totalBytesReceived += chunk.length;
@@ -300,6 +320,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       if (totalBytesReceived > 64000) {
         silenceTimer = setTimeout(() => {
           if (!isDestroyed) {
+            isCompletedCleanly = true;
             try {
               ffmpegProc.stdin?.end();
             } catch {}
@@ -317,6 +338,8 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     });
 
     const saveToMemoryCache = () => {
+      // ONLY save to RAM cache if the track finished playing to EOF naturally, NEVER if aborted mid-song!
+      if (!isCompletedCleanly) return;
       if (chunks.length > 0) {
         const fullBuffer = Buffer.concat(chunks);
         if (fullBuffer.length > 64000) {
@@ -337,6 +360,9 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     const killStream = () => {
       if (isDestroyed) return;
       isDestroyed = true;
+      if (activeSpotifyStreamKill === killStream) {
+        activeSpotifyStreamKill = null;
+      }
       if (silenceTimer) clearTimeout(silenceTimer);
       try {
         socket.destroy();
@@ -348,6 +374,8 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       } catch {}
       saveToMemoryCache();
     };
+
+    activeSpotifyStreamKill = killStream;
 
     socket.pipe(ffmpegProc.stdin, { end: false });
 
@@ -409,6 +437,9 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
   const killProcesses = () => {
     if (isDestroyed) return;
     isDestroyed = true;
+    if (activeSpotifyStreamKill === killProcesses) {
+      activeSpotifyStreamKill = null;
+    }
     try {
       spotstreamProc.stdout?.destroy();
       spotstreamProc.kill();
@@ -419,6 +450,8 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       ffmpegProc.kill();
     } catch {}
   };
+
+  activeSpotifyStreamKill = killProcesses;
 
   spotstreamProc.stderr?.on('data', (data) => {
     const msg = data.toString().trim();
