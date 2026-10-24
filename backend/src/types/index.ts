@@ -35,11 +35,13 @@ export interface CachedTrack extends Track {
   cachedAt: number;
   playCount: number;
   lastPlayed?: number;
+  hiddenFromHistory?: boolean;
 }
 
 export interface CacheStore {
   version: number;
   updatedAt: number;
+  historyClearedAt?: number;
   tracks: Record<string, CachedTrack>;   // keyed by videoId
   queryIndex: Record<string, string>;     // query hash -> videoId
 }

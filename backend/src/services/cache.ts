@@ -214,6 +214,7 @@ export function recordPlay(videoId: string): void {
   if (!track) return;
   track.playCount = (track.playCount ?? 0) + 1;
   track.lastPlayed = Date.now();
+  track.hiddenFromHistory = false;
   saveStore(store);
 }
 
@@ -244,6 +245,7 @@ export function recordPlayWithMetadata(track: Track): CachedTrack {
     originalPlaylistName: track.originalPlaylistName ?? existing.originalPlaylistName,
     playCount: (existing.playCount ?? 0) + 1,
     lastPlayed: Date.now(),
+    hiddenFromHistory: false,
   };
 
   store.tracks[track.id] = updated;
@@ -267,8 +269,9 @@ export function getTopTracks(limit?: number): CachedTrack[] {
 /** Get cached tracks sorted by latest play time. */
 export function getRecentTracks(limit = 50): CachedTrack[] {
   const store = getStore();
+  const clearedAt = store.historyClearedAt || 0;
   const sorted = Object.values(store.tracks)
-    .filter((track) => Boolean(track.lastPlayed))
+    .filter((track) => Boolean(track.lastPlayed) && (track.lastPlayed ?? 0) > clearedAt && !track.hiddenFromHistory)
     .sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
 
   const seen = new Set<string>();
@@ -291,11 +294,11 @@ export function getRecentTracks(limit = 50): CachedTrack[] {
 
 export function clearPlaybackHistory(): { updated: number } {
   const store = getStore();
+  store.historyClearedAt = Date.now();
   let updated = 0;
   for (const track of Object.values(store.tracks)) {
-    if (track.lastPlayed || track.playCount) {
-      track.lastPlayed = undefined;
-      track.playCount = 0;
+    if (track.lastPlayed) {
+      track.hiddenFromHistory = true;
       updated += 1;
     }
   }
@@ -306,9 +309,8 @@ export function clearPlaybackHistory(): { updated: number } {
 export function removePlaybackHistoryItem(videoId: string): boolean {
   const store = getStore();
   const track = store.tracks[videoId];
-  if (!track || (!track.lastPlayed && !track.playCount)) return false;
-  track.lastPlayed = undefined;
-  track.playCount = 0;
+  if (!track || !track.lastPlayed) return false;
+  track.hiddenFromHistory = true;
   saveStore(store);
   return true;
 }
