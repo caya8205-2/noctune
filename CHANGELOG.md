@@ -2,6 +2,18 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.3 - 2026-10-25
+
+### Audio Resolver & Stream Reliability
+- **Eliminated Toxic yt-dlp Bot-Check Fallback**: Stopped unauthenticated `yt-dlp` from being triggered when `innertube-rs` detects restricted, deleted, or login-required YouTube videos. This eliminates 5-second timeouts, deceptive "Sign in to confirm you're not a bot" error dialogs, and unwanted IP bot challenges.
+- **Primary-First Stream Recovery**: Reordered stream URL expiration recovery to prioritize the native `innertube-rs` engine over legacy scrapers, ensuring immediate 200/206 stream refreshes.
+- **Process Timeout Safeguard**: Added an explicit 15-second process timeout for child CLI resolver calls to prevent hanging background tasks from stalling playback or prefetch pipelines.
+
+### Playback Blacklist & Queue Navigation
+- **15-Minute Blacklist Expiration (TTL)**: Replaced permanent playback blacklisting with an automatic 15-minute TTL and on-the-fly expiration pruning. Temporary network hiccups or stream timeouts no longer permanently ban valid songs from your library.
+- **Strict Blacklist Admission Guard**: Restricted `markPlaybackFailed` to only trigger on verified permanent track unplayability rather than generic stream dropouts.
+- **Unstuck Queue Advancement**: Upgraded queue skip logic to evaluate entire remaining queue availability, ensuring deleted or restricted tracks are skipped seamlessly without playback stalling at queue edges or during shuffle.
+
 ## v4.6.2 - 2026-10-24
 
 ### Stats & History Preservation

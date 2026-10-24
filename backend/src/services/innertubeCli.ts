@@ -86,7 +86,15 @@ async function execInnertubeCli<T>(args: string[]): Promise<T> {
       reject(err);
     });
 
+    const timer = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {}
+      reject(new Error(`innertube CLI timed out after 15000ms: ${args.join(' ')}`));
+    }, 15000);
+
     proc.on('close', (code) => {
+      clearTimeout(timer);
       if (code !== 0) {
         return reject(new Error(`innertube CLI exited with code ${code}: ${stderr || stdout}`));
       }

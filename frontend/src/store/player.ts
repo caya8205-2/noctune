@@ -493,9 +493,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         };
       });
       const state = get();
-      const failedIndex = state.queue.findIndex((queuedTrack) => queuedTrack.id === track.id);
-      const hasNext = failedIndex >= 0 && failedIndex < state.queue.length - 1;
-      if (hasNext) {
+      const hasOtherPlayable = state.queue.some(
+        (queuedTrack) => queuedTrack.id !== track.id && !queuedTrack.playbackError
+      );
+      if (hasOtherPlayable) {
         set({ playbackNotice: `Skipped "${track.title}" because it is unavailable.` });
         window.setTimeout(() => {
           get().next();
@@ -785,8 +786,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }));
     const state = get();
     if (state.currentTrack?.id === trackId) {
-      const currentIndex = state.queue.findIndex((track) => track.id === trackId);
-      if (currentIndex >= 0 && currentIndex < state.queue.length - 1) {
+      const hasOtherPlayable = state.queue.some(
+        (track) => track.id !== trackId && !track.playbackError
+      );
+      if (hasOtherPlayable) {
         set({ playbackNotice: `Skipped "${failedTitle || state.currentTrack.title}" because playback failed.` });
         window.setTimeout(() => {
           get().next();

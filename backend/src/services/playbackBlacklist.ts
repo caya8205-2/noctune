@@ -95,10 +95,21 @@ export function markPlaybackFailed(
   saveStore(store);
 }
 
+export const BLACKLIST_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
+
 export function isPlaybackBlacklisted(videoId: string): boolean {
   const clean = cleanId(videoId);
   if (!clean) return false;
-  return Boolean(getStore().entries[clean]);
+  const store = getStore();
+  const entry = store.entries[clean];
+  if (!entry) return false;
+  const failedAt = typeof entry === 'number' ? entry : entry.failedAt;
+  if (Date.now() - failedAt > BLACKLIST_TTL_MS) {
+    delete store.entries[clean];
+    saveStore(store);
+    return false;
+  }
+  return true;
 }
 
 export function getPlaybackBlacklist(): string[] {
@@ -166,9 +177,9 @@ export function getPlaybackBlacklistDetailed(): Array<{
       targetArtist,
       matchedTitle,
       matchedArtist,
-      expiresIn: Math.max(0, 86400000 - age),
+      expiresIn: Math.max(0, BLACKLIST_TTL_MS - age),
     };
-  });
+  }).filter((entry) => entry.expiresIn > 0);
 }
 
 export function clearPlaybackBlacklist(): { cleared: number } {

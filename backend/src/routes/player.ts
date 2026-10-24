@@ -782,7 +782,11 @@ export async function playerRoutes(app: FastifyInstance) {
         return reply.send({ ...saved, source: 'resolved' });
       } catch (err) {
         app.log.error(err, `[player] full resolve failed for ${playableVideoId}`);
-        markPlaybackFailed(playableVideoId);
+        const errMsg = (err as Error)?.message || '';
+        const isPermanentUnplayable = /LOGIN_REQUIRED|restricted|unavailable|not playable|This video is unavailable|private/i.test(errMsg);
+        if (isPermanentUnplayable) {
+          markPlaybackFailed(playableVideoId);
+        }
         return reply
           .status(502)
           .send({ error: 'Could not resolve audio', message: (err as Error).message });
@@ -1021,13 +1025,13 @@ export async function playerRoutes(app: FastifyInstance) {
       if (!ytRes.ok || !ytRes.body) {
         ytRes.body?.cancel().catch(() => {});
         try {
-          app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL via ytdlp fallback');
+          app.log.info({ videoId, status: ytRes.status }, '[player] stream URL non-ok, resolving fresh stream URL via primary resolver');
           let recovered: { track: Track; audio: AudioStreamInfo } | null = null;
           try {
-            recovered = await resolveTrackWithYtdlp(videoId, cached.query || videoId);
+            recovered = await resolveTrack(videoId, cached.query || videoId);
           } catch {
             try {
-              recovered = await resolveTrack(videoId, cached.query || videoId);
+              recovered = await resolveTrackWithYtdlp(videoId, cached.query || videoId);
             } catch {
               recovered = null;
             }

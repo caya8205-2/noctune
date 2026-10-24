@@ -97,6 +97,11 @@ function logResolvedStream(
   );
 }
 
+function isRestrictedOrUnplayable(err: unknown): boolean {
+  const msg = (err as Error)?.message || '';
+  return /LOGIN_REQUIRED|restricted|unavailable|not playable|This video is unavailable|private|copyright|bot/i.test(msg);
+}
+
 export async function searchTracks(query: string, limit = 10): Promise<Track[]> {
   try {
     if (isInnertubeCliAvailable()) {
@@ -104,6 +109,7 @@ export async function searchTracks(query: string, limit = 10): Promise<Track[]> 
     }
     return await ytdlpSearchTracks(query, limit);
   } catch (err) {
+    if (isRestrictedOrUnplayable(err)) throw err;
     console.warn(`[audio-resolver] innertube searchTracks failed, falling back to yt-dlp: ${(err as Error).message}`);
     return await ytdlpSearchTracks(query, limit);
   }
@@ -116,6 +122,7 @@ export async function getYoutubeTrack(urlOrVideoId: string, originalQuery?: stri
     }
     return await ytdlpGetYoutubeTrack(urlOrVideoId, originalQuery);
   } catch (err) {
+    if (isRestrictedOrUnplayable(err)) throw err;
     console.warn(`[audio-resolver] innertube getYoutubeTrack failed, falling back to yt-dlp: ${(err as Error).message}`);
     return await ytdlpGetYoutubeTrack(urlOrVideoId, originalQuery);
   }
@@ -140,6 +147,10 @@ export async function resolveAudioUrl(
     logResolvedStream('ytdlp', 'resolveAudioUrl', audio, Date.now() - startedAt);
     return audio;
   } catch (err) {
+    if (isRestrictedOrUnplayable(err)) {
+      console.warn(`[audio-resolver] innertube reported restricted/unplayable video for ${videoId}, skipping yt-dlp fallback: ${(err as Error).message}`);
+      throw err;
+    }
     console.warn(`[audio-resolver] innertube resolveAudioUrl failed, falling back to yt-dlp: ${(err as Error).message}`);
     const audio = await ytdlpResolveAudioUrl(videoId, preference);
     logResolvedStream('ytdlp', 'resolveAudioUrl', audio, Date.now() - startedAt);
@@ -163,6 +174,10 @@ export async function resolveTrack(
     logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
     return result;
   } catch (err) {
+    if (isRestrictedOrUnplayable(err)) {
+      console.warn(`[audio-resolver] innertube reported restricted/unplayable video for ${videoId}, skipping yt-dlp fallback: ${(err as Error).message}`);
+      throw err;
+    }
     console.warn(`[audio-resolver] innertube resolveTrack failed, falling back to yt-dlp: ${(err as Error).message}`);
     const result = await ytdlpResolveTrack(videoId, originalQuery);
     logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
