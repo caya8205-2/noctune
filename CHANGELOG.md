@@ -2,6 +2,24 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.0 - 2026-10-24
+
+### Desktop & System Integration
+- **Native System Tray & Background Playback**: Added a native system tray icon with minimize-to-tray capability. Closing the window now minimizes to the tray by default so music playback continues uninterrupted in the background. Left-clicking the tray icon toggles window visibility, while right-clicking opens a quick context menu with controls for Show Noctune, Play/Pause, Next Track, Previous Track, and Exit.
+- **Close to System Tray Preference**: Added a toggle switch in Settings (`Settings > Playback & engines`) allowing users to choose whether closing the window minimizes to the system tray or exits the application completely. Setting persists across sessions in `localStorage`.
+- **Windows SMTC Seeking & Realtime Timeline**: Added `seekto` action handling and `setPositionState()` synchronization to `navigator.mediaSession`. Dragging the scrubber on Windows 10/11 lock screen and volume flyout now seeks accurately, with the timeline position updating in real-time.
+
+### Playback & Audio Pipeline
+- **Dual-Element Audio Crossfade Engine**: Rebuilt the crossfade system using dual pre-routed audio elements (`audioA` and `audioB`) connected directly to the Web Audio `AudioContext` and `AnalyserNode`. Eliminates player freezing, preserves visualizer reactivity and equalizer filters during crossfade transitions, and ensures continuous auto-advance to subsequent queue tracks.
+- **Industry-Standard Previous Track Behavior**: Updated the Previous track button logic so that pressing previous when a song has played for more than 3 seconds restarts the current song from the beginning (`0:00`), matching Spotify and Apple Music behavior. Pressing it within the first 3 seconds navigates to the previous song in queue.
+- **Shuffle Self-Repetition Elimination**: Fixed the queue shuffle selection logic to exclude the currently playing track index from the randomized candidate pool, preventing back-to-back duplicate playback in smaller queues.
+
+### Queue & Database Reliability
+- **Queue Removal Desynchronization Fix**: Fixed an issue where removing the currently active track from Queue View shifted queue indices without updating playback, causing player desynchronization and skipped tracks. Removing the active track now immediately advances playback to the next item or cleanly resets the player if the queue is empty.
+- **Japanese Lyric Normalization & Bracket Cleaning**: Resolved a UTF-8 mojibake defect in LRCLIB title candidate generation where Japanese brackets `【` and `】` were corrupted, preventing lyric retrieval for anime and Japanese music. Added automatic bracket stripping to `normalize()` so video tags (e.g. `【MV】`) are stripped cleanly before searching.
+- **SQLite Connection Safety & Batch Querying**: Wrapped SQLite operations in a `withDb` helper ensuring safe `db.close()` invocation under `try...finally`. Optimized `getAllPlaylists()` to fetch all tracks across all playlists in a single batch query, replacing an N+1 query pattern.
+- **Console Log Cleanup**: Removed leftover development debug statements across `LocalFilesView.tsx` and `api.ts`.
+
 ## v4.5.1 - 2026-10-05
 
 ### Interface & Sidebar Enhancements

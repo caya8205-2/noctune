@@ -121,6 +121,33 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
 }
 
+const V460_HIGHLIGHTS = [
+  {
+    title: 'Native System Tray & Background Listening',
+    desc: 'Noctune now lives in your system tray! Closing the window keeps music playing in the background without cluttering your taskbar. Single-click the tray icon to restore the window, or right-click for quick playback controls (Play/Pause, Next, Previous, and Exit). You can toggle this behavior anytime in Settings.',
+  },
+  {
+    title: 'Dual-Engine Audio Crossfade',
+    desc: 'Rebuilt the crossfade audio engine with synchronized dual audio pipelines connected directly to the visualizer and equalizer. Smooth crossfade transitions between songs now work seamlessly without UI freezes or stalled queues.',
+  },
+  {
+    title: 'Previous Track Smart Restart',
+    desc: 'Clicking the Previous Track button after listening for more than 3 seconds now restarts the current track from 0:00—matching Spotify and Apple Music standards. Click again within 3 seconds to jump to the previous song in queue.',
+  },
+  {
+    title: 'Windows Media Scrubber & Live Timeline',
+    desc: 'System media controls on Windows 10/11 now support live timeline tracking and direct scrubbing: drag the seek bar in the volume flyout or lock screen to jump instantly to any point in the song.',
+  },
+  {
+    title: 'Queue & Shuffle Reliability',
+    desc: 'Fixed an issue where removing the currently playing track from the queue desynchronized playback. Upgraded the shuffle algorithm so small playlists never repeat the same song twice in a row.',
+  },
+  {
+    title: 'Japanese Lyric Matching & Database Optimizations',
+    desc: 'Fixed a character encoding issue with Japanese bracket titles (such as 【MV】) that caused lyric searches on LRCLIB to fail. Optimized internal library loading with batched SQLite queries.',
+  },
+];
+
 const V451_HIGHLIGHTS = [
   {
     title: 'Resizable Track Details Sidebar',
@@ -262,7 +289,25 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.5.1</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.0</span>
+                <span className="text-xs font-semibold text-white">Minor Feature Release Highlights</span>
+              </div>
+              <ul className="space-y-2 text-muted">
+                {V460_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v460-${idx}`} className="flex items-start gap-2">
+                    <span className="text-accent font-bold mt-0.5">•</span>
+                    <span>
+                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                      {renderInlineMarkdown(item.desc)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="border-t border-white/10 pt-3.5">
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.5.1</span>
                 <span className="text-xs font-semibold text-white">Patch Updates</span>
               </div>
               <ul className="space-y-2 text-muted">
