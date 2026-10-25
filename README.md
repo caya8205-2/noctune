@@ -14,7 +14,7 @@
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)\
 [![Rust](https://img.shields.io/badge/Rust-2021-730039?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![innertube-rs](https://img.shields.io/crates/v/innertube-rs?style=for-the-badge&logo=rust&logoColor=white&color=dea584&label=innertube-rs)](https://crates.io/crates/innertube-rs)
-[![MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
+[![GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue?style=for-the-badge)](LICENSE)
 [![GitHub All Releases](https://img.shields.io/github/downloads/caya8205-2/noctune/total?style=for-the-badge&logo=github)](https://github.com)
 
 </div>
@@ -211,4 +211,29 @@ See [CHANGELOG.md](./CHANGELOG.md) or [Releases](https://github.com/caya8205-2/n
 
 ## License
 
-[MIT](./LICENSE)
+Noctune is licensed under the [GNU General Public License v3.0 or later](./LICENSE)
+(`GPL-3.0-or-later`).
+
+    Copyright (C) 2026 Caya
+
+    This program is free software: you can redistribute it and/or modify it under
+    the terms of the GNU General Public License as published by the Free Software
+    Foundation, either version 3 of the License, or (at your option) any later
+    version.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with
+    this program. If not, see <https://www.gnu.org/licenses/>.
+
+**Version history of the license.** Releases up to and including `v4.6.6` were
+published under the MIT License; that grant is irrevocable and remains valid for
+those copies (see [LICENSE-MIT-LEGACY](./LICENSE-MIT-LEGACY)). Every version
+after `v4.6.6` is licensed under `GPL-3.0-or-later`.
+
+The license covers the source code only. It does not grant any right to the
+Noctune name, logo, or branding, so forks must use their own name and artwork.
+Third-party components and their licenses are listed in
+[THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).

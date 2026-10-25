@@ -2,6 +2,7 @@
   "name": "@noctune/frontend",
   "version": "4.6.6",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",
