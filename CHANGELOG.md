@@ -7,7 +7,7 @@ All notable Noctune changes are documented here.
 Starting with the release after `v4.6.6`, Noctune is licensed under
 **GPL-3.0-or-later**. Releases up to and including `v4.6.6` remain available under
 the MIT License, and that grant stays valid for those copies
-(see [LICENSE-MIT-LEGACY](./LICENSE-MIT-LEGACY)). This is a license change only —
+(see [docs/licensing-history.md](./docs/licensing-history.md)). This is a license change only —
 no application behaviour changed.
 
 ## v4.6.8 - 2026-10-25

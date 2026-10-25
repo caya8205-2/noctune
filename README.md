@@ -230,8 +230,8 @@ Noctune is licensed under the [GNU General Public License v3.0 or later](./LICEN
 
 **Version history of the license.** Releases up to and including `v4.6.6` were
 published under the MIT License; that grant is irrevocable and remains valid for
-those copies (see [LICENSE-MIT-LEGACY](./LICENSE-MIT-LEGACY)). Every version
-after `v4.6.6` is licensed under `GPL-3.0-or-later`.
+those copies (see [docs/licensing-history.md](./docs/licensing-history.md)). Every
+version after `v4.6.6` is licensed under `GPL-3.0-or-later`.
 
 The license covers the source code only. It does not grant any right to the
 Noctune name, logo, or branding, so forks must use their own name and artwork.

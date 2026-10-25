@@ -11,6 +11,7 @@ reports/
 docs/**
 !docs/CURRENT_STATUS.md
 !docs/next-plan.md
+!docs/licensing-history.md
 .kiro/
 *.db
 *.db-shm

@@ -1,3 +1,26 @@
+# Licensing history
+
+Noctune is currently licensed under **GPL-3.0-or-later** — see [LICENSE](../LICENSE).
+
+This page exists only as a record. It is deliberately not named `LICENSE*` so that
+GitHub's licence detection reports a single licence for this repository instead of
+listing a second, historical one.
+
+## Timeline
+
+| Versions | Licence |
+|----------|---------|
+| up to and including `v4.6.6` | MIT |
+| after `v4.6.6` | GPL-3.0-or-later |
+
+The MIT grant is irrevocable. Anyone who received a copy of Noctune up to `v4.6.6`
+keeps the rights that grant gave them, for that copy, permanently — relicensing the
+project does not and cannot take those rights away from them. New versions are
+distributed under the GPL only.
+
+## The MIT licence those releases used
+
+```text
 MIT License
 
 Copyright (c) 2026 Caya
@@ -19,3 +42,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
