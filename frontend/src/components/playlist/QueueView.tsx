@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, Search, Shuffle, X } from 'lucide-react';
+import { AlertTriangle, Clock, EyeOff, GripVertical, House, ListMusic, ListOrdered, RotateCcw, Search, Shuffle, X } from 'lucide-react';
 import { usePlayerStore } from '../../store/player';
 import { formatDuration } from '../../utils/format';
 import { clsx } from 'clsx';
@@ -45,6 +45,7 @@ export function QueueView() {
     reorderQueue,
     removeFromQueue,
     dismissPlaybackNotice,
+    clearQueueErrors,
     setView,
   } = usePlayerStore();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -139,6 +140,15 @@ export function QueueView() {
             <button onClick={shuffleQueue} className="btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap" title="Shuffle upcoming tracks">
               <Shuffle size={12} /> Shuffle
             </button>
+            {queue.some((t) => t.playbackError) && (
+              <button
+                onClick={clearQueueErrors}
+                className="btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap text-amber-400 hover:text-amber-300"
+                title="Reset error status for failed tracks in queue"
+              >
+                <RotateCcw size={12} /> Retry Failed
+              </button>
+            )}
             <button
               onClick={() => setHideFailed((value) => !value)}
               className={clsx('btn-ghost text-xs gap-1.5 px-2.5 whitespace-nowrap', hideFailed && 'text-accent')}

@@ -121,22 +121,18 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V463_HIGHLIGHTS = [
+  const V464_HIGHLIGHTS = [
     {
-      title: 'Eliminated yt-dlp Bot-Check Fallback',
-      desc: 'Stopped unauthenticated yt-dlp from triggering when YouTube videos are deleted or restricted, removing fake "Sign in to confirm you\'re not a bot" errors and 5-second delays.',
+      title: 'Single-Instance Desktop Guard',
+      desc: 'Launching Noctune from a desktop shortcut while running in the system tray now cleanly restores and focuses the existing window instead of creating duplicate instances.',
     },
     {
-      title: '15-Minute Playback Blacklist TTL',
-      desc: 'Playback failures now expire automatically after 15 minutes instead of permanently blocking songs, ensuring temporary connection drops never permanently disable library tracks.',
+      title: 'Auto-Clear Failed Queue Badges',
+      desc: 'Tracks that successfully play now automatically clear stale "Failed" error badges from the queue and storage.',
     },
     {
-      title: 'Unstuck Queue Skipping',
-      desc: 'Enhanced error handling to cleanly skip unavailable songs across the entire queue without halting playback at queue boundaries or in shuffle mode.',
-    },
-    {
-      title: 'Decoupled History Clearance from Listening Stats',
-      desc: 'History clearance safely hides tracks from the recent playback view while keeping all-time plays, top tracks, and daily listening activity 100% intact.',
+      title: 'Queue "Retry Failed" Action',
+      desc: 'Added a one-click Retry Failed button in Queue View to clear error flags across all upcoming tracks without having to reload playlists.',
     },
   ];
 
@@ -270,12 +266,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.3</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.4</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V463_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v463-${idx}`} className="flex items-start gap-2">
+                {V464_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v464-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}

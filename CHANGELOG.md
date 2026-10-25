@@ -2,6 +2,15 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.4 - 2026-10-25
+
+### Desktop Shell & Instance Guard
+- **Single-Instance Application Lock**: Integrated `tauri-plugin-single-instance` to prevent duplicate Noctune windows when launched from desktop shortcuts while minimized to the system tray. Clicking the shortcut now brings the existing window to the foreground, unminimizes it, and focuses it immediately.
+
+### Queue & Error Recovery
+- **Automatic Playback Error Clearance**: Tracks that successfully resolve and begin playing now immediately clear their `playbackError` flag in the queue store and localStorage, removing stale "Failed" badges and red borders.
+- **Queue "Retry Failed" Action**: Added a dedicated "Retry Failed" button in Queue View when failed tracks exist, allowing one-click clearance of error statuses across all upcoming tracks without having to reload the playlist.
+
 ## v4.6.3 - 2026-10-25
 
 ### Audio Resolver & Stream Reliability

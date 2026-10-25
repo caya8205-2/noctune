@@ -93,6 +93,7 @@ interface PlayerState {
   shuffleQueue: () => void;
   markTrackUnavailable: (trackId: string, message?: string) => void;
   dismissPlaybackNotice: () => void;
+  clearQueueErrors: () => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   toggleTrackDetails: () => void;
@@ -412,9 +413,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       playableTrack.originalSource = track.originalSource ?? (source === 'history' ? undefined : source);
       playableTrack.originalPlaylistId = track.originalPlaylistId;
       playableTrack.originalPlaylistName = track.originalPlaylistName;
-      const seedTrack = { ...track, queueSource: source };
+      const seedTrack = { ...track, queueSource: source, playbackError: undefined };
       const shouldAutoQueue = (options?.autoQueue ?? false) && (queue.length <= 1);
-      let playbackQueue = queue.map((queuedTrack) => queuedTrack.id === track.id ? seedTrack : queuedTrack);
+      let playbackQueue = queue.map((queuedTrack) =>
+        queuedTrack.id === track.id ? { ...queuedTrack, ...seedTrack, playbackError: undefined } : queuedTrack
+      );
       let playbackIndex = idx;
 
       if (shouldAutoQueue) {
@@ -527,6 +530,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       isLoading: false,
       progress: 0,
       duration: playableTrack.duration || 0,
+      queue: queue.map((queuedTrack, i) =>
+        i === targetIndex || queuedTrack.id === track.id
+          ? { ...queuedTrack, playbackError: undefined }
+          : queuedTrack
+      ),
       queueIndex: targetIndex,
     });
 
@@ -799,6 +807,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   dismissPlaybackNotice: () => set({ playbackNotice: null }),
+
+  clearQueueErrors: () => {
+    set((s) => ({
+      queue: s.queue.map((t) => (t.playbackError ? { ...t, playbackError: undefined } : t)),
+    }));
+    get().saveQueueState();
+  },
 
   reorderQueue: (fromIndex, toIndex) => {
     set((s) => {
