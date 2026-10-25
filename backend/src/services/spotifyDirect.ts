@@ -167,6 +167,7 @@ export async function ensureSpotifyDaemon(): Promise<boolean> {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       daemonProcess = proc;
+      pipeChildLogs(proc, 'spotstream');
 
       proc.on('exit', (code) => {
         console.warn(`[spotifyDirect] spotstream daemon exited with code ${code}`);
@@ -207,6 +208,29 @@ export async function ensureSpotifyDaemon(): Promise<boolean> {
   return daemonStartingPromise;
 }
 
+/** Forward a child process's stdout/stderr into the backend log.
+ *
+ * A piped but unread stdio stream fills its OS pipe buffer (~64 KB on Windows)
+ * and blocks the child on its next write. That is exactly how the spotstream
+ * daemon used to wedge permanently after a few minutes of playback: it kept
+ * logging to a stderr nobody drained until the write never returned.
+ */
+function pipeChildLogs(proc: ChildProcess, label: string) {
+  const forward = (chunk: Buffer) => {
+    const text = chunk.toString().trim();
+    if (!text) return;
+    for (const line of text.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (trimmed) console.info(`[${label}] ${trimmed}`);
+    }
+  };
+  proc.stdout?.on('data', forward);
+  proc.stderr?.on('data', forward);
+  // Swallow EPIPE/stream errors so a dying child cannot crash the backend.
+  proc.stdout?.on('error', () => {});
+  proc.stderr?.on('error', () => {});
+}
+
 /**
  * Cleanly terminates the persistent spotstream daemon when switching back to YouTube Match or on shutdown.
  */
@@ -226,6 +250,24 @@ export interface SpotifyAudioStreamResult {
   contentType: string;
   contentLength?: number;
   destroy: () => void;
+}
+
+// The daemon can end up alive-but-mute (dead AccessPoint session, wedged stream
+// loop). Without a first-byte deadline the HTTP response hangs forever and the
+// player sits on "Resolving audio..." with no error to recover from.
+const DAEMON_FIRST_BYTE_TIMEOUT_MS = 9000;
+
+function restartSpotifyDaemon(reason: string) {
+  console.warn(`[spotifyDirect] Restarting spotstream daemon: ${reason}`);
+  const proc = daemonProcess;
+  isDaemonReady = false;
+  daemonProcess = null;
+  try {
+    proc?.kill();
+  } catch {}
+  setTimeout(() => {
+    void ensureSpotifyDaemon().catch(() => {});
+  }, 700);
 }
 
 export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?: number): SpotifyAudioStreamResult {
@@ -298,12 +340,26 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
         stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
+    // ffmpeg is quiet at -loglevel error, but an undrained stderr pipe would
+    // still block it if it ever writes.
+    ffmpegProc.stderr?.resume();
 
     let silenceTimer: NodeJS.Timeout | null = null;
     let totalBytesReceived = 0;
     let isCompletedCleanly = false;
+    let firstByteTimer: NodeJS.Timeout | null = setTimeout(() => {
+      firstByteTimer = null;
+      if (totalBytesReceived > 0) return;
+      console.warn(`[spotifyDirect:${cleanId}] daemon sent no audio within ${DAEMON_FIRST_BYTE_TIMEOUT_MS}ms, restarting daemon`);
+      killStream();
+      restartSpotifyDaemon('no first byte for stream request');
+    }, DAEMON_FIRST_BYTE_TIMEOUT_MS);
 
     socket.on('data', (chunk: Buffer) => {
+      if (firstByteTimer) {
+        clearTimeout(firstByteTimer);
+        firstByteTimer = null;
+      }
       totalBytesReceived += chunk.length;
       if (silenceTimer) clearTimeout(silenceTimer);
 
@@ -364,6 +420,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
         activeSpotifyStreamKill = null;
       }
       if (silenceTimer) clearTimeout(silenceTimer);
+      if (firstByteTimer) clearTimeout(firstByteTimer);
       try {
         socket.destroy();
       } catch {}
@@ -409,6 +466,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  pipeChildLogs(spotstreamProc, 'spotstream');
 
   const ffmpegProc = spawn(
     'ffmpeg',
@@ -432,6 +490,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       stdio: ['pipe', 'pipe', 'pipe'],
     }
   );
+  ffmpegProc.stderr?.resume();
 
   let isDestroyed = false;
   const killProcesses = () => {

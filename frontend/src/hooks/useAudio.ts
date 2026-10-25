@@ -379,6 +379,16 @@ export function useAudio() {
       return;
     }
 
+    let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearStallTimer = () => {
+      if (stallTimer) {
+        clearTimeout(stallTimer);
+        stallTimer = null;
+      }
+    };
+    audio.addEventListener('loadedmetadata', clearStallTimer, { once: true });
+    audio.addEventListener('canplay', clearStallTimer, { once: true });
+
     apiUrl('/player/stream/' + targetId)
       .then((src) => {
         if (cancelled || !audioRef.current) return;
@@ -389,6 +399,19 @@ export function useAudio() {
           audio.src = src;
           audio.load();
         }
+        // A stream that returns headers but never sends bytes (wedged upstream
+        // daemon) fires no error event, so the spinner would spin forever.
+        // Force the normal recovery path when metadata never arrives.
+        clearStallTimer();
+        stallTimer = setTimeout(() => {
+          stallTimer = null;
+          if (cancelled || audio.readyState >= HTMLMediaElement.HAVE_METADATA) return;
+          console.warn('[audio] stream stalled: no metadata after 12s, forcing recovery', {
+            id: currentTrack.id,
+            src: audio.currentSrc,
+          });
+          audio.dispatchEvent(new Event('error'));
+        }, 12000);
         waitForAudioReady(audio)
           .then(() => {
             if (cancelled) return;
@@ -407,6 +430,7 @@ export function useAudio() {
       });
     return () => {
       cancelled = true;
+      clearStallTimer();
     };
   }, [
     currentTrack?.id,

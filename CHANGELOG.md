@@ -2,6 +2,17 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.6 - 2026-10-25
+
+### Spotify Direct Stream Stability
+- **Fixed the Deadlocking spotstream Daemon**: The daemon's `stderr` pipe was never drained, so once its log buffer filled (~64 KB) every write blocked and the daemon froze mid-session — new tracks then hung forever on "Resolving audio..." with zero bytes of audio, even for songs that had played fine minutes earlier. Daemon and FFmpeg output is now drained continuously and forwarded into the backend log.
+- **First-Byte Watchdog + Automatic Daemon Recovery**: A stream request that produces no audio within 9 seconds now aborts, restarts the daemon with a fresh session, and surfaces a real error instead of hanging indefinitely.
+- **Player Stall Recovery**: The player now detects a stream that returns headers but never delivers audio (12 seconds without metadata) and runs the normal recovery path — re-resolve, retry, then skip — instead of spinning indefinitely.
+
+### Diagnostics
+- **Rotating Session Logs**: Each launch moves the previous session's log to `backend.prev.log` instead of discarding it, so the last two sessions stay available next to `backend.log` in the app data folder.
+- **Daemon & FFmpeg Logs in One Place**: `spotstream` daemon and FFmpeg output now appear in `backend.log`, making stream failures diagnosable without external tools.
+
 ## v4.6.5 - 2026-10-25
 
 ### Lyrics Cache Correctness

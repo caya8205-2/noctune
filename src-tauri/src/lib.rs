@@ -301,9 +301,15 @@ pub fn run() {
                 _app.manage(BackendProcess(std::sync::Mutex::new(Some(child))));
 
                 // Persist backend stdout/stderr to a rotating log so silent sidecar
-                // exits can be diagnosed post-mortem. Log lives alongside the PID
-                // file in the app data dir and is truncated per session.
+                // exits can be diagnosed post-mortem. Each launch moves the previous
+                // session to backend.prev.log instead of destroying it, so the last
+                // two sessions stay available for diagnosis.
                 let backend_log_path = app_data_dir.join("backend.log");
+                let previous_log_path = app_data_dir.join("backend.prev.log");
+                if backend_log_path.exists() {
+                    let _ = std::fs::remove_file(&previous_log_path);
+                    let _ = std::fs::rename(&backend_log_path, &previous_log_path);
+                }
                 let log_file = std::fs::OpenOptions::new()
                     .create(true)
                     .write(true)

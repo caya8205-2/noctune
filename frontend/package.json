@@ -1,6 +1,6 @@
 {
   "name": "@noctune/frontend",
-  "version": "4.6.5",
+  "version": "4.6.6",
   "private": true,
   "type": "module",
   "scripts": {

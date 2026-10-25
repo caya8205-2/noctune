@@ -121,18 +121,18 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V465_HIGHLIGHTS = [
+  const V466_HIGHLIGHTS = [
     {
-      title: 'Lyrics Corrections Now Stick',
-      desc: 'Cache entries are no longer keyed by track duration, so a saved correction lands on the exact entry playback reads. Clearing or replacing lyrics finally replaces the wrong ones for good.',
+      title: 'Fixed the Streaming Daemon Freeze',
+      desc: 'The Spotify stream daemon could freeze mid-session and then hang every new track forever on "Resolving audio...". Its output pipe is now drained continuously, so it can no longer deadlock while logging.',
     },
     {
-      title: 'One Song, One Cache Entry',
-      desc: 'Artist aliases like "- Topic", "VEVO", and collaborator lists now normalize to the primary artist, so the same song stops splitting into three separate lyrics entries.',
+      title: 'Automatic Stream Recovery',
+      desc: 'A stream that produces no audio now restarts the daemon with a fresh session and retries instead of hanging. The player also stops waiting forever and falls back to the next option.',
     },
     {
-      title: 'Instant Lyrics Refresh',
-      desc: 'Saving or clearing lyrics refreshes the player view immediately instead of showing up to an hour of stale cached lines.',
+      title: 'Better Session Logs',
+      desc: 'Stream daemon and FFmpeg output now land in the backend log, and the previous session is kept as backend.prev.log instead of being deleted.',
     },
   ];
 
@@ -266,12 +266,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.5</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.6</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V465_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v465-${idx}`} className="flex items-start gap-2">
+                {V466_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v466-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
