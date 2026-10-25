@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle,
   Download,
@@ -96,6 +97,7 @@ const licenseGroups: Array<{ layer: string; items: Array<{ name: string; license
 ];
 
 export function SettingsView() {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<SettingsData | null>(null);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -440,6 +442,7 @@ export function SettingsView() {
     try {
       const res = await fetch(await apiUrl('/settings/cache/lyrics'), { method: 'DELETE' });
       if (!res.ok) throw new Error('Clear lyrics cache failed');
+      queryClient.invalidateQueries({ queryKey: ['lyrics'] });
       await loadSettings();
       setCacheMessage({ ok: true, text: 'Lyrics cache cleared.' });
     } catch (err) {

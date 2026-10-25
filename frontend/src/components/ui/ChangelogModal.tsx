@@ -121,18 +121,18 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V464_HIGHLIGHTS = [
+  const V465_HIGHLIGHTS = [
     {
-      title: 'Single-Instance Desktop Guard',
-      desc: 'Launching Noctune from a desktop shortcut while running in the system tray now cleanly restores and focuses the existing window instead of creating duplicate instances.',
+      title: 'Lyrics Corrections Now Stick',
+      desc: 'Cache entries are no longer keyed by track duration, so a saved correction lands on the exact entry playback reads. Clearing or replacing lyrics finally replaces the wrong ones for good.',
     },
     {
-      title: 'Auto-Clear Failed Queue Badges',
-      desc: 'Tracks that successfully play now automatically clear stale "Failed" error badges from the queue and storage.',
+      title: 'One Song, One Cache Entry',
+      desc: 'Artist aliases like "- Topic", "VEVO", and collaborator lists now normalize to the primary artist, so the same song stops splitting into three separate lyrics entries.',
     },
     {
-      title: 'Queue "Retry Failed" Action',
-      desc: 'Added a one-click Retry Failed button in Queue View to clear error flags across all upcoming tracks without having to reload playlists.',
+      title: 'Instant Lyrics Refresh',
+      desc: 'Saving or clearing lyrics refreshes the player view immediately instead of showing up to an hour of stale cached lines.',
     },
   ];
 
@@ -266,12 +266,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.4</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.5</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V464_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v464-${idx}`} className="flex items-start gap-2">
+                {V465_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v465-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}

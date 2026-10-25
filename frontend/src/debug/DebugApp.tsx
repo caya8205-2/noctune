@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef, createContext, useContext, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
   Search, Trash2, RefreshCw, Activity, Database, Terminal, AlertCircle, CheckCircle2,
@@ -1155,6 +1156,7 @@ function CachePanel() {
 }
 
 function CachedLyricsList() {
+  const queryClient = useQueryClient();
   const [entries, setEntries] = useState<Array<{ key: string; query: { title: string; artist: string; duration: number }; cachedAt: number; hasLyrics: boolean; synced: boolean; lineCount: number; provider: string; lyricsTitle: string; lyricsArtist: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1188,7 +1190,8 @@ function CachedLyricsList() {
       onConfirm: async () => {
         try {
           await debugApi.clearLyricsCache({ title: entry.query.title, artist: entry.query.artist, duration: entry.query.duration });
-          setEntries((prev) => prev.filter((e) => e.key !== key));
+          queryClient.invalidateQueries({ queryKey: ['lyrics'] });
+          await refresh();
         } catch (err) {
           setError((err as Error).message);
         }
@@ -1286,6 +1289,7 @@ function CachedLyricsList() {
 
 function LyricsPanel() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const queryClient = useQueryClient();
   const [snapshot, setSnapshot] = useState<any | null>(null);
   const [loadingSnap, setLoadingSnap] = useState(false);
 
@@ -1354,6 +1358,7 @@ function LyricsPanel() {
         duration: currentTrack?.duration || 0,
         candidate: cand,
       });
+      void queryClient.invalidateQueries({ queryKey: ['lyrics'] });
       setMsg({ ok: true, text: `Saved lyrics "${cand.trackName || cand.name || searchTitle}" to learned cache!` });
       await loadSnapshot();
     } catch (e) {
@@ -1377,6 +1382,7 @@ function LyricsPanel() {
         setMsg(null);
         try {
           await debugApi.clearLyricsCache({ title: currentTrack.title, artist: currentTrack.artist || '', duration: currentTrack.duration || 0 });
+          void queryClient.invalidateQueries({ queryKey: ['lyrics'] });
           setMsg({ ok: true, text: 'Lyrics cache cleared.' });
           await loadSnapshot();
         } catch (e) {

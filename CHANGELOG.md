@@ -2,6 +2,15 @@
 
 All notable Noctune changes are documented here.
 
+## v4.6.5 - 2026-10-25
+
+### Lyrics Cache Correctness
+- **Stable Cache Keys (Duration Drift Fix)**: Lyrics cache entries are no longer keyed by track duration. Resolvers report slightly different durations for the same track (e.g. 272s vs 274s), which previously split one song across multiple cache entries — a manual lyrics correction landed on a key that playback never read, so the wrong lyrics kept coming back after clearing the cache.
+- **Artist Alias Normalization**: `"- Topic"`, `"VEVO"`, `feat.` credits and collaborator lists are collapsed to the primary artist, so `NAOKI - Topic`, `NAOKI, Arc System Works`, and `NAOKI` all resolve to the same cache entry instead of three separate ones.
+- **Manual Corrections Purge Sibling Entries**: Saving lyrics manually now removes every other cache entry for the same title, preventing a stale wrong match from resurfacing on a later lookup. Clearing lyrics for a track also clears all artist-spelling variants.
+- **Legacy Cache Migration**: Existing `title::artist::duration` entries are re-keyed on first launch (newest variant wins) instead of being discarded, preserving saved lyrics while collapsing duplicates.
+- **Immediate UI Refresh**: Saving or clearing lyrics now invalidates the frontend lyrics query, so the player view shows the corrected lyrics right away instead of serving up to an hour of cached data.
+
 ## v4.6.4 - 2026-10-25
 
 ### Desktop Shell & Instance Guard

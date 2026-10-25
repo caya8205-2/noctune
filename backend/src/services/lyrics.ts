@@ -6,7 +6,7 @@ import type { LyricsCacheStore, LyricsResult } from '../types/index.js';
 
 const LRCLIB_BASE = 'https://lrclib.net/api';
 const USER_AGENT = 'Noctune (https://github.com/caya8205-2/Noctune)';
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const DATA_DIR = process.env.APP_DATA_DIR
   ? path.resolve(process.env.APP_DATA_DIR)
   : path.join(process.cwd(), 'data');
@@ -34,6 +34,19 @@ function normalize(value: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Artist strings drift between resolvers ("NAOKI - Topic", "NAOKI, Arc System
+// Works", "NAOKI"). Reduce them to the primary credit so one track maps to one
+// cache key instead of spawning a new entry per source.
+function normalizeArtist(value: string): string {
+  const stripped = (value || '')
+    .replace(/\s*[-–—]\s*topic\b/gi, ' ')
+    .replace(/\btopic\b/gi, ' ')
+    .replace(/\bvevo\b/gi, ' ')
+    .replace(/\s*(?:feat|ft|featuring|with)\b.*$/i, ' ')
+    .split(/\s*(?:,|&|\/|\+|\bx\b)\s*/i)[0] || '';
+  return normalize(stripped);
 }
 
 function compactTitle(value: string): string {
@@ -64,8 +77,11 @@ function titleCandidates(title: string): string[] {
   return [...new Set([compact, title, ...parts])].filter(Boolean);
 }
 
-function cacheKey(title: string, artist: string, duration: number): string {
-  return `${normalize(title)}::${normalize(artist)}::${Math.round(duration || 0)}`;
+// Duration is a matching signal, never an identity. Track durations drift by a
+// second or two between resolvers (272 vs 274), so folding it into the key made
+// a manual correction write to a different entry than the one playback read.
+function cacheKey(title: string, artist: string): string {
+  return `${normalize(title)}::${normalizeArtist(artist)}`;
 }
 
 function ensureDataDir() {
@@ -74,6 +90,25 @@ function ensureDataDir() {
 
 function emptyStore(): LyricsCacheStore {
   return { version: CACHE_VERSION, updatedAt: Date.now(), entries: {} };
+}
+
+function migrateLegacyEntries(entries: LyricsCacheStore['entries']): LyricsCacheStore {
+  const migrated: LyricsCacheStore['entries'] = {};
+  for (const entry of Object.values(entries)) {
+    const query = entry?.query;
+    if (!query?.title) continue;
+    const key = cacheKey(query.title, query.artist || '');
+    const existing = migrated[key];
+    // Multiple duration variants of the same song collapse into one key; the
+    // most recently written entry wins.
+    if (!existing || (entry.cachedAt ?? 0) >= (existing.cachedAt ?? 0)) {
+      migrated[key] = entry;
+    }
+  }
+  const store: LyricsCacheStore = { version: CACHE_VERSION, updatedAt: Date.now(), entries: migrated };
+  saveStore(store);
+  console.log(`[lyrics] migrated legacy cache keys (${Object.keys(entries).length} -> ${Object.keys(migrated).length})`);
+  return store;
 }
 
 function loadStore(): LyricsCacheStore {
@@ -85,8 +120,14 @@ function loadStore(): LyricsCacheStore {
     if (!parsed.entries || typeof parsed.entries !== 'object' || Array.isArray(parsed.entries)) {
       return emptyStore();
     }
+    if (parsed.version !== CACHE_VERSION) {
+      // Legacy stores keyed entries by title::artist::duration, which spawns one
+      // entry per resolver duration and strands manual corrections on a key that
+      // playback never reads. Re-key them instead of dropping the user's edits.
+      return migrateLegacyEntries(parsed.entries as LyricsCacheStore['entries']);
+    }
     return {
-      version: typeof parsed.version === 'number' ? parsed.version : CACHE_VERSION,
+      version: CACHE_VERSION,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
       entries: parsed.entries,
     };
@@ -222,9 +263,9 @@ function durationScore(candidate: LrclibLyrics, duration: number): number {
 
 function scoreCandidate(candidate: LrclibLyrics, title: string, artist: string, duration: number): number {
   const wantedTitles = titleCandidates(title).map(normalize).filter(Boolean);
-  const wantedArtist = normalize(artist);
+  const wantedArtist = normalizeArtist(artist);
   const trackName = normalize(candidate.trackName || candidate.name || '');
-  const artistName = normalize(candidate.artistName || '');
+  const artistName = normalizeArtist(candidate.artistName || '');
   let score = durationScore(candidate, duration);
 
   if (wantedTitles.includes(trackName)) {
@@ -285,7 +326,7 @@ async function searchLrclib(title: string, artist: string, retries = 1): Promise
 }
 
 export async function findLyrics(title: string, artist: string, duration: number): Promise<LyricsResult | null> {
-  const key = cacheKey(title, artist, duration);
+  const key = cacheKey(title, artist);
   const cached = getCachedLyrics(key);
   if (cached !== undefined) {
     if (cached && hasMissingRomanizedLines(cached)) {
@@ -377,15 +418,18 @@ export function clearLyricsCacheStore(): LyricsCacheStore {
   return _store;
 }
 
-export function deleteCachedLyricsEntry(title: string, artist: string, duration: number): boolean {
-  const key = cacheKey(title, artist, duration);
+export function deleteCachedLyricsEntry(title: string, artist: string, _duration: number): boolean {
   const store = getStore();
-  if (store.entries[key]) {
-    delete store.entries[key];
-    saveStore(store);
-    return true;
+  const titlePrefix = `${normalize(title)}::`;
+  let cleared = 0;
+  for (const existingKey of Object.keys(store.entries)) {
+    if (existingKey === cacheKey(title, artist) || existingKey.startsWith(titlePrefix)) {
+      delete store.entries[existingKey];
+      cleared += 1;
+    }
   }
-  return false;
+  if (cleared > 0) saveStore(store);
+  return cleared > 0;
 }
 
 export function hasRomajiContent(cand: LrclibLyrics): boolean {
@@ -440,7 +484,7 @@ export async function saveManualLyrics(
   duration: number,
   candidate: LrclibLyrics
 ): Promise<LyricsResult> {
-  const key = cacheKey(title, artist, duration);
+  const key = cacheKey(title, artist);
   const syncedLines = candidate.syncedLyrics ? parseSyncedLyrics(candidate.syncedLyrics) : [];
   const plainLines = candidate.plainLyrics ? parsePlainLyrics(candidate.plainLyrics) : [];
   const result = await addRomanizedLines({
@@ -456,11 +500,23 @@ export async function saveManualLyrics(
   });
 
   setCachedLyrics(key, title, artist, duration, result);
+  // Drop any sibling entry for the same song filed under a different artist
+  // spelling, otherwise a stale wrong match can still win on a later lookup.
+  const titlePrefix = `${normalize(title)}::`;
+  const prunedStore = getStore();
+  let pruned = false;
+  for (const existingKey of Object.keys(prunedStore.entries)) {
+    if (existingKey !== key && existingKey.startsWith(titlePrefix)) {
+      delete prunedStore.entries[existingKey];
+      pruned = true;
+    }
+  }
+  if (pruned) saveStore(prunedStore);
   return result;
 }
 
 export function getLyricsSnapshot(title: string, artist: string, duration: number) {
-  const key = cacheKey(title, artist, duration);
+  const key = cacheKey(title, artist);
   const entry = getStore().entries[key];
   return {
     key,
