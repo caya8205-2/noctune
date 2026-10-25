@@ -92,6 +92,9 @@ const licenseGroups: Array<{ layer: string; items: Array<{ name: string; license
     items: [
       { name: 'Tauri', license: 'Apache-2.0 OR MIT' },
       { name: 'Rust', license: 'MIT OR Apache-2.0' },
+      { name: 'innertube-rs', license: 'MIT' },
+      { name: 'spotstream', license: 'MIT' },
+      { name: 'librespot', license: 'MIT' },
     ],
   },
 ];
@@ -1461,7 +1464,7 @@ export function SettingsView() {
               Licenses
             </h2>
             <p className="text-xs text-muted leading-relaxed mt-2">
-              Noctune is MIT-licensed and bundles these third-party open source components.
+              Noctune is licensed under GPL-3.0-or-later — releases up to v4.6.6 were MIT — and bundles these third-party open source components. The full license text ships with the app as <span className="font-mono">LICENSE</span>.
             </p>
           </div>
         </div>

@@ -12,7 +12,7 @@ release artifacts.
 | Component  | Version | License    | Upstream |
 |------------|---------|------------|----------|
 | `yt-dlp`   | Windows build from [yt-dlp/yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases), fetched by `scripts/prepare-ytdlp.mjs` | Unlicense (public domain) | https://github.com/yt-dlp/yt-dlp |
-| `innertube`| `innertube-rs` 0.8.0 | MIT | https://crates.io/crates/innertube-rs — https://github.com/caya8205-2/innertube-rs |
+| `innertube`| `innertube-rs` 0.8.0 | MIT | https://crates.io/crates/innertube-rs |
 | `spotstream`| `spotstream` 0.1.0 | MIT | https://crates.io/crates/spotstream |
 
 ## Bundled in the application bundle
