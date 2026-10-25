@@ -43,13 +43,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../CHANGELOG.md",
-      "../backend/src/data/seed-model.json",
-      "resources/yt-dlp.exe",
-      "resources/innertube.exe",
-      "resources/spotstream.exe"
-    ],
+    "resources": {
+      "../CHANGELOG.md": "_up_/CHANGELOG.md",
+      "../backend/src/data/seed-model.json": "_up_/backend/src/data/seed-model.json",
+      "../LICENSE": "LICENSE",
+      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
+      "resources/yt-dlp.exe": "resources/yt-dlp.exe",
+      "resources/innertube.exe": "resources/innertube.exe",
+      "resources/spotstream.exe": "resources/spotstream.exe"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",
