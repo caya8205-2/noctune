@@ -121,18 +121,14 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V466_HIGHLIGHTS = [
+  const V467_HIGHLIGHTS = [
     {
-      title: 'Fixed the Streaming Daemon Freeze',
-      desc: 'The Spotify stream daemon could freeze mid-session and then hang every new track forever on "Resolving audio...". Its output pipe is now drained continuously, so it can no longer deadlock while logging.',
+      title: 'Tracks Play to the Real End',
+      desc: 'Spotify Direct streams were being cut off around 85-90% because the connection was closed while audio was still buffered, sending playback to the next song early. The last part of every track now plays through.',
     },
     {
-      title: 'Automatic Stream Recovery',
-      desc: 'A stream that produces no audio now restarts the daemon with a fresh session and retries instead of hanging. The player also stops waiting forever and falls back to the next option.',
-    },
-    {
-      title: 'Better Session Logs',
-      desc: 'Stream daemon and FFmpeg output now land in the backend log, and the previous session is kept as backend.prev.log instead of being deleted.',
+      title: 'No More Permanently Clipped Songs',
+      desc: 'A short read is no longer stored as a finished track, so a once-truncated song can never keep replaying clipped from memory.',
     },
   ];
 
@@ -266,12 +262,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.6</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.7</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V466_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v466-${idx}`} className="flex items-start gap-2">
+                {V467_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v467-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}

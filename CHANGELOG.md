@@ -10,6 +10,13 @@ the MIT License, and that grant stays valid for those copies
 (see [LICENSE-MIT-LEGACY](./LICENSE-MIT-LEGACY)). This is a license change only —
 no application behaviour changed.
 
+## v4.6.7 - 2026-10-25
+
+### Spotify Direct Playback Completeness
+- **Tracks No Longer End Around 85-90%**: The stream is now finished only after every byte the daemon already sent has been piped into the encoder. Previously the socket was destroyed while its receive buffer still held data, silently discarding the last 10-15% of the track so playback jumped to the next song early — with crossfade both on and off.
+- **Truncated Streams Are No Longer Cached**: A transfer now counts as "complete" only when at least 98% of the expected audio arrived (was 90%), and only completed tracks are written to the in-memory audio cache — so a short read can no longer be replayed from RAM as a permanently clipped song.
+- **Longer Mid-Stream Tolerance**: A stall in the middle of a track now waits 20 seconds for the CDN fetcher instead of 15, while a genuine end-of-track gap still closes within 2 seconds.
+
 ## v4.6.6 - 2026-10-25
 
 ### Spotify Direct Stream Stability

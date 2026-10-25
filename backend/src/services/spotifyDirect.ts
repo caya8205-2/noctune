@@ -363,28 +363,19 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       totalBytesReceived += chunk.length;
       if (silenceTimer) clearTimeout(silenceTimer);
 
-      // If we know expected PCM size, check if >= 90% has been transferred.
-      // If duration is unknown, require at least 1MB before applying the short silence timer.
+      // If we know expected PCM size, decide whether the transfer looks finished.
+      // 98% (not 90%) matters: the daemon reports a hair under the computed size,
+      // and a threshold that is too low declares a still-streaming track complete.
       const hasReceivedTarget = expectedPcmBytes > 0
-        ? totalBytesReceived >= expectedPcmBytes * 0.9
+        ? totalBytesReceived >= expectedPcmBytes * 0.98
         : totalBytesReceived > 1024 * 1024;
 
-      // When the song is essentially complete (>90%), a short 1500ms silence cleanly triggers EOF.
-      // If the song is still mid-stream (<90%), allow up to 15s for network/CDN buffering before aborting.
-      const silenceTimeoutMs = hasReceivedTarget ? 1500 : 15000;
+      // Essentially complete: short silence is enough to confirm EOF. Mid-stream:
+      // give the CDN fetcher 20s instead of cutting a healthy track short.
+      const silenceTimeoutMs = hasReceivedTarget ? 2000 : 20000;
 
       if (totalBytesReceived > 64000) {
-        silenceTimer = setTimeout(() => {
-          if (!isDestroyed) {
-            isCompletedCleanly = true;
-            try {
-              ffmpegProc.stdin?.end();
-            } catch {}
-            try {
-              socket.destroy();
-            } catch {}
-          }
-        }, silenceTimeoutMs);
+        silenceTimer = setTimeout(() => finishWhenDrained(hasReceivedTarget), silenceTimeoutMs);
       }
     });
 
@@ -413,6 +404,34 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     };
 
     let isDestroyed = false;
+    let drainTimer: NodeJS.Timeout | null = null;
+
+    // Finish the response only after every byte the daemon already sent has been
+    // piped into ffmpeg. Calling socket.destroy() while its receive buffer still
+    // held data discarded the tail of the track (playback used to stop around
+    // 85-90%), and that truncated buffer was then stored in the RAM cache.
+    const finishWhenDrained = (complete: boolean, attempt = 0) => {
+      if (isDestroyed) return;
+      const stillBuffered =
+        socket.readableLength > 0 || (ffmpegProc.stdin?.writableLength ?? 0) > 0;
+      if (stillBuffered && attempt < 600) {
+        if (drainTimer) clearTimeout(drainTimer);
+        drainTimer = setTimeout(() => finishWhenDrained(complete, attempt + 1), 50);
+        return;
+      }
+      // Only a genuinely complete transfer may be marked clean and cached; a
+      // short transfer must never be remembered as a finished track.
+      isCompletedCleanly = complete;
+      try {
+        ffmpegProc.stdin?.end();
+      } catch {}
+      setTimeout(() => {
+        try {
+          socket.destroy();
+        } catch {}
+      }, 200);
+    };
+
     const killStream = () => {
       if (isDestroyed) return;
       isDestroyed = true;
@@ -421,6 +440,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       }
       if (silenceTimer) clearTimeout(silenceTimer);
       if (firstByteTimer) clearTimeout(firstByteTimer);
+      if (drainTimer) clearTimeout(drainTimer);
       try {
         socket.destroy();
       } catch {}
