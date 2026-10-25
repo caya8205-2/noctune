@@ -9,23 +9,23 @@ the ones that matter for redistributing Noctune binaries.
 Binaries placed in `src-tauri/resources` are shipped inside the Windows and Linux
 release artifacts.
 
-| Component  | Version source        | License    | Notes |
-|------------|-----------------------|------------|-------|
-| `yt-dlp`   | `prepare-ytdlp.mjs`   | Unlicense  | Public domain. https://github.com/yt-dlp/yt-dlp |
-| `innertube`| `prepare-innertube.mjs` | MIT      | Built from https://github.com/caya8205-2/innertube-rs |
-| `spotstream`| `prepare-spotstream.mjs` | MIT    | Spotify Connect streaming helper crate |
+| Component  | Version | License    | Upstream |
+|------------|---------|------------|----------|
+| `yt-dlp`   | Windows build from [yt-dlp/yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases), fetched by `scripts/prepare-ytdlp.mjs` | Unlicense (public domain) | https://github.com/yt-dlp/yt-dlp |
+| `innertube`| `innertube-rs` 0.8.0 | MIT | https://crates.io/crates/innertube-rs — https://github.com/caya8205-2/innertube-rs |
+| `spotstream`| `spotstream` 0.1.0 | MIT | https://crates.io/crates/spotstream |
 
 ## Bundled in the application bundle
 
-| Component | License | Notes |
-|-----------|---------|-------|
-| Tauri | MIT OR Apache-2.0 | Desktop shell |
-| librespot | MIT | Spotify Connect playback |
-| better-sqlite3 | MIT | Local database |
-| Fastify | MIT | Backend HTTP server |
-| React, Vite, Tailwind CSS | MIT | Frontend |
-| lucide-react | ISC | Icons |
-| **audiomotion-analyzer** | **AGPL-3.0-or-later** | Audio visualizer. AGPL is compatible with GPLv3; the combined work must stay open source. https://github.com/hvianna/audioMotion-analyzer |
+| Component | License | Upstream |
+|-----------|---------|----------|
+| Tauri | MIT OR Apache-2.0 | https://crates.io/crates/tauri |
+| librespot | MIT | https://crates.io/crates/librespot |
+| better-sqlite3 | MIT | https://github.com/WiseLibs/better-sqlite3 |
+| Fastify | MIT | https://github.com/fastify/fastify |
+| React, Vite, Tailwind CSS | MIT | https://react.dev / https://vite.dev / https://tailwindcss.com |
+| lucide-react | ISC | https://github.com/lucide-icons/lucide |
+| **audiomotion-analyzer** | **AGPL-3.0-or-later** | https://github.com/hvianna/audioMotion-analyzer — AGPL is compatible with GPLv3, but the combined work must stay open source |
 
 All remaining npm dependencies are MIT, ISC, Apache-2.0, BSD, 0BSD, BlueOak, or
 CC-BY-4.0 (attribution only). None of them are proprietary or GPL-incompatible.
