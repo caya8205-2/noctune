@@ -121,14 +121,14 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
-  const V467_HIGHLIGHTS = [
+  const V468_HIGHLIGHTS = [
     {
-      title: 'Tracks Play to the Real End',
-      desc: 'Spotify Direct streams were being cut off around 85-90% because the connection was closed while audio was still buffered, sending playback to the next song early. The last part of every track now plays through.',
+      title: 'Licence Section Is Now Correct',
+      desc: 'Settings → Licenses still said Noctune was MIT-licensed. It now shows GPL-3.0-or-later, notes that releases up to v4.6.6 were MIT, and points at the LICENSE file bundled with the app.',
     },
     {
-      title: 'No More Permanently Clipped Songs',
-      desc: 'A short read is no longer stored as a finished track, so a once-truncated song can never keep replaying clipped from memory.',
+      title: 'Notices Match What Ships',
+      desc: 'innertube-rs, spotstream and librespot are now listed in-app, and the third-party notices link their crates.io pages with the exact bundled versions.',
     },
   ];
 
@@ -262,12 +262,12 @@ export function ChangelogModal() {
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.7</span>
+                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.6.8</span>
                 <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
               </div>
               <ul className="space-y-2 text-muted">
-                {V467_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v467-${idx}`} className="flex items-start gap-2">
+                {V468_HIGHLIGHTS.map((item, idx) => (
+                  <li key={`v468-${idx}`} className="flex items-start gap-2">
                     <span className="text-accent font-bold mt-0.5">•</span>
                     <span>
                       <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}

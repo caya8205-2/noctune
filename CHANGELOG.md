@@ -10,6 +10,13 @@ the MIT License, and that grant stays valid for those copies
 (see [LICENSE-MIT-LEGACY](./LICENSE-MIT-LEGACY)). This is a license change only —
 no application behaviour changed.
 
+## v4.6.8 - 2026-10-25
+
+### Licensing Accuracy
+- **Settings → Licenses No Longer Says MIT**: The in-app licence notice still claimed Noctune was MIT-licensed. It now states `GPL-3.0-or-later`, notes that releases up to v4.6.6 were MIT, and points to the `LICENSE` file that ships with the app.
+- **Complete In-App Component List**: `innertube-rs`, `spotstream` and `librespot` are compiled into the app but were missing from the in-app list; they are now listed as MIT alongside the rest.
+- **Third-Party Notices Point at crates.io**: `innertube-rs` and `spotstream` now link their crates.io pages directly, with the exact shipped versions (0.8.0 and 0.1.0).
+
 ## v4.6.7 - 2026-10-25
 
 ### Spotify Direct Playback Completeness
