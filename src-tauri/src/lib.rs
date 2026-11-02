@@ -1,17 +1,24 @@
+#[cfg(desktop)]
 mod innertube_service;
+#[cfg(desktop)]
 mod spotify_service;
+#[cfg(desktop)]
 mod youtube_channel;
 
+#[cfg(desktop)]
 use innertube_service::{
     get_video_metadata, get_watch_next_tracks, resolve_audio_stream, search_youtube_tracks,
     InnertubeState,
 };
+#[cfg(desktop)]
 use spotify_service::{
     spotify_auth_status, spotify_disconnect, spotify_get_radio_tracks, spotify_playlist_info,
     spotify_poll_pairing, spotify_start_pairing, spotify_track_info, SpotifySessionState,
 };
-use youtube_channel::{get_youtube_channel, get_youtube_playlist, get_channel_posts};
+#[cfg(desktop)]
+use youtube_channel::{get_channel_posts, get_youtube_channel, get_youtube_playlist};
 
+#[cfg(desktop)]
 use std::process::Command;
 #[cfg(all(not(debug_assertions), desktop))]
 use std::sync::Mutex;
@@ -24,6 +31,7 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     Emitter,
 };
+#[cfg(desktop)]
 use tauri::Manager;
 #[cfg(all(not(debug_assertions), desktop))]
 use tauri_plugin_shell::process::CommandChild;
@@ -52,6 +60,10 @@ fn open_external_url(url: String) -> Result<(), String> {
             .arg(&url)
             .spawn()
             .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = url;
     }
     Ok(())
 }
@@ -142,10 +154,6 @@ fn kill_backend_sidecar(app: &tauri::AppHandle) {
         }
     }
 }
-            }
-        }
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -167,29 +175,44 @@ pub fn run() {
 
     builder = builder
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
-        .manage(InnertubeState::new())
-        .manage(SpotifySessionState::new())
-        .invoke_handler(tauri::generate_handler![
+        .plugin(tauri_plugin_dialog::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .manage(InnertubeState::new())
+            .manage(SpotifySessionState::new())
+            .invoke_handler(tauri::generate_handler![
+                open_external_url,
+                kill_backend,
+                exit_app,
+                get_youtube_channel,
+                get_youtube_playlist,
+                get_channel_posts,
+                resolve_audio_stream,
+                get_video_metadata,
+                search_youtube_tracks,
+                get_watch_next_tracks,
+                spotify_auth_status,
+                spotify_start_pairing,
+                spotify_poll_pairing,
+                spotify_disconnect,
+                spotify_track_info,
+                spotify_playlist_info,
+                spotify_get_radio_tracks
+            ]);
+    }
+
+    #[cfg(mobile)]
+    {
+        builder = builder.invoke_handler(tauri::generate_handler![
             open_external_url,
             kill_backend,
             exit_app,
-            get_youtube_channel,
-            get_youtube_playlist,
-            get_channel_posts,
-            resolve_audio_stream,
-            get_video_metadata,
-            search_youtube_tracks,
-            get_watch_next_tracks,
-            spotify_auth_status,
-            spotify_start_pairing,
-            spotify_poll_pairing,
-            spotify_disconnect,
-            spotify_track_info,
-            spotify_playlist_info,
-            spotify_get_radio_tracks
-        ])
-        .setup(|_app| {
+        ]);
+    }
+
+    builder = builder.setup(|_app| {
             #[cfg(desktop)]
             if let Some(icon) = _app.default_window_icon() {
                 let show_i = MenuItemBuilder::with_id("show", "Show Noctune").build(_app)?;
@@ -378,12 +401,12 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|_window, _event| {
             #[cfg(desktop)]
-            if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            if _window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let _ = _window.hide();
                 }
             }
         });

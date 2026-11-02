@@ -2,352 +2,300 @@
 
 All notable Noctune changes are documented here.
 
-## v3.1.0 - 2026-07-25
+## License
 
-### Playback Blacklist & Disk Audio Cache Hardening
-- **Disk Audio Cache Deletion Fix**: Normalized Video ID prefixes (`youtube:`, `ytdlp:`, `spotify:`) in `audioFileCache` so clearing track cache or blacklisting a video physically deletes cached `.m4a`/`.webm` files from disk.
-- **Blacklisted Stream Rejection**: Enforced HTTP 404 stream rejection on `GET /player/stream/:videoId` for blacklisted video IDs, forcing HTML5 audio elements to load clean alternative streams.
-- **Blacklist Relation Formatting**: Enhanced `playbackBlacklist.ts` and Debug Dashboard UI to record and display exact relation mappings: `<Target Track: Artist — Title> ➔ 🚫 <Blacklisted Bad Match Title / Video ID>` so users can easily distinguish between the requested track and the blacklisted video ID.
+Starting with the release after `v4.6.6`, Noctune is licensed under
+**GPL-3.0-or-later**. Releases up to and including `v4.6.6` remain available under
+the MIT License, and that grant stays valid for those copies
+(see [docs/licensing-history.md](./docs/licensing-history.md)). This is a license change only —
+no application behaviour changed.
 
-### Matcher Keyword Hardening
-- **Keyword Penalty Bypass**: Expanded `keywordAllowed` in `youtubeMatcher.ts` to inspect title, artist, and search query. Target tracks containing terms like `sings`, `cover`, `karaoke`, `concert`, `live`, or date formats are no longer penalized by negative keyword filters.
+## v4.6.8 - 2026-10-25
 
-### History & Track Cache Preservation
-- **Metadata Preservation on Clear Cache**: Updated `clearTrackCache()` to strip stream URL properties while keeping track metadata (`lastPlayed`, `playCount`, `title`, `artist`) intact so tracks remain visible in History.
-- **History Row Deduplication**: Added deduplication in `getRecentTracks()` to group repeated plays of the same track into a single history entry with updated timestamp.
+### Licensing Accuracy
+- **Settings → Licenses No Longer Says MIT**: The in-app licence notice still claimed Noctune was MIT-licensed. It now states `GPL-3.0-or-later`, notes that releases up to v4.6.6 were MIT, and points to the `LICENSE` file that ships with the app.
+- **Complete In-App Component List**: `innertube-rs`, `spotstream` and `librespot` are compiled into the app but were missing from the in-app list; they are now listed as MIT alongside the rest.
+- **Third-Party Notices Point at crates.io**: `innertube-rs` and `spotstream` now link their crates.io pages directly, with the exact shipped versions (0.8.0 and 0.1.0).
 
-### Direct YouTube Resolution
-- **Direct Video ID Resolution**: Stripped `ytdlp:` and `youtube:` prefixes before video ID regex validation, ensuring direct YouTube search clicks resolve to exact Video IDs without unnecessary fallback query searches.
+## v4.6.7 - 2026-10-25
 
-### Debug Dashboard UI & Workflow Improvements
-- **Native In-App Confirmation Modal**: Replaced suppressed browser native confirmation dialogs in Electron/webview with a native React Noctune-styled `ConfirmModal` (`modal-backdrop`, `modal-panel`, `btn-danger`, `btn-accent`, `btn-ghost`) for all destructive debug actions while excluding instant non-destructive actions (`Import Telemetry JSON` & `Test ML Predictions`).
-- **Tools Tab Restructure**: Re-organized Debug Dashboard navigation into 4 clean sections: `Resolver`, `Lyrics`, `Status`, and `Tools` (incorporating Blacklist Manager, Audio Cache Browser, HTTP Request Log, and ML Recommendation Sandbox).
-- **Trained Dataset Badge**: Renamed `Base Model` badge to `Trained Dataset` with hover tooltip explaining it reflects both the pre-trained seed model and locally learned tracks from listening history. Track count now uses `Math.max(seedCount, storeTracksCount)` to accurately reflect the real dataset size.
+### Spotify Direct Playback Completeness
+- **Tracks No Longer End Around 85-90%**: The stream is now finished only after every byte the daemon already sent has been piped into the encoder. Previously the socket was destroyed while its receive buffer still held data, silently discarding the last 10-15% of the track so playback jumped to the next song early — with crossfade both on and off.
+- **Truncated Streams Are No Longer Cached**: A transfer now counts as "complete" only when at least 98% of the expected audio arrived (was 90%), and only completed tracks are written to the in-memory audio cache — so a short read can no longer be replayed from RAM as a permanently clipped song.
+- **Longer Mid-Stream Tolerance**: A stall in the middle of a track now waits 20 seconds for the CDN fetcher instead of 15, while a genuine end-of-track gap still closes within 2 seconds.
 
-### ML Dataset Management & Telemetry
-- **Official Pre-trained Seed Model**: Shipped `seed-model.json` (888 baseline tracks & 11,300+ pre-trained transition weights) directly with Noctune `v3.1.0`, providing instant local ML recommendations on first launch without cold start.
-- **Auto Disk Sync for Seed Model**: Added `mtimeMs` file timestamp tracking in `loadSeedModel()` so replacing or restoring `seed-model.json` on disk instantly invalidates RAM caches and reloads the dataset without requiring a server restart.
-- **Log Event Deduplication**: Added automatic `trackId_timestamp` deduplication in `importProdDataset()` so importing production datasets is idempotent and never creates duplicate play events.
-- **Clear ML Dataset Action**: Added `DELETE /debug/ml/dataset` endpoint and **Clear Dataset** button in Debug Dashboard ➔ Tools. Now properly unlinks `data/seed-model.json` from disk and resets all in-memory caches.
-- **Anonymous Dataset Telemetry Submission**: Added `POST /debug/ml/submit-telemetry` endpoint and **Help Improve ML Model** button in Debug Dashboard ➔ Tools to allow users to contribute anonymized listening datasets to Cloudflare Workers for future base model training.
-- **Cloudflare Worker Dataset Dashboard**: Deployed live dashboard at `noctune-dataset-collector.caya8205.workers.dev` with submission management (view, download individual/aggregated, delete entries with admin secret), stat cards, and deduplication disclaimer. Aggregation uses `Math.max` per transition weight to prevent duplicate inflation across multiple submissions.
+## v4.6.6 - 2026-10-25
 
-## v3.0.0 - 2026-07-24
+### Spotify Direct Stream Stability
+- **Fixed the Deadlocking spotstream Daemon**: The daemon's `stderr` pipe was never drained, so once its log buffer filled (~64 KB) every write blocked and the daemon froze mid-session — new tracks then hung forever on "Resolving audio..." with zero bytes of audio, even for songs that had played fine minutes earlier. Daemon and FFmpeg output is now drained continuously and forwarded into the backend log.
+- **First-Byte Watchdog + Automatic Daemon Recovery**: A stream request that produces no audio within 9 seconds now aborts, restarts the daemon with a fresh session, and surfaces a real error instead of hanging indefinitely.
+- **Player Stall Recovery**: The player now detects a stream that returns headers but never delivers audio (12 seconds without metadata) and runs the normal recovery path — re-resolve, retry, then skip — instead of spinning indefinitely.
 
-### Spotify & Network Auto-Recovery
-- **Spotify 401 Auto-Refresh & Retry**: Implemented automatic token refresh and 1-step retry in `spotifyApiFetch` to prevent `502 Bad Gateway` errors when Spotify credentials expire or account entitlement status changes.
-- **Real Connection Diagnostics**: Updated `testSpotifyCredentials()` in Settings to execute a live test query against Spotify Web API endpoints to verify actual connection status.
-- **YouTube Stream URL Recovery**: Improved automatic recovery for expired YouTube media links without applying permanent blacklisting.
+### Diagnostics
+- **Rotating Session Logs**: Each launch moves the previous session's log to `backend.prev.log` instead of discarding it, so the last two sessions stay available next to `backend.log` in the app data folder.
+- **Daemon & FFmpeg Logs in One Place**: `spotstream` daemon and FFmpeg output now appear in `backend.log`, making stream failures diagnosable without external tools.
 
-### Audio Visualizer Library & Centering
-- **6 Visualizer Presets**: Added `ncs` (Symmetrical NCS Ring), `wave` (Liquid Neon Wave), `orbit` (Orbital Particle Ring), `bars` (Dual Radial Bars), `ambient` (Ambient Halo Pulse), and `off`.
-- **Symmetrical Dual-Mirror Mapping**: Mapped frequency spectrum symmetrically with bass frequencies centered at top center, mirroring left and right 50:50.
-- **Smooth Pause Decay**: Visualizer frequency bars smoothly decay down to rest position when playback is paused before stopping the animation loop.
-- **100% CD Centering**: Fixed CD artwork container geometry so Ambient Glow, CD Image, Center Hole, and SVG Visualizer Ring share exact `(50%, 50%)` center coordinates.
-- **Live Preview in Settings**: Added an interactive vinyl preview box in Settings to test visualizer preset animations in real-time.
+## v4.6.5 - 2026-10-25
 
-### Performance & Desktop Installation
-- **GPU Usage Optimization**: Replaced heavy `backdrop-blur-xl` in `.surface-panel` cards with sleek solid dark styling, reducing GPU usage from 45% down to ~1-3%.
-- **NSIS Installer Target Folder Fix**: Added `installMode: "currentUser"` to `tauri.conf.json` so setup executables default to `AppData\Local\Programs\Noctune`.
+### Lyrics Cache Correctness
+- **Stable Cache Keys (Duration Drift Fix)**: Lyrics cache entries are no longer keyed by track duration. Resolvers report slightly different durations for the same track (e.g. 272s vs 274s), which previously split one song across multiple cache entries — a manual lyrics correction landed on a key that playback never read, so the wrong lyrics kept coming back after clearing the cache.
+- **Artist Alias Normalization**: `"- Topic"`, `"VEVO"`, `feat.` credits and collaborator lists are collapsed to the primary artist, so `NAOKI - Topic`, `NAOKI, Arc System Works`, and `NAOKI` all resolve to the same cache entry instead of three separate ones.
+- **Manual Corrections Purge Sibling Entries**: Saving lyrics manually now removes every other cache entry for the same title, preventing a stale wrong match from resurfacing on a later lookup. Clearing lyrics for a track also clears all artist-spelling variants.
+- **Legacy Cache Migration**: Existing `title::artist::duration` entries are re-keyed on first launch (newest variant wins) instead of being discarded, preserving saved lyrics while collapsing duplicates.
+- **Immediate UI Refresh**: Saving or clearing lyrics now invalidates the frontend lyrics query, so the player view shows the corrected lyrics right away instead of serving up to an hour of cached data.
 
-### Recommendations & Diagnostics
-- **Selectable Recommendation Engines**: Added setting to choose between Last.fm (default) and Hybrid Local ML recommendation model.
-- **Expanded Debug Dashboard**: Added Lyrics Cache Inspector, Playback Blacklist & Audio Cache Manager, and HTTP Request Log viewer.
-- **What's New Changelog Modal**: Added automatic release notes modal that pops up on first launch after an update.
+## v4.6.4 - 2026-10-25
 
-## v2.4.0 - 2026-07-23
-### feat: overhaul debug dashboard, audio cache download UX, permanent blacklist & player badge legend
+### Desktop Shell & Instance Guard
+- **Single-Instance Application Lock**: Integrated `tauri-plugin-single-instance` to prevent duplicate Noctune windows when launched from desktop shortcuts while minimized to the system tray. Clicking the shortcut now brings the existing window to the foreground, unminimizes it, and focuses it immediately.
 
-## v2.3.0 - 2026-07-23
-### fix: add missing queueSource values to RPC TrackSchema
+### Queue & Error Recovery
+- **Automatic Playback Error Clearance**: Tracks that successfully resolve and begin playing now immediately clear their `playbackError` flag in the queue store and localStorage, removing stale "Failed" badges and red borders.
+- **Queue "Retry Failed" Action**: Added a dedicated "Retry Failed" button in Queue View when failed tracks exist, allowing one-click clearance of error statuses across all upcoming tracks without having to reload the playlist.
 
-### fix: clear Discord RPC on app close to prevent lingering activity
+## v4.6.3 - 2026-10-25
 
-### feat(debug): enhance debug dashboard with lyrics inspector, match blacklisting, and learned cache
-- Add standalone 'Clear track cache' button to track action buttons in SearchView & PlaylistView
-- Add 'Blacklist match' button in Resolver Match debug panel to blacklist bad YouTube IDs
-- Allow 'Save as Match' for manual matcher searches without requiring a manual Spotify ID
-- Rename 'Match Cache' tab to 'Learned Cache' across debug dashboard
-- Add new 'Lyrics Inspector' tab in debug dashboard with manual LRCLIB search, 'Romaji Available' badge, and 'Save to Learned Cache'
-- Keep Track Details Sidebar visible when Debug Dashboard is open
-- Remove track limits on YouTube playlist imports by setting limit to MAX_SAFE_INTEGER
-- Update scripts/sync-version.js to synchronize src-tauri/Cargo.lock version
+### Audio Resolver & Stream Reliability
+- **Eliminated Toxic yt-dlp Bot-Check Fallback**: Stopped unauthenticated `yt-dlp` from being triggered when `innertube-rs` detects restricted, deleted, or login-required YouTube videos. This eliminates 5-second timeouts, deceptive "Sign in to confirm you're not a bot" error dialogs, and unwanted IP bot challenges.
+- **Primary-First Stream Recovery**: Reordered stream URL expiration recovery to prioritize the native `innertube-rs` engine over legacy scrapers, ensuring immediate 200/206 stream refreshes.
+- **Process Timeout Safeguard**: Added an explicit 15-second process timeout for child CLI resolver calls to prevent hanging background tasks from stalling playback or prefetch pipelines.
 
-## v2.2.3 - 2026-07-22
-### fix(v2.2.3): inject discord client for RPC
+### Playback Blacklist & Queue Navigation
+- **15-Minute Blacklist Expiration (TTL)**: Replaced permanent playback blacklisting with an automatic 15-minute TTL and on-the-fly expiration pruning. Temporary network hiccups or stream timeouts no longer permanently ban valid songs from your library.
+- **Strict Blacklist Admission Guard**: Restricted `markPlaybackFailed` to only trigger on verified permanent track unplayability rather than generic stream dropouts.
+- **Unstuck Queue Advancement**: Upgraded queue skip logic to evaluate entire remaining queue availability, ensuring deleted or restricted tracks are skipped seamlessly without playback stalling at queue edges or during shuffle.
 
-### 22 Jul 2026:
-- fix: add missing queueSource values to RPC TrackSchema
-- fix: clear Discord RPC on app close to prevent lingering activity
+## v4.6.2 - 2026-10-24
 
-## v2.2.2 - 2026-07-22
-### fix(v2.2.2): inject music service credentials into release builds 
-- forward Last.fm and Spotify repository secrets to the Tauri release build
-- prioritize CI environment credentials over local dotenv values and rebuild when they change
-- synchronize package and Tauri version metadata to 2.2.2
+### Stats & History Preservation
+- **Decoupled History Clearance from Listening Stats**: Fixed a critical defect where clicking "Clear" in History View erroneously reset all-time play counts (`playCount = 0`) across the entire library, wiping out user stats, top tracks, top artists, and daily listening activity. Clearing history now safely hides tracks from the recent playback view while keeping lifetime play counts and analytics 100% intact.
+- **Individual History Removal Safety**: Removing single tracks from history now conceals them from the recent list without erasing their play counts or removing them from top played statistics.
 
-## v2.2.1 - 2026-07-22
-### fix(v2.2.1): preserve playlist context and improve playback feedback
-- rebuild playlist queues from History and retain origin metadata through playback
-- record History at playback start, refresh open History view, and prioritize current queue source badges
-- show loading feedback immediately after track selection and reset track action visibility when playlist menus close
-- align Queue source badge spacing and synchronize app package versions to 2.2.1
+### Settings & Cache Management
+- **Persistent Cache Statistics Cards**: Fixed an issue in SettingsView where saving any setting (engine preferences, stream quality, or Discord RPC) caused the Cache statistics tiles (Tracks, Lyrics, Audio storage) to vanish from the UI. `PATCH /settings` now returns complete cache and resolver stats, and state updates merge previous data safely.
+- **Resilient Cache Metric Display**: Rendered cache metric tiles unconditionally in the DOM with loading fallbacks, preventing layout jumps or empty gaps while settings synchronize.
 
-## v2.2.0 - 2026-07-22
-### fix: align CI node-version with pkg target (24) and add --fallback-to-source
-- CI uses node-version 22 but pkg --target node24-win-x64, causing
-better-sqlite3 native addon ABI mismatch at runtime (NODE_MODULE_VERSION
-127 vs 137). Bump CI to Node 24 to match pkg target.
-- Also add --fallback-to-source so youtubei.js modules that fail V8
-bytecode generation are still included as plain source.
+## v4.6.1 - 2026-10-24
 
-### feat(v2.2.0): preserve playback sources and streamline track actions
-- Add source metadata to history and restore full playlist context when replaying playlist tracks.
-- Replace verbose queue badges with icon legends, move queue actions into a compact overflow menu, and remove Radio Mode from the player and API surface.
-- Keep player action menus scoped correctly and make playlist dropdowns stable above muted queue rows.
-- Sync all package and Tauri versions to 2.2.0.
+### Playback & Audio Transitions
+- **Seamless Gapless Crossfade**: Re-anchored crossfade evaluation to playback timeline progress (`timeupdate`) near the end of a track with strict `Number.isFinite` duration validation. Completely eliminates premature start-of-track crossfades, double-audio bugs, and unintended track skips.
+- **Hiccup-Free UI Handoff**: Added an atomic `transitionTrack` store action that updates track metadata, queue index, and history seamlessly while preserving active playback (`isPlaying: true`), eliminating the micro-pause/audio stutter when the UI switches tracks.
+- **Crossfade Cancellation Safety**: Added automatic crossfade cancellation on manual track selection or scrubber seeking, instantly resetting secondary audio elements and restoring full output volume.
 
-## v2.1.0 - 2026-07-15
-### feat: enhance equalizer with smooth drag & preset animation, persist settings, and interactive lyrics
-#### Equalizer
-- Replace native with custom mouse/touch drag handler
-that tracks vertical cursor position directly, eliminating erratic value jumps
-- Bypass React during drag: update thumb/fill DOM via refs with zero re-renders,
-giving buttery-smooth 1:1 cursor tracking
-- Bypass React during preset animation: apply target band positions directly
-to DOM, let CSS transitions animate, then commit to Zustand after 200ms
-- UseLayoutEffect re-applies target positions after eqPreset state update so
-preset buttons highlight instantly while sliders animate smoothly
-- Cancel pending preset animation on drag start to prevent conflicts
-- Disable CSS transitions on the actively dragged slider to avoid jank
+### Spotify Direct Reliability
+- **Stream Collision Prevention**: Added an active stream mutex in the backend to ensure previous TCP connections and FFmpeg transcoders on the `spotstream` daemon are cleanly terminated before starting a new track, preventing overlapping audio packets and session collisions when switching tracks mid-song.
+- **In-Memory Cache Integrity**: Gated in-memory WebM audio caching exclusively on complete tracks reaching natural EOF silence, preventing partial or mid-stream aborted tracks from polluting RAM cache, with automatic eviction for truncated buffers.
+- **Instant Playback Gating Elimination**: Populated optimistic track representations with Spotify Direct resolver metadata (`spotstream`) and stream URLs, allowing direct streams to start playing immediately in 0ms without getting blocked by legacy YouTube resolution checks.
 
-#### EQ & Player Settings Persistence (TanStack Query + localStorage)
-- Cache eqEnabled, eqBands, eqPreset under 'noctune-eq-cache' key
-- Cache playbackRate, crossfadeDuration under 'noctune-player-settings' key
-- Hydrate Zustand store from localStorage cache on mount
-- Write back to localStorage on changes (deduplicated via ref snapshot)
-- Expose as useQuery(['eq-settings']) and useQuery(['player-settings']) matching the HomeView caching pattern with staleTime: Infinity
+## v4.6.0 - 2026-10-24
 
-#### Lyrics (Spotify-like interactivity)
-- Add hover state tracking per line with underline decoration
-- Click any synced lyric line to seekAudio to its timestamp
-- Cursor pointer only on lines with valid timestamps
-- Active line excluded from hover underline to avoid visual clash
+### Desktop & System Integration
+- **Native System Tray & Background Playback**: Added a native system tray icon with minimize-to-tray capability. Closing the window now minimizes to the tray by default so music playback continues uninterrupted in the background. Left-clicking the tray icon toggles window visibility, while right-clicking opens a quick context menu with controls for Show Noctune, Play/Pause, Next Track, Previous Track, and Exit.
+- **Close to System Tray Preference**: Added a toggle switch in Settings (`Settings > Playback & engines`) allowing users to choose whether closing the window minimizes to the system tray or exits the application completely. Setting persists across sessions in `localStorage`.
+- **Windows SMTC Seeking & Realtime Timeline**: Added `seekto` action handling and `setPositionState()` synchronization to `navigator.mediaSession`. Dragging the scrubber on Windows 10/11 lock screen and volume flyout now seeks accurately, with the timeline position updating in real-time.
 
-### 15 Jul 2026, 6:45 UTC+8
-- Replaced the installer with a rebuilt package.
-- The initial CI build used Node.js 22, which caused bettersqlite3 to fail resulting in sidecar also failing
-- Version number remains v2.1.0 because no application code changed.
+### Playback & Audio Pipeline
+- **Dual-Element Audio Crossfade Engine**: Rebuilt the crossfade system using dual pre-routed audio elements (`audioA` and `audioB`) connected directly to the Web Audio `AudioContext` and `AnalyserNode`. Eliminates player freezing, preserves visualizer reactivity and equalizer filters during crossfade transitions, and ensures continuous auto-advance to subsequent queue tracks.
+- **Industry-Standard Previous Track Behavior**: Updated the Previous track button logic so that pressing previous when a song has played for more than 3 seconds restarts the current song from the beginning (`0:00`), matching Spotify and Apple Music behavior. Pressing it within the first 3 seconds navigates to the previous song in queue.
+- **Shuffle Self-Repetition Elimination**: Fixed the queue shuffle selection logic to exclude the currently playing track index from the randomized candidate pool, preventing back-to-back duplicate playback in smaller queues.
 
-## v2.0.0 - 2026-07-13
-### v2.0.0 — inject default spotify credentials for premium-tier api access
-- spotify web api now requires a premium account for metadata access (its been like that since March, i just found out about it).
-- built-in credentials (set via .env → build.rs → sidecar) provide seamless metadata lookup without requiring each user to bring their own api key. user-provided credentials in settings still take priority when set.
+### Queue & Database Reliability
+- **Queue Removal Desynchronization Fix**: Fixed an issue where removing the currently active track from Queue View shifted queue indices without updating playback, causing player desynchronization and skipped tracks. Removing the active track now immediately advances playback to the next item or cleanly resets the player if the queue is empty.
+- **Japanese Lyric Normalization & Bracket Cleaning**: Resolved a UTF-8 mojibake defect in LRCLIB title candidate generation where Japanese brackets `【` and `】` were corrupted, preventing lyric retrieval for anime and Japanese music. Added automatic bracket stripping to `normalize()` so video tags (e.g. `【MV】`) are stripped cleanly before searching.
+- **SQLite Connection Safety & Batch Querying**: Wrapped SQLite operations in a `withDb` helper ensuring safe `db.close()` invocation under `try...finally`. Optimized `getAllPlaylists()` to fetch all tracks across all playlists in a single batch query, replacing an N+1 query pattern.
+- **Console Log Cleanup**: Removed leftover development debug statements across `LocalFilesView.tsx` and `api.ts`.
 
-### 15 Jul 2026 Update:
-- Added a self-signed digital signature to the Windows installer.
+## v4.5.1 - 2026-10-05
 
-## v1.9.1 - 2026-07-11
-### fix(stats): make artist name clickable in top artists section
-- Add artist navigation button in TopArtistRow
-- Revert TopTrackRow click behavior to original (no artist/album clickable)
-- Revert HistoryView click behavior to original
+### Interface & Sidebar Enhancements
+- **Resizable Track Details Sidebar**: Made the right-hand Track Details sidebar draggable and resizable by dragging its left border, matching the navigation sidebar behavior. Width is persisted across sessions in `localStorage` (`noctune:track-details-width`, clamped between 240px and 520px, default 320px) with smooth 60fps interaction and instant double-click reset to default width.
+- **Dynamic Settings Callouts & Clean Copy**: Cleaned up hardcoded requirements text in Settings descriptions and replaced them with dynamic amber callout notices that automatically adapt depending on whether Spotify account pairing is active.
 
-### feat(local-files): improve scanning & metadata extraction
-- Add folder/file import progress UI (isScanning, scanError)
-- Implement metadata fallback chain: music-metadata → ffprobe → ffmpeg thumbnail extraction
-- Add server-side POST endpoint for cache file writing (Save As in Tauri)
+### Debug Dashboard & Inspector Accuracy
+- **Spotify Direct Cache Priority in Debug Inspector**: Fixed an issue in `/debug/resolver-snapshot` where Spotify tracks played via Spotify Direct erroneously returned stale YouTube match cache metadata (e.g. `MP4 · 128kbps`, `cached 24d ago`, and `Stream URL: stale`) if the track had previously been resolved or matched to YouTube prior to Spotify Direct. The endpoint now checks `isSpotifyDirectEnabled()` and authoritative Spotify Direct cache (`spotify:<id>`), returning the active 320kbps WebM stream metadata and fresh URL expiry while properly omitting inactive YouTube matcher entries.
+- **Audio Quality Display Formatting**: Updated `CurrentTrackSnapshot` in `DebugApp.tsx` to strip internal `spotify-` prefixes from `audioQuality` (e.g. `spotify-320kbps` -> `320kbps`), accurately presenting `WEBM · 320kbps` for native Spotify Direct playback.
 
-### feat(player): short-circuit local track playback
-- Skip network resolution for tracks with 'local:' prefix
-- Background fetch metadata/thumbnail on demand
-- Queue entire library when playing from local library
+## v4.5.0 - 2026-10-05
 
-### fix(settings): implement Save As dialog for cache export
-- Use Tauri save dialog on desktop
-- POST base64 cache to backend write-file endpoint
+### Spotify Direct Playback (Opt-In)
+- **Spotify Direct Playback Engine**: Added a new `spotifyPlayback` configuration (`'youtube-match' | 'spotify-direct'`) to `env.ts` and the `PATCH /settings` schema, defaulting to `youtube-match` (also overridable via the `SPOTIFY_PLAYBACK` environment variable). When `spotify-direct` is selected and both the `spotstream` binary and cached credentials are present (`isSpotifyDirectEnabled()`), `spotify:` tracks bypass YouTube matching entirely: `/player/resolve` returns a track with `resolverSource: 'spotstream'`, `audioFormat: 'webm'`, `audioQuality: 'spotify-320kbps'` and `source: 'spotify_direct'`, and `/player/stream/spotify:<id>` streams 320kbps Vorbis decoded to PCM (s16le, 44.1kHz, stereo) and transcoded by FFmpeg into WebM/Opus (160kbps VBR). If Spotify Direct resolution or streaming fails, the request falls through to the existing YouTube matching pipeline. YouTube and local tracks are unaffected.
+- **Native Spotify Session in Tauri Core**: Added `spotstream` v0.1.0, `librespot` v0.8.0 (`native-tls`), `bytes`, and `dirs` crates to `src-tauri`, with a new `spotify_service.rs` module holding a long-lived `SpotifySessionState` that is reused across IPC calls and re-initialized only when the session becomes invalid. Exposed Tauri commands: `spotify_auth_status`, `spotify_start_pairing`, `spotify_poll_pairing`, `spotify_disconnect`, `spotify_track_info`, `spotify_playlist_info`, and `spotify_get_radio_tracks`. IPC structs are serialized in camelCase, with snake_case fallbacks in the Settings pairing handler.
+- **RFC 8628 Device Pairing**: Added an inline pairing card in Settings that requests a device code, displays the user code and verification link, and polls until authorization completes. Credentials are stored at `%LOCALAPPDATA%\spotstream\cache\credentials.json` (overridable via `SPOTSTREAM_CACHE_DIR`) and are shared with the standalone `spotstream` CLI. **Disconnect** shuts down the active session and deletes the cached credentials.
+- **Persistent Warm Streaming Daemon**: The backend now spawns `spotstream daemon --port 3135`, waits for the `{"status":"ready"}` handshake (10s timeout), and requests audio via `STREAM <id>` over a localhost TCP socket piped directly into FFmpeg, avoiding a Spotify AccessPoint reconnect per track. The daemon is pre-warmed on backend boot and when Spotify Direct is saved, stopped when switching back to YouTube Match or on shutdown, and auto-restarted 2s after an unexpected exit while Spotify Direct remains enabled. If the daemon is not ready, a one-shot `spotstream stream <id>` process is used as fallback. Playback start latency dropped from ~4.5s to ~1.3s.
+- **Low-Latency FFmpeg WebM Pipeline**: Tuned the daemon stream transcoder with `-probesize 32`, `-analyzeduration 0`, `-application lowdelay`, `-frame_duration 20`, `-cluster_time_limit 50`, `-cluster_size_limit 2048`, and `-flush_packets 1` for faster first-chunk delivery. The `spotstream` daemon itself also lowers `AudioFetchParams.read_ahead_before_playback` to 150ms.
+- **Non-Blocking Spotify Direct Resolve**: `playTrack` in the frontend player store now constructs the playable Spotify Direct track synchronously (`audioUrl: /player/stream/spotify:<id>`) and syncs `/player/resolve` in the background, removing a ~330ms blocking round-trip. The active playback engine is cached in memory from `/settings` on load (`getSpotifyPlaybackSettingSync`) and updated on save. `/player/resolve` reuses cached Spotify metadata instead of blocking on Web API lookups.
+- **In-Memory Replay Cache**: Completed Spotify Direct streams larger than 64KB are kept in a bounded in-memory cache (`memoryAudioCache`, max 3 tracks) and served instantly on replay. Existing on-disk audio cache entries for a Spotify ID are served before starting a live stream.
+- **Bundled spotstream Binary**: `spotstream` is now bundled directly with Noctune across desktop installers (`src-tauri/resources/spotstream.exe`), prepared during build via `scripts/prepare-spotstream.mjs` and passed via `SPOTSTREAM_PATH` from Tauri to the backend sidecar. The obsolete temporary lookup in `%LOCALAPPDATA%\avpull\` has been removed.
+- **Platform Requirements & Limitations**: Spotify Direct requires a Spotify Premium account, the Tauri desktop app (pairing commands are unavailable in browser mode), and `ffmpeg` available in `PATH`. Live Spotify Direct streams are served with `Accept-Ranges: none`, so seeking is limited while a track is still streaming.
 
-Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>
+### Spotify Playlists & Recommendations
+- **Personalized Playlist Import Fallback**: `getSpotifyPlaylistTracks()` now falls back to the Mercury protocol via `spotstream playlist <id>` (15s timeout) when the Web API request fails (e.g. 404 on personalized playlists like Daily Mix or Discover Weekly). Returned track IDs are enriched through Web API `/tracks?ids=` in batches of 50, with minimal placeholder tracks if a batch fails. Requires the `spotstream` binary and paired credentials.
+- **Spotify Radio Recommendation Engine Option**: Added `spotify-radio` to the recommendation engine enum and Settings dropdown, auto-selected when choosing Spotify Direct, with a warning note when combined with YouTube Match. In this release, the backend `spotify-radio` engine builds autoqueue candidates from Spotify Web API search results for each seed track (falling back to YouTube search); the native `spotify_get_radio_tracks` command (librespot `get_radio_for_track` with `get_apollo_station` fallback) is exposed to the frontend but not yet wired into autoqueue.
 
-## v1.9.0 - 2026-07-09
-### fix(critical): resolve production build data persistence and local files playback
+### Navigation & Interface
+- **Resizable Navigation Sidebar**: The left desktop navigation sidebar is now resizable by dragging its right border, supporting any width between 180px and 480px. Custom widths are persisted in `localStorage` (`noctune:sidebar-width`). Includes a smooth 60fps drag handler with global text-selection shielding, a hover highlight, and double-click on the handle to instantly reset to the default 240px width.
+- **Debug Dashboard Engine Labels**: Updated engine labels in the Debug Dashboard to clean "Spotify" and "Innertube" descriptors.
 
-## v1.8.0 - 2026-07-02
-### fix(build): set NSIS installer/uninstaller icon + header/sidebar images
-- set bundle.windows.nsis.installerIcon and uninstallerIcon to icons/icon.ico (setup.exe was falling back to the NSIS default download-arrow icon since v1.0.0)
-- add nsis-header.bmp (150x57) and nsis-sidebar.bmp (164x314) for installer wizard
-- regenerate icon.icns from app-icon.png
+### Settings & Player Interface
+- **Reorganized Playback & Engines Panel**: Reordered the panel to Discord RPC, stream quality, Spotify Playback Engine dropdown, and recommendation engine, with the Spotify connection/pairing card placed directly above **Save Engine Settings**. The playback engine now requires an explicit save and shows an **Unsaved** badge for pending changes. Descriptions clarify that Spotify Direct applies only to Spotify tracks while YouTube and local tracks keep their own engines. The Disconnect button uses the `btn-danger` theme token.
+- **Unified Spotify Direct Source Badge**: Added a green `Spotify Direct (320k)` entry to the Full Player source badge and clickable legend (`sourceMeta.spotify_direct`), and updated Track Details sidebar source info to show `Spotify Direct (320kbps Vorbis via spotstream)`.
 
-## v1.7.2 - 2026-06-28
-### fix: Harden resolver matching
-- Harden Spotify-to-YouTube matching by requiring title evidence before accepting candidates or cached mappings, continuing fallback queries when early results are weak, rejecting stale cache entries after rescoring, and avoiding raw first-result fallback for Spotify playback.
-- Handle compact titles like I I I -> III, penalize Japanese karaoke results, and bump the resolver match cache version
+### Playback Reliability
+- **Duration-Aware Silence EOF & Mid-Track Advance Fix**: Fixed an issue where audio could abruptly stop mid-track and auto-advance to the next queue track. In `spotifyDirect.ts`, streaming silence detection now tracks expected PCM volume ($176,400\text{ bytes/sec}$ at 44.1kHz 16-bit stereo), granting up to 15s of network/CDN buffering leeway mid-stream and dropping to a 1.5s EOF timeout only after $\ge 90\%$ of audio is received. In `useAudio.ts`, eliminated the aggressive `timeupdate` watchdog that prematurely aborted playback.
+- **Mini Player & Player Bar Duration Accuracy**: Fixed duration mismatches in the player bar and mini player (e.g. showing `3:51` instead of `5:05`). `PlayerBar.tsx` and `useAudio.ts` now strictly prioritize authoritative track metadata over chunked WebM live buffer duration, preventing stream chunk headers from corrupting progress or triggering false track-end events.
+- **Single Active Spotify Stream (No Next-Track Prebuffering)**: Spotify Direct intentionally does not prebuffer the next Spotify track. Opening a second stream on the same Spotify session terminates the active stream, so Spotify tracks are excluded from `useAudio.ts` preloading and from `resolvePrefetchIds` while Spotify Direct is enabled. The in-memory cache stores full streams without truncation.
+- **YouTube Match Prefetch Parity**: `resolvePrefetchIds` skips Spotify tracks only when Spotify Direct is enabled, so YouTube Match users keep background matching and audio prefetching for upcoming Spotify tracks.
 
-## v1.7.1 - 2026-06-27
-### fix(debug): embed dashboard and harden resolver matching
-- Move the debug dashboard into the main app view instead of opening a second Tauri window, remove the obsolete open_debug_dashboard command, and keep sidecar shutdown async on main-window close.
-- Polish the debug dashboard typography, rename the header to Debug Dashboard, make the dashboard return to Settings, and combine playback quality with Discord Rich Presence under Playback & presence.
+## v4.4.3 - 2026-09-13
 
-## v1.7.0 - 2026-06-27
-### chore(release): bump version to 1.7.0 and add debug preview controls
-- Bump workspace and package versions to 1.7.0 in root package.json, package-lock.json, backend/package.json, frontend/package.json, src-tauri/Cargo.toml, and src-tauri/tauri.conf.json
-- Add backend debug preview endpoints in backend/src/routes/debug.ts:
-  - POST /debug/preview/start
-  - POST /debug/preview/stop
-  - GET /debug/preview/status
-- Implement frontend preview process management with Windows support and frontend workspace resolution
-- Add frontend/noctune-debug.bat helper to launch the preview server on Windows
-- Extend frontend settings UI in frontend/src/components/settings/SettingsView.tsx with debug dashboard status, start/open/stop controls, busy states, and messages
-- Add frontend API helpers in frontend/src/utils/api.ts for debug preview control
-- Polish UI button layout in frontend/src/components/player/TrackDetailsSidebar.tsx
+### Update Notification & Stacking Fixes
+- **Portal Toast Rendering & Stacking Fix**: Teleported the update notification toast directly into `document.body` via React Portal with root-level `z-[9999999]`. This decouples the toast from all application layout stacking contexts, ensuring it never renders beneath Settings view cards or the Track Details sidebar.
+- **Pre-Update Backend Termination Hook**: Added a native `kill_backend` Tauri command triggered before executing the update installer, coupled with a 600ms grace period in NSIS `PREINSTALL` hooks. This ensures the backend process is fully terminated and its executable file handle released before the installer attempts file replacement, preventing "failed to write sidecar" errors on auto-restart.
+- **Strict SemVer Version Check**: Enforced strict SemVer comparison before background downloading, ensuring the updater only downloads releases that are strictly newer than the running app's local version.
 
-## v1.6.1 - 2026-06-27
-### fix(matcher,log): improve Spotify→YouTube accuracy, fix pino mojibake, add debug dashboard
-- Stale cache rejection, three matcher scoring bugs, ICU-free logging,
-progressive query fallback, debug tooling, and per-track cache modal fix.
-- Stale match cache (youtubeMatcher.ts, settings.ts).
-- Pino mojibake fix (index.ts).
-- Matcher scoring bugs (player.ts, youtubeMatcher.ts).
-- Progressive query fallback (youtubeMatcher.ts).
-- Debug dashboard (new).
-- Home TTL cache (home.ts).
-- Per-track cache clear modal fix (TrackActionButtons.tsx,
-useClearTrackCache.tsx).
-- Version bump to 1.6.1 (package.json, backend/package.json,
-frontend/package.json, Cargo.toml, tauri.conf.json).
+### Debug Dashboard Visual & Layout Alignment
+- **Icon-Free Section Headers**: Removed decorative section header icons across Resolver, Lyrics, Status, and Tools tabs in `DebugApp.tsx`, standardizing on pure typographic hierarchy.
+- **Full-Width Responsive Cards**: Removed the rigid `max-w-4xl mx-auto` constraint in `DebugApp.tsx` and aligned content padding with `SettingsView` (`px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-8`), allowing card sections to dynamically adapt when the Track Details sidebar is opened or closed.
+- **Status Data Typography & ML Button Consistency**: Standardized status metrics and data values to solid white typography, and unified colorful ML action buttons to consistent neutral bordered controls while strictly preserving danger styling for delete actions.
 
-## v1.6.0 - 2026-06-25
-### feat: add personalized nightly mixes and queue polish
-- Add Last.fm-backed recommendation support, Nightly Mix home cards, cached mix refreshes, and autoqueue top-up behavior.
-- Introduce shared track action buttons with add-to-playlist support across track lists, player surfaces, queue, history, search, album, and artist views.
-- Add env-aware dev and Tauri launch scripts so backend/client ports can avoid conflicts with a running Noctune instance.
-- Update README, env examples, app version metadata, and package locks for the v1.6.0 release.
+### Interface & Header Refinements
+- **Quiet Section Headings**: Simplified section header copy across Search ("Find a track."), Settings ("Make a change, or just look around."), and Stats, removing superfluous descriptive text to maintain a calm, typography-first aesthetic.
 
-## v1.5.0 - 2026-06-18
-### release: prepare v1.5.0
-- Polish list layouts across search, playlist, queue, and history views for wider desktop windows.
-- Align album and artist typography with the refreshed Noctune visual system.
-- Prefetch lyrics when playback changes so cached and cold lyrics are ready before opening the full player.
-- Add a Preferred stream quality setting with Auto and High modes, persist it in backend settings, and make audio resolve, prefetch, URL cache, and local audio cache quality-aware.
-- Record audio format and quality metadata in cache and log resolver/cache decisions so Auto vs High can be verified from backend logs.
-- Bump workspace, frontend, backend, and Tauri versions to 1.5.0.
+## v4.4.2 - 2026-09-13
 
-## v1.4.0 - 2026-06-17
-### feat: prepare Noctune 1.4.0 stability release
-- Add Japanese lyrics romanization with Kuroshiro/Kuromoji and expose Romaji mode in the full player.
-- Require compatible backend capabilities when resolving desktop API ports, preserve explicit YouTube IDs during playback resolve and prefetch, and avoid rematching tracks while clearing per-track cache.
-- Fix previous-track seeking behavior, bump app/package/Tauri versions to 1.4.0, and refresh README tech stack/current feature documentation.
+### Backend Stability & Node 22 LTS Migration
+- **Eliminated Native SQLite GC Crash**: Fixed a fatal crash where the background backend process terminated silently with `Assertion failed: (env) != nullptr` in `node::RemoveEnvironmentCleanupHook` (exit code 134 / SIGABRT) when V8 garbage-collected prepared SQLite statements (such as loading playlists, history, or settings). Root-caused to an upstream Node 24.19+ regression where `node::ObjectWrap` cleanup hooks are invoked without an active environment. Migrated backend standalone binary compilation (`pkg`) and CI runtime targets from Node 24 to Node 22 LTS, completely eliminating the crash.
 
-## v1.3.0 - 2026-06-17
-### feat: expand browse and update workflows
-- Add album and artist browse routes plus dedicated frontend views, route-aware navigation history, and clickable track/artist/album entry points across player, sidebar, search, playlist, history, and queue surfaces.
-- Add per-track cache clearing with a confirmation modal and backend cleanup for learned metadata, Spotify matches, audio files, prefetch state, and failed playback IDs.
-- Add GitHub Releases update checks with startup toast, Settings controls, backend capability detection for mixed-version desktop backends, and native external URL opening for Spotify/update links without the deprecated Tauri shell opener.
-- Improve search result limits and cached-query merging, preserve player controls in narrower desktop full-player layouts, and remove the accidentally committed feedback.txt tester note.
-- Add the post-v1.3.0 roadmap covering the mobile app track and full-Rust nightly rewrite direction.
+### In-App Updater & Release Pipeline Polishing
+- **Pruned Redundant Release Assets**: Streamlined GitHub Release publishing to strictly upload user-facing installation packages (`.exe`, `.deb`, `.AppImage`) and `latest.json`, filtering out internal intermediate Debian archives (`control.tar.gz`, `data.tar.gz`) and loose `.sig` files already embedded inside `latest.json`.
+- **Smart CI Build Artifact Caching**: Added automatic artifact detection and reuse across workflow runs, allowing previous successful Windows/Linux builds for the same version to be downloaded instantly rather than recompiling from scratch.
 
-## v1.2.0 - 2026-06-16
-### feat: ui reskin
+## v4.4.1 - 2026-09-12
 
-## v1.1.0 - 2026-06-14
-### fix: playlist max tracks from 100 to 2000
+### In-App Background Updater
+- **Automated In-App Updates**: Implemented seamless background update checking and downloading via `tauri-plugin-updater`. Updates are checked on startup and every 5 hours, downloaded silently in the background, and presented with an understated toast offering a one-click "Restart Now" action that applies the update and relaunches Noctune without requiring manual downloads from GitHub.
+- **Synchronized Settings Update Panel**: Reworked the Updates card in SettingsView to display real-time background download progress and a dedicated "Restart & Install" action, replacing the legacy external link that redirected users to GitHub Releases.
+- **Automated Release Manifest Generation**: Added `scripts/generate-latest-json.mjs` and updated CI release workflow to produce signed `latest.json` manifests and `.nsis.zip` updater bundles alongside standard standalone installers.
 
-## v1.0.0 - 2026-06-08
-### Settings & Discord RPC
-- Added Discord Rich Presence (RPC) toggle in Settings, allowing users to enable or disable Discord activity status display.
+### Audio Streaming & Zero-Latency Transitions
+- **Android Progressive Stream Priority in innertube-rs**: Updated `innertube-rs` CLI stream selection to prioritize Android progressive format (`itag 18`) with `ratebypass=yes` over iOS adaptive streams (`itag 140`). GoogleVideo's CDN enforces a strict 1MB ceiling on iOS streams that rejected subsequent range requests with `HTTP 403 Forbidden`; progressive itag 18 streams support full open-ended range requests (`Range: bytes=0-`) and arbitrary seeks without cutoff or decode errors (`PIPELINE_ERROR_DECODE`).
+- **Prefetch Queue Sliding Window Eviction**: When advancing through the queue, unstarted prefetch jobs from previous sliding windows are now cleared from `prefetchQueue`, ensuring workers immediately process the current upcoming tracks rather than processing skipped songs.
+- **In-Flight Prefetch Await**: `/player/resolve` now awaits actively running prefetch jobs via `waitForInFlightPrefetch` instead of declaring a premature cache miss and launching a duplicate cold resolve.
+- **Media Abort Filtering on Rapid Skips**: Added filtering for `MediaError.MEDIA_ERR_ABORTED` (code 1) in `useAudio.ts` error listeners, preventing intentional stream cancellations during fast skips from triggering false-alarm error recovery cycles.
+- **Fixed Stream Quality Matching Logic**: Corrected an evaluation flaw in `cacheMatchesAudioQuality` where `auto` preference failed strict equality checks against `high` streams produced natively by `innertube-rs`. This previously caused fresh prefetched and cached streams to be rejected as quality mismatches, forcing redundant live refreshes and erroneously flipping track badges to blue (`Refreshed`).
+- **Removed Legacy iOS Stream Invalidation**: Removed the obsolete `isLimitedIosStream` check in `fetchAudioStream` from the `youtubei.js` era that aborted valid streams and fell back to `yt-dlp` or returned HTTP 502.
+- **In-Memory Prefetch Retained Across Handoff**: Prevented `consumePrefetch` from immediately evicting resolved tracks from the in-memory prefetch map during `/player/resolve`, allowing subsequent `/player/stream` proxy requests and queue polling to hit RAM cache. Pruned cleanly via URL expiration and a 50-item LRU cap.
+- **Clean Spotify URI Prefix Parsing**: Fixed Spotify track resolution regex (`replace(/^spotify:(track:)?/, '')`) in `resolvePlayableVideoId` and `/player/stream` so that Spotify URI tracks directly match stored cache entries without leaving residual `track:` prefixes.
 
-### Backend & Network
-- Added port fallback logic: if preferred port `3131` is busy, the backend scans up to 10 sequential ports and binds to the first available one.
+### Queue & Status Badge Alignment
+- **Prioritize Cached over Refreshed in QueueView**: Fixed badge rendering precedence in QueueView where `cacheStatus.refreshed` was evaluated before `cacheStatus.cached`. Cached queue tracks now consistently display emerald-green `Cached` badges matching the Full Player view.
 
-### Stability & Security
-- Hardened `yt-dlp` search resolver with `try-catch` blocks to prevent crashes on network failures or missing binaries.
-- Added search query sanitization to filter out control and dangerous shell characters before querying `yt-dlp`.
+### Installer & Sidecar Reliability
+- **NSIS Backend Lifecycle Hooks**: Added `PREINSTALL` and `PREUNINSTALL` hooks to `installer-hooks.nsh` to automatically terminate windowless `noctune-backend.exe` sidecar instances before file copy or removal. This eliminates installation failures caused by locked binaries and prevents orphaned processes from occupying port 3131 across updates.
+- **Persistent Sidecar Logging**: Configured Tauri sidecar process runner in `lib.rs` to persist stdout/stderr and termination exit codes/signals into `backend.log` within the user's application data directory for post-mortem diagnostics.
 
-## v1.0.0-beta.5.3 - 2026-06-01
-### Playback and Resolver
-- Improved stream recovery when YouTube audio URLs expire or return forbidden responses.
-- Added validation for resolved YouTube stream URLs and skipped limited iOS stream URLs that can fail during playback.
-- Kept playback recovery closer to the previous position instead of restarting from the beginning when possible.
-- Returned stream proxy failures as safe JSON responses.
+### Dependency Hardening
+- **Pruned Unused Fastify Static**: Removed unused `@fastify/static` dependency and resolved 18 transitive vulnerabilities across `fast-uri`, `browserslist`, and build tooling.
 
-### Search and Matching
-- Improved Spotify-to-YouTube scoring with stronger official/MV/original signals.
-- Added artist-to-channel matching and stronger duration weighting.
-- Added penalties for acoustic versions and related cover variants.
-- Refreshed Spotify-to-YouTube match cache version so improved scoring can take effect.
+## v4.4.0 - 2026-09-11
 
-### Discord RPC
-- Refined Discord activity display so Noctune stays as the listening app while title, artist, and album metadata are shown in the right places.
-- Cleared activity while playback is paused.
+### Home & Visual Design Rework
+- **Icon-Free Section Headers**: Removed decorative Lucide icons from all Home section headers (Continue Listening, Nightly Mix, Recently Played, Your Playlists, New Releases) and Stats panel headers (Top Tracks, Top Artists). Section titles now rely purely on typographic hierarchy, eliminating the repetitive icon-per-section pattern across the interface.
+- **Unified Home Header**: Replaced the bespoke "Welcome" hero block with the standard view header pattern used across History, Queue, Stats, and Search — a small uppercase accent section label (`HOME`) paired with a large bold page title (`Your library.`).
+- **Text-First Quick Shortcuts**: Rebuilt the Home shortcut pills as neutral text-only chips. The previous design paired every shortcut with its own Lucide icon and a distinct accent color per pill (rose, amber, indigo, emerald, cyan), which produced an unmotivated rainbow accent row; shortcuts now share a single neutral bordered style with a subtle hover state.
+- **Typographic Cover Fallbacks**: Replaced oversized Lucide placeholder icons (Sparkles, ListOrdered) on empty mix/playlist covers with a large serif initial letter derived from the item name, keeping cover placeholders quiet and content-aware.
+- **Simplified Empty States**: Removed the decorative icon from the Recently Played empty state.
 
-### UI and Responsive Layout
-- Restored desktop full-player behavior with the track details sidebar and bottom mini player.
-- Kept inline full-player controls and embedded details limited to mobile layouts.
-- Made Search, History, Playlist, and Home track rows/cards play with one click.
-- Removed redundant hover play buttons so row actions stay cleaner and closer to duration text.
-- Updated remaining old scaffold naming to Noctune.
+### Queue Drag & Drop Fix
+- **Pointer-Based Queue Reordering**: Replaced the broken HTML5 drag-and-drop (`draggable`/`onDragStart`/`onDrop`) in QueueView with the pointer-event-based reordering system already proven in PlaylistView edit mode. Dragging the grip handle now live-reorders the queue as the pointer hovers over target rows via `elementFromPoint` hit-testing against `data-queue-track-index` rows, with incremental `reorderQueue` commits that correctly adjust the active `queueIndex`. Includes visual drag feedback: the dragged row scales down and dims, and the drop target row highlights with an accent border.
 
-### Packaging and Cleanup
-- Removed obsolete setup script and kept generated/local artifacts out of source control.
+## v4.3.1 - 2026-09-11
 
-## v1.0.0-beta.5 - 2026-05-30
-### Playback and Resolver
-- Moved the main playback path to a faster local YouTube resolver powered by `youtubei.js`, with `yt-dlp` kept as fallback.
-- Improved cold playback and seeking behavior for uncached tracks.
-- Added same-origin backend stream proxy behavior needed for desktop playback and Web Audio visualization.
-- Added local audio file caching with background cache jobs, cache status badges, cache size limits, and audio cache clearing.
-- Added temporary failed-stream blacklist so broken candidates are skipped after playback failures.
-- Added resolver diagnostics for active resolver, prefetch state, failed IDs, and Spotify match cache.
+### Backend Process Lifecycle & Stability Hardening
+- **Discord RPC Signal Handler Fix**: Restored explicit `process.exit(0)` calls in `SIGINT`/`SIGTERM` handlers after `destroyClient()` completes. In v4.2.0, removing these exit calls caused the backend to enter a limbo state when child processes (innertube.exe, yt-dlp.exe) propagated termination signals to the parent, resulting in silent backend crashes after successful startup.
+- **Child Process Signal Isolation**: Added `detached: true` and `proc.unref()` to `innertube.exe` spawn configuration in `innertubeCli.ts`. This isolates child processes into their own process group, preventing console signals (CTRL_CLOSE_EVENT, SIGTERM) from propagating upward and killing the parent backend process during audio resolution and prefetch operations.
+- **Root Cause Resolution**: Fixes the "backend dies after startup gate" issue introduced in v4.2.0 where the sidecar would successfully respond to `/status` (allowing frontend to proceed to Home) but then silently terminate seconds later when startup prefetch spawned innertube.exe for the first time.
 
-### Search and Matching
-- Added direct engine switching inside Search between YouTube and Spotify.
-- Added URL-aware search for YouTube and Spotify links.
-- Improved Spotify-to-YouTube scoring with penalties for reactions, reviews, live/tour versions, covers, karaoke, instrumental versions, piano covers, drum covers, backing tracks, sheet music, nightcore, sped-up/slowed edits, and unrelated clips.
-- Added Spotify-to-YouTube match cache clearing.
-- Added Search scoring debug mode with candidate scores and scoring reasons.
-- Added recent searches.
-- Added fallback action to try the other engine when Search has no results.
+## v4.3.0 - 2026-09-03
 
-### Queue and Playlists
-- Added draggable queue reorder with visual drag handles.
-- Added queue actions for shuffle, hide failed tracks, remove played tracks, remove individual queue items, and clear queue.
-- Added queue badges for manual/search/playlist/autoqueue/cache status.
-- Changed playlist playback so playing any track from a playlist keeps the full playlist context instead of replacing the queue with autoqueue.
-- Added Play all for playlists.
-- Added playlist track filtering and sort modes.
-- Added playlist edit tools: rename, cover upload, cover crop with grid overlay, WebP conversion, reorder, and remove tracks.
-- Added Liked Songs behavior and like buttons across key views.
-- Added Spotify and YouTube playlist import with better loading and error feedback.
+### Startup & Connection Reliability
+- **In-App Startup Gate**: Added a dedicated startup gateway component that verifies backend engine health via `/status` before mounting application views and queries. This completely eliminates cold-start race conditions and empty interface states where UI loaded before the sidecar finished initializing.
+- **Understated Startup Surface**: Designed a clean, distraction-free startup screen matching Noctune's native `#08090d` surface with a centered logo, functional draggable titlebar with window controls, and quiet progressive status indicators if initialization takes longer than expected.
+- **Fast Port Discovery & Resilient Retries**: Optimized backend connection discovery in `api.ts` to check development and production ports concurrently with low-latency polling (250ms), and configured query retry policies to gracefully await the audio engine without user disruption.
 
-### Lyrics and Player UI
-- Added LRCLIB synced lyrics support with local lyrics cache.
-- Added full player view with album disk, lyrics space, and adaptive circular visualizer.
-- Added visualizer color adaptation from current album art.
-- Improved progress and volume sliders for easier seeking and control.
-- Added track details sidebar with Spotify metadata when available and local resolver details otherwise.
+### Release Notes & UI Polishing
+- **Rendered Markdown Changelog Viewer**: Replaced the raw monospace `<pre>` block in the `View Full CHANGELOG.md` dropdown with a lightweight built-in inline markdown parser. Supports version dividers, category headings, bold text, inline code backticks, and external links rendered with native Noctune theme typography.
+- **Markdown Formatting in Release Highlights**: Integrated the inline markdown renderer directly into modal release highlight titles and descriptions, enabling rich inline code, bold accents, and links across release notes.
 
-### History and Library
-- Added History view and made it record actual playback instead of prefetch activity.
-- Updated history recording to preserve Spotify metadata when Spotify tracks are resolved to YouTube streams.
-- Added single-item history removal and full history clearing.
-- Improved home view cards, playlist cards, and now-playing layout.
+## v4.2.0 - 2026-09-02
 
-### Settings and Diagnostics
-- Reworked Settings sections for Spotify credentials, diagnostics, cache, about, and version info.
-- Clarified that Spotify credentials are used for metadata search, playlist import, and release discovery, not Spotify playback.
-- Added cache import/export, full cache clear, audio cache clear, and audio cache limit controls.
-- Added custom Search scoring debug toggle.
-- Updated displayed version to `v1.0.0-beta.5`.
+### YouTube Channel Community Posts & Artwork Viewer
+- **YouTube Channel Posts Tab Support**: Added native channel Community Posts view in `ArtistView`, exposing posts, announcements, multi-image collages, video links, like counts, and published timestamps with automated poll filtering.
+- **Paginated Posts Loading via InnerTube**: Integrated native `/browse` endpoint routing (`params: "EgVwb3N0c_IGBAoCSgA%3D"`) in `youtube_channel.rs` with robust recursive parsing across initial browse trees and `appendContinuationItemsAction.continuationItems` for smooth "Load More" pagination.
+- **Interactive Artwork Lightbox for Community Posts**: Connected post images to `ArtworkLightboxModal`, allowing high-resolution inspection, panning, zooming, and direct image downloading with quick backdrop/outside-click dismissal.
+- **Full-Resolution Uncropped Artwork Resolution**: Enhanced `ArtworkLightboxModal` with `getHighResolutionArtworkUrl` to strip Google/YouTube CDN square cropping parameters (`-c`, `-fcrop64`) and upgrade URLs to `=s0`, serving original uncropped aspect ratios (full landscape or portrait) and original source dimensions upon opening the lightbox.
+- **Channel Navigation & In-Process Resolution**: Updated YouTube metadata and channel resolution in `api.ts` and `innertubeCli.ts` to directly recognize `@handle` and `UC...` identifiers, resolving channels in-process via Tauri without redundant HTTP requests.
 
-### Desktop and Packaging
-- Improved Tauri desktop backend wiring and production API targeting.
-- Fixed desktop audio playback issues related to stream source/CORS behavior.
-- Kept local app data out of git while allowing development data to regenerate automatically.
+### Features & Privacy Controls
+- **User Telemetry Management & Token-Based Retraction**: Introduced user data privacy controls for anonymous ML listening telemetry submissions. When contributing listening data via "Help Improve ML Model", a unique device delete token is securely generated and persisted locally in `telemetry-submission.json` within AppData Roaming, with only its SHA-256 cryptographic hash stored and verified on Cloudflare Worker to authenticate retraction requests.
+- **In-App Telemetry Deletion & Token Export**: Added dedicated "Delete My Upload" and "Copy Delete Token" actions directly within the ML Recommendation Sandbox in Debug Dashboard (Tools tab), allowing users to retract submitted datasets at any time without admin intervention.
+- **Automated Cloudflare Telemetry Sync**: Implemented background remote status verification in `getTelemetryStatus()`. When opening the dashboard or refreshing, Noctune checks if the recorded key exists on Cloudflare Worker; if deleted externally (e.g. via dashboard or token), Noctune purges the local record automatically and syncs the UI instantly.
+- **Collector Web Dashboard Shortcut**: Added a direct external link button to the Cloudflare Dataset Collector Web Dashboard in the Debug Dashboard Tools tab header, allowing users to quickly access the web interface and verify or retract tokens with one click.
 
-## v1.0.0-beta.4 and Earlier
+### Cloudflare Worker & Collector Architecture
+- **Dual-Path Dataset Collector Authorization**: Updated Cloudflare Worker collector (`worker.js`) to support both master administrative keys (`X-Admin-Secret`) and hashed user delete tokens (`X-Delete-Token`) using Web Crypto SHA-256 (`clientTokenHash`).
+- **Dashboard Collector UI Refactoring**: Rebuilt the embedded Cloudflare Worker dashboard HTML, CSS, and client-side JavaScript into a structured, readable multi-line layout with clean DOM nesting.
 
-- Initial Noctune desktop player foundation.
-- Spotify metadata search and YouTube playback resolver.
-- Smart autoqueue and prefetch system.
-- Local playlists, liked songs, and cache learning basics.
-- Initial Tauri desktop packaging and app icon.
+## v4.1.2 - 2026-09-01
+
+### Bug Fixes & Visual Polish
+- **Production Sidecar Playback Stability Fix**: Fixed a critical issue where child processes (such as `innertube.exe` and `yt-dlp.exe`) exiting after audio stream resolution triggered signal propagation to Discord RPC handlers in the backend sidecar, prematurely invoking `process.exit(0)`. Removed premature exit calls from signal handlers and attached defensive stream error handlers in `innertubeCli.ts`.
+- **Silent Application Shutdown (Windows)**: Added `CREATE_NO_WINDOW` execution flag (`0x08000000`) to `taskkill` in `kill_backend_sidecar`, preventing a brief empty CMD console window from flashing when closing Noctune on Windows.
+- **Frontend Startup Connection Retries**: Increased initial connection attempt window in `api.ts` from 1s (5 retries) to ~6s (15 retries × 400ms) to ensure smooth communication during cold-start sidecar initialization.
+- **Removed Deprecated `youtubei.js` from Sidecar Build**: Completely purged `youtubei.js` from `backend/package.json` dependencies, eliminating `pkg` packaging warnings during sidecar compilation.
+- **Installer & Icon Branding Refresh**: Updated NSIS installer graphics (`nsis-sidebar.bmp`, `nsis-header.bmp`) and desktop application icons (`icon.ico`, `icon.png`, `icon.icns`) with the new sleek full-black background logo.
+
+## v4.1.1 - 2026-08-31
+
+### Bug Fixes & Binary Bundling
+- **Bundled `innertube-rs` CLI Adapter**: Bundled the standalone `innertube-rs` v0.8.0 binary into app resources (`%LOCALAPPDATA%\Noctune\resources\`) and integrated `innertubeCli.ts` into the backend streaming pipeline. Fixes an issue in v4.1.0 where the missing bundled CLI caused audio stream resolving to fall back to yt-dlp.
+- **Removed Legacy `youtubei.js`**: Completely purged deprecated `youtubei.js` dependency from backend resolution paths.
+
+## v4.1.0 - 2026-08-29
+
+### Core Performance & YouTube Engine Overhaul
+- **Pure Rust `innertube-rs` YouTube Audio Resolver**: Upgraded the core YouTube audio streaming resolver to native Rust [`innertube-rs`](https://github.com/caya8205-2/innertube-rs) with embedded QuickJS (`rquickjs`) deciphering, slashing stream startup latency and memory overhead.
+
+### Recommendation & Playlist Improvements
+- **20-Track Full Length Nightly Mixes & Smart Playlists**: Expanded default track generation count across all Nightly Mixes and Smart Playlists from 8 to 20 tracks.
+- **12-Hour Smart Playlist Stability**: Extended smart playlist expiry (`staleTime`) from 5 minutes to 12 hours (and 7 days for Discover Weekly) with `refetchOnWindowFocus: false` to prevent unwanted continuous re-generation.
+- **Distinct Artist Clusters in Nightly Mixes**: Enforced temporal clustering across all 4 personal mixes (Top Artist Drift, Recent Playback Drift, Deep Rotation, and Nightly Discovery) with guaranteed unique artist seeds.
+- **Strict Genre & Artist Coherence**: Refined the personal mix generator to prioritize contextually coherent live recommendations from seed tracks, limiting local history dumps to high-affinity matches to prevent jarring genre mashups.
+- **Single-Mix Targeted Refresh**: Enabled independent single-mix regeneration when clicking "Refresh mix", preserving cached tracks and states across all other personal mixes.
+- **Adaptive Shuffle Mode AutoQueue Top-Up**: Implemented an adaptive background playback counter that automatically triggers autoqueue recommendations once the current queue cycle completes, correctly accounting for repeated tracks.
+- **Dynamic AutoQueue Entropy Scoring**: Injected bounded score variance into candidate selection to ensure fresh, distinct recommendations on every playback session without genre drift.
+- **Single Track Queue Seeding**: Refined search view playback to seed individual selected tracks directly into dynamic autoqueue generation instead of appending the entire search results table.
+
+### Navigation & UI Refinements
+- **YouTube Channel Playlist & Navigation Enhancements**: Added dedicated Back button navigation to YouTube Channel Playlist views, streamlined multi-byte Japanese/Unicode avatar handling, and fixed double-click browser history navigation.
+- **Queue View & Settings Alignment**: Polished QueueView header baseline alignment (`sm:translate-y-2`), eliminated horizontal legend scrollbars, and cleaned up Settings diagnostic controls.
+
+### Bug Fixes
+- **Player Loading Animation on Manual Clicks**: Ensured overlay spinner and "Resolving audio..." feedback on the album disc display reliably on manual track clicks until the stream actually begins playback.
+- **Nightly Mix Action Controls**: Fixed an issue where the "Refresh mix" button was disabled in PlaylistView.
+- **Recommendation Engine Selection**: Fixed an issue where non-Last.fm recommendation engines fell back to generic search candidates instead of querying the selected engine.
+- **Channel Playlist Track Hydration**: Fixed an issue where YouTube channel playlist tracks failed to map and appeared empty in PlaylistView.
+- **Startup Prefetch ID Resolution**: Mapped valid YouTube video IDs for Spotify tracks during startup prefetch warmup, preventing unresolvable Spotify IDs from triggering invalid yt-dlp fallbacks.
+- **UTF-8 Slicing Panic in Channel Scraper**: Used `floor_char_boundary` in `extract_avatar_from_html` to prevent string slicing panics on multibyte Japanese/Unicode characters.
+- **Search Engine Mode Preservation**: Ensured search queries properly route through user-configured search engines (Spotify vs YouTube) without defaulting to raw YouTube results.
+
+## v4.0.0 - 2026-08-17
+
+### YouTube Streaming & Audio Resolver Engine Overhaul (Breaking Changes)
+- **Innertube `youtubei.js@18.0.0` Upgrade & `ANDROID_VR` Client Prioritization**: Upgraded `youtubei.js` to version `18.0.0` and prioritized the `ANDROID_VR` client across all audio resolution paths. Bypasses YouTube's latest signature cipher obfuscation and GoogleVideo HTTP 403 Forbidden blocking that previously broke playback across all v3.4.0 and older installations.
+- **Dual-Mode JavaScript Evaluator Shim (`Platform.shim.eval`)**: Implemented a resilient JavaScript evaluator in `youtubei.ts` supporting both plain string expressions and InnerTube AST extractor objects (`arg.output`), completely preventing decipher extraction syntax failures during player initialization.
+- **Native WebM Opus Stream Prioritization**: Updated streaming format selection in both `youtubei.ts` and `ytdlp.ts` (`pickBestAudioFormat`) to prioritize native WebM Opus (`itag 251`, ~160kbps). Eliminates player decipher signature failures previously triggered by `m4a`/`mp4` streams.
+- **Automated `yt-dlp` Android Extractor & Stream Auto-Recovery**: Configured bundled `yt-dlp` extraction to use the official mobile `youtube:player_client=android` client. Enhanced Fastify's `/player/stream/:videoId` endpoint with transparent auto-recovery: when an upstream YouTube stream encounters an HTTP 403 or non-OK response, the backend immediately triggers automatic fallback to `yt-dlp` to resolve and proxy a working stream seamlessly without track skips.
+- **Cache Store v2 Auto-Migration & Stale URL Purging**: Bumped `CACHE_VERSION` to `2` with automated store migration on startup. Cleans legacy/unplayable pre-v4 `audioUrl` entries from local storage (`songs.json`) so newly queued tracks immediately resolve fresh WebM Opus streams while preserving 100% of user history, playlists, play counts, and track metadata.
+- **Debug Dashboard Resolver Engine & Audio Format Inspector**: Added dedicated `Resolver engine` (with color-coded badges for Innertube `youtubei.js`, bundled `yt-dlp` fallback, and local storage) and `Audio format` (container type and bitrate) status rows to the **Current Track** snapshot panel in the Debug Dashboard.
+- **Bundled `yt-dlp` Path Discovery in Dev & Production**: Enhanced `resolveYtdlpBinaryPath` in `ytdlp.ts` to automatically search `src-tauri/resources/` and `../src-tauri/resources/`, ensuring the bundled binary is detected across all run modes.

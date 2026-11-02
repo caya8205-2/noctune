@@ -19,18 +19,18 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
 innertube-rs = "0.8.0"
 spotstream = "0.1.0"
 librespot = { version = "0.8.0", default-features = false, features = ["native-tls"] }
 bytes = "1"
 dirs = "6"
-
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
 
 [profile.dev]
 incremental = true
