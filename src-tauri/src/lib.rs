@@ -13,17 +13,22 @@ use spotify_service::{
 use youtube_channel::{get_youtube_channel, get_youtube_playlist, get_channel_posts};
 
 use std::process::Command;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager};
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 use std::sync::Mutex;
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 use tauri::path::BaseDirectory;
-#[cfg(not(debug_assertions))]
-use tauri_plugin_shell::ShellExt;
-#[cfg(not(debug_assertions))]
+#[cfg(desktop)]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+#[cfg(desktop)]
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    Emitter,
+};
+use tauri::Manager;
+#[cfg(all(not(debug_assertions), desktop))]
 use tauri_plugin_shell::process::CommandChild;
+#[cfg(all(not(debug_assertions), desktop))]
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
@@ -83,12 +88,12 @@ fn kill_backend() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
 // Kill any orphaned backend from a previous session (crash / updater restart)
 // before spawning a fresh sidecar, so the old process can't hold port 3131.
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 fn kill_stale_backend(app_data_dir: &std::path::Path) {
     let pid_file = app_data_dir.join("noctune-backend.pid");
     let Ok(contents) = std::fs::read_to_string(&pid_file) else { return };
@@ -118,7 +123,7 @@ fn kill_stale_backend(app_data_dir: &std::path::Path) {
     let _ = std::fs::remove_file(&pid_file);
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 fn kill_backend_sidecar(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<BackendProcess>() {
         let mut child_lock = state.0.lock().unwrap();
@@ -137,20 +142,32 @@ fn kill_backend_sidecar(app: &tauri::AppHandle) {
         }
     }
 }
+            }
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
-        }))
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            }))
+            .plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(InnertubeState::new())
         .manage(SpotifySessionState::new())
         .invoke_handler(tauri::generate_handler![
@@ -173,6 +190,7 @@ pub fn run() {
             spotify_get_radio_tracks
         ])
         .setup(|_app| {
+            #[cfg(desktop)]
             if let Some(icon) = _app.default_window_icon() {
                 let show_i = MenuItemBuilder::with_id("show", "Show Noctune").build(_app)?;
                 let play_i = MenuItemBuilder::with_id("play_pause", "Play / Pause").build(_app)?;
@@ -214,7 +232,7 @@ pub fn run() {
                                 let _ = app.emit("noctune:tray-prev", ());
                             }
                             "quit" => {
-                                #[cfg(not(debug_assertions))]
+                                #[cfg(all(not(debug_assertions), desktop))]
                                 kill_backend_sidecar(app);
                                 app.exit(0);
                             }
@@ -243,9 +261,9 @@ pub fn run() {
                     .build(_app)?;
             }
 
-            // Only spawn the backend sidecar in production builds.
-            // In dev mode the backend is started separately via `npm run dev`.
-            #[cfg(not(debug_assertions))]
+            // Only spawn the backend sidecar in production desktop builds.
+            // In dev mode or on mobile the backend runs on server/desktop.
+            #[cfg(all(not(debug_assertions), desktop))]
             {
                 use tauri_plugin_shell::process::CommandEvent;
 
@@ -361,13 +379,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
             if window.label() == "main" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let _ = window.hide();
                 }
             }
-        })
+        });
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
