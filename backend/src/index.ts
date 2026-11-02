@@ -121,7 +121,7 @@ async function bootstrap() {
     if (request.method === 'OPTIONS') return;
 
     const url = request.url.split('?')[0];
-    if (url === '/status' || url === '/status/' || url.startsWith('/changelog')) return;
+    if (url === '/status' || url === '/status/' || url.startsWith('/changelog') || url.startsWith('/image/proxy')) return;
 
     const envConfig = getEnvConfig();
     const apiKey = envConfig.apiKey?.trim();
@@ -211,6 +211,42 @@ async function bootstrap() {
       audioQualityPreference: true,
     },
   }));
+
+  // Image proxy for CORS-safe artwork & visualizer palette extraction
+  app.get('/image/proxy', async (request, reply) => {
+    const query = request.query as { url?: string };
+    if (!query.url) {
+      reply.status(400).send({ error: 'Missing url query parameter' });
+      return;
+    }
+    try {
+      const parsed = new URL(query.url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        reply.status(400).send({ error: 'Invalid URL protocol' });
+        return;
+      }
+      const res = await fetch(query.url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+      });
+      if (!res.ok) {
+        reply.status(res.status).send({ error: 'Failed to fetch upstream image' });
+        return;
+      }
+      const contentType = res.headers.get('content-type') || 'image/jpeg';
+      const buffer = Buffer.from(await res.arrayBuffer());
+      reply
+        .header('Content-Type', contentType)
+        .header('Cache-Control', 'public, max-age=86400')
+        .header('Access-Control-Allow-Origin', '*')
+        .send(buffer);
+    } catch (err) {
+      reply.status(500).send({ error: (err as Error).message });
+    }
+  });
 
   // Init SQLite schema
   initDb();

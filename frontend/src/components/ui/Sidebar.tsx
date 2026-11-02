@@ -183,7 +183,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 mb-2 flex flex-col gap-1 overflow-y-auto scrollbar-hidden">
+      <nav className="flex-shrink-0 flex flex-col gap-1">
         {navItems.map(({ icon: Icon, label, view }) => {
           const active = activeView === view;
           return (
@@ -213,7 +213,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Playlists */}
-      <div className="flex-shrink-0 flex flex-col min-h-0" style={{ height: '38%' }}>
+      <div className="flex-1 min-h-0 flex flex-col mt-4">
         {!sidebarCompact && (
           <div className="relative mb-2 flex flex-shrink-0 items-center justify-between px-0.5" ref={menuRef}>
             <span className="section-label">Playlists</span>

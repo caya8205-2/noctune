@@ -2584,9 +2584,31 @@ export default function DebugApp() {
         <div className="ambient-glow -top-40 left-1/4 h-72 w-72 bg-accent/10 animate-float" aria-hidden="true" />
 
         {/* Header */}
-        <div className="relative z-10 flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-5 backdrop-blur-xl">
-          <span className="text-sm font-semibold text-white/90">Debug Dashboard</span>
-          <div className="ml-2 flex items-center gap-1">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:h-14 flex-shrink-0 sm:items-center gap-2.5 sm:gap-3 border-b border-white/[0.06] bg-base-950/80 p-3 sm:px-5 backdrop-blur-xl">
+          <div className="flex items-center justify-between w-full sm:w-auto">
+            <span className="text-sm font-semibold text-white/90">Debug Dashboard</span>
+            <div className="flex items-center gap-2 sm:hidden">
+              {backendOk === null ? (
+                <span className="text-[11px] text-muted">Checking...</span>
+              ) : backendOk ? (
+                <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                  <CheckCircle2 size={12} /> Connected
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[11px] text-red-400">
+                  <AlertCircle size={12} /> Offline
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setView('settings')}
+                className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-xs text-soft hover:bg-white/[0.1]"
+              >
+                Settings
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hidden py-0.5 w-full sm:w-auto">
             {tabs.map((t) => {
               const Icon = t.icon;
               const active = tab === t.id;
@@ -2594,19 +2616,19 @@ export default function DebugApp() {
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-accent/10 text-accent'
+                      ? 'bg-accent/10 text-accent font-semibold'
                       : 'text-muted hover:bg-white/[0.04] hover:text-soft'
                   }`}
                 >
-                  <Icon size={15} />
+                  <Icon size={14} />
                   {t.label}
                 </button>
               );
             })}
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="hidden sm:flex ml-auto items-center gap-2">
             {backendOk === null ? (
               <span className="text-xs text-muted">Checking backend...</span>
             ) : backendOk ? (

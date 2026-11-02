@@ -40,9 +40,9 @@ export const VISUALIZER_PRESETS: Array<{ id: VisualizerMode; name: string; desc:
 type Rgb = [number, number, number];
 
 const FALLBACK_PALETTE = {
-  primary: 'rgb(34 211 238)',
-  secondary: 'rgb(217 70 239)',
-  accent: 'rgb(200 241 53)',
+  primary: 'rgb(250 204 21)',   // Amber Gold (#facc15)
+  secondary: 'rgb(245 158 11)', // Warm Amber (#f59e0b)
+  accent: 'rgb(217 119 6)',     // Honey Amber (#d97706)
 };
 
 function getAnalyser(): AnalyserNode | null {
@@ -81,25 +81,48 @@ function enhanceColor([r, g, b]: Rgb): Rgb {
 }
 
 export async function extractPalette(src: string): Promise<typeof FALLBACK_PALETTE> {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.decoding = 'async';
+  const tryLoad = async (url: string, crossOrigin?: string): Promise<Uint8ClampedArray | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      if (crossOrigin) img.crossOrigin = crossOrigin;
+      img.decoding = 'async';
+      img.onload = () => {
+        try {
+          const size = 32;
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0, size, size);
+          resolve(ctx.getImageData(0, 0, size, size).data);
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
 
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error('Album art failed to load'));
-    img.src = src;
-  });
+  let pixels: Uint8ClampedArray | null = null;
+  try {
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      const apiModule = await import('../../utils/api').catch(() => null);
+      const apiBase = apiModule ? await apiModule.getApiBase().catch(() => '') : '';
+      if (apiBase) {
+        pixels = await tryLoad(`${apiBase}/image/proxy?url=${encodeURIComponent(src)}`, 'anonymous');
+      }
+    }
+    if (!pixels) {
+      pixels = await tryLoad(src, 'anonymous');
+    }
+  } catch {
+    return FALLBACK_PALETTE;
+  }
 
-  const size = 48;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return FALLBACK_PALETTE;
+  if (!pixels) return FALLBACK_PALETTE;
 
-  ctx.drawImage(img, 0, 0, size, size);
-  const pixels = ctx.getImageData(0, 0, size, size).data;
   const buckets = new Map<string, { color: Rgb; score: number; count: number }>();
 
   for (let i = 0; i < pixels.length; i += 4) {
@@ -169,33 +192,53 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
   const [palette, setPalette] = useState(FALLBACK_PALETTE);
 
   useEffect(() => {
-    const source = getAnalyser();
-    const audioCtx = getAudioCtx();
-    if (!source || !audioCtx) return;
+    let pollTimer: number;
 
-    const motion = new AudioMotionAnalyzer({
-      audioCtx,
-      source,
-      connectSpeakers: false,
-      start: true,
-      useCanvas: false,
-      mode: 6,
-      frequencyScale: 'bark',
-      minFreq: 30,
-      maxFreq: 16000,
-      fftSize: 2048,
-      smoothing: 0.68,
-      weightingFilter: 'D',
-      linearAmplitude: false,
-      minDecibels: -88,
-      maxDecibels: -16,
-    });
+    const setupMotion = () => {
+      const source = getAnalyser();
+      const audioCtx = getAudioCtx();
+      if (!source || !audioCtx) return false;
 
-    motionRef.current = motion;
+      if (!motionRef.current) {
+        try {
+          motionRef.current = new AudioMotionAnalyzer({
+            audioCtx,
+            source,
+            connectSpeakers: false,
+            start: true,
+            useCanvas: false,
+            mode: 6,
+            frequencyScale: 'bark',
+            minFreq: 30,
+            maxFreq: 16000,
+            fftSize: 2048,
+            smoothing: 0.68,
+            weightingFilter: 'D',
+            linearAmplitude: false,
+            minDecibels: -88,
+            maxDecibels: -16,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    if (!setupMotion()) {
+      pollTimer = window.setInterval(() => {
+        if (setupMotion()) {
+          clearInterval(pollTimer);
+        }
+      }, 300);
+    }
+
     return () => {
+      clearInterval(pollTimer);
       cancelAnimationFrame(rafRef.current);
+      motionRef.current?.destroy();
       motionRef.current = null;
-      motion.destroy();
     };
   }, []);
 
@@ -234,11 +277,27 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
     }
 
     function draw() {
-      const bars = activeMotion ? activeMotion.getBars() : [];
-      const bass = activeMotion ? activeMotion.getEnergy('bass') || 0 : 0;
-      const lowMid = activeMotion ? activeMotion.getEnergy('lowMid') || 0 : 0;
-      const mid = activeMotion ? activeMotion.getEnergy('mid') || 0 : 0;
-      const highMid = activeMotion ? activeMotion.getEnergy('highMid') || 0 : 0;
+      const activeMotion = motionRef.current;
+      let bars = activeMotion ? activeMotion.getBars() : [];
+      let bass = activeMotion ? activeMotion.getEnergy('bass') || 0 : 0;
+      let lowMid = activeMotion ? activeMotion.getEnergy('lowMid') || 0 : 0;
+      let mid = activeMotion ? activeMotion.getEnergy('mid') || 0 : 0;
+      let highMid = activeMotion ? activeMotion.getEnergy('highMid') || 0 : 0;
+
+      // Fallback: If AudioMotionAnalyzer returns empty bars but AnalyserNode exists, read directly
+      const rawAnalyser = getAnalyser();
+      if ((!bars || bars.length === 0) && rawAnalyser && isPlaying) {
+        const freqData = new Uint8Array(rawAnalyser.frequencyBinCount);
+        rawAnalyser.getByteFrequencyData(freqData);
+        bars = Array.from({ length: 64 }, (_, i) => ({
+          value: [freqData[Math.min(freqData.length - 1, Math.floor((i / 64) * (freqData.length * 0.75)))] / 255],
+        })) as any;
+        const bCount = Math.max(1, Math.floor(freqData.length * 0.08));
+        let bSum = 0;
+        for (let b = 0; b < bCount; b++) bSum += freqData[b];
+        bass = (bSum / bCount) / 255;
+      }
+
       const globalEnergy = Math.min(1, bass * 0.35 + lowMid * 0.25 + mid * 0.22 + highMid * 0.12);
 
       const active = isPlaying || preview;
