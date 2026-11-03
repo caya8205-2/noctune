@@ -383,6 +383,17 @@ class MediaPlaybackService : Service() {
     playing = json.optBoolean("playing", playing)
     isPlayingNow = playing
     if (playing) acquirePlaybackLocks() else releasePlaybackLocks()
+
+    // Track changed while the app is in the background: the web player keeps
+    // advancing the queue with a paused element, so native has to follow the new
+    // stream URL, otherwise ExoPlayer stays parked on the finished track.
+    if (nativeActive) {
+      val nextUrl = json.optString("streamUrl").trim()
+      if (nextUrl.isNotEmpty() && nextUrl != nativeUrl) {
+        startNativePlayback(nextUrl, 0L)
+      }
+    }
+
     title = json.optString("title", title).ifBlank { "Noctune" }
     artist = json.optString("artist", artist)
     album = json.optString("album", album)

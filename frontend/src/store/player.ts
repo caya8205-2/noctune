@@ -582,8 +582,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (queue.length <= 1) {
         nextIdx = 0;
       } else {
-        const rand = Math.floor(Math.random() * (queue.length - 1));
-        nextIdx = rand >= queueIndex ? rand + 1 : rand;
+        // Walk a stable shuffle plan instead of rolling a fresh random index.
+        // The same plan feeds prefetch, so the next track is always resolved
+        // ahead of time.
+        let candidates = shuffleUpcoming(queue, queue[queueIndex]?.id, 1, repeat === 'all');
+        if (candidates.length === 0) return;
+        const targetId = candidates[0].id;
+        const targetIdx = queue.findIndex((track) => track.id === targetId);
+        if (targetIdx < 0) return;
+        nextIdx = targetIdx;
       }
     } else {
       shufflePlayedCount = 0;
@@ -629,11 +636,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     await get().playTrack(queue[prevIdx], queue);
   },
 
-  toggleShuffle: () => set(s => ({ shuffle: !s.shuffle })),
+  toggleShuffle: () =>
+    set((s) => {
+      // A fresh plan whenever the mode flips so the new order anchors on the
+      // track that is playing right now.
+      shuffleOrder = [];
+      return { shuffle: !s.shuffle };
+    }),
   cycleRepeat: () =>
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
   cyclePlaybackMode: () =>
     set((s) => {
+      shuffleOrder = [];
       if (!s.shuffle && s.repeat === 'off') {
         return { shuffle: true, repeat: 'off' };
       }
@@ -980,11 +994,68 @@ function getNextCandidateTracks(
   count: number
 ): Track[] {
   if (shuffle) {
-    return queue
-      .filter((_, i) => i !== currentIdx)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, count);
+    // Preview must follow the same plan next() walks, otherwise the prefetched
+    // set never matches the track that actually plays.
+    return shuffleUpcoming(queue, queue[currentIdx]?.id, count, false);
   }
   return queue
     .slice(currentIdx + 1, currentIdx + 1 + count);
+}
+
+/**
+ * Stable shuffle order for the current queue. Rebuilt only when the queue
+ * membership changes, so `next()` and prefetch always agree on what comes next.
+ */
+let shuffleOrder: string[] = [];
+
+function shuffledIds(ids: string[]): string[] {
+  const result = [...ids];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function ensureShuffleOrder(queue: Track[], currentId?: string): void {
+  const ids = queue.map((track) => track.id);
+  const known = new Set(ids);
+  const matchesQueue = shuffleOrder.length === ids.length && shuffleOrder.every((id) => known.has(id));
+  if (matchesQueue) return;
+
+  shuffleOrder = shuffledIds(ids);
+  if (currentId) {
+    const idx = shuffleOrder.indexOf(currentId);
+    if (idx > 0) {
+      shuffleOrder.splice(idx, 1);
+      shuffleOrder.unshift(currentId);
+    }
+  }
+}
+
+function shuffleUpcoming(
+  queue: Track[],
+  currentId: string | undefined,
+  count: number,
+  wrap: boolean
+): Track[] {
+  if (count <= 0 || queue.length <= 1) return [];
+  ensureShuffleOrder(queue, currentId);
+
+  const byId = new Map(queue.map((track) => [track.id, track]));
+  const total = shuffleOrder.length;
+  const start = currentId ? shuffleOrder.indexOf(currentId) : -1;
+  const picked: Track[] = [];
+
+  const limit = wrap ? total * 2 : total;
+  for (let step = 1; step <= limit && picked.length < count; step++) {
+    const position = start + step;
+    if (!wrap && position >= total) break;
+    const index = ((position % total) + total) % total;
+    const id = shuffleOrder[index];
+    if (id === currentId) continue;
+    const track = byId.get(id);
+    if (track && !track.playbackError) picked.push(track);
+  }
+  return picked;
 }

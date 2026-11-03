@@ -883,6 +883,8 @@ export function useAudio() {
       }
       return {
         playing: state.isPlaying,
+        trackId: track.id,
+        streamUrl: ((host.__noctune_audio as HTMLAudioElement | undefined)?.src || ''),
         title: track.title,
         artist: track.artist,
         album: track.album ?? track.youtubeTitle ?? 'Noctune',
