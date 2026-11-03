@@ -404,6 +404,9 @@ export function useAudio() {
     }
 
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    // Exposed so the native media service (and on-device debugging) can read
+    // the live element state without holding a JS reference.
+    (window as any).__noctune_audio = audio;
     const clearStallTimer = () => {
       if (stallTimer) {
         clearTimeout(stallTimer);

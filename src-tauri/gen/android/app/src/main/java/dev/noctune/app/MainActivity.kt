@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 class MainActivity : TauriActivity() {
   private val pollHandler = Handler(Looper.getMainLooper())
 
+
   override fun onCreate(savedInstanceState: Bundle?) {
     WebView.setWebContentsDebuggingEnabled(true)
     enableEdgeToEdge()
@@ -72,13 +73,12 @@ class MainActivity : TauriActivity() {
     pollHandler.removeCallbacksAndMessages(null)
     super.onPause()
 
-    // WryActivity.onPause() calls WebView.onPause(), which halts media and
-    // timers. Unpause immediately (and before any JS round-trip, which is
-    // itself blocked once the WebView is paused), then hand the session to the
-    // foreground service. If nothing is playing, pause it back.
+    // WryActivity.onPause() calls WebView.onPause(). Chromium keeps suspending
+    // the HTMLMediaElement while the page is hidden even when that call is
+    // suppressed, so this only resumes the web layer and hands the session to
+    // the foreground service (notification + wake locks). Playback survival in
+    // the background needs native playback, not a WebView trick.
     val webView = currentWebView() ?: return
-    // Resume synchronously: WebView.onPause() suspends media, and a delayed
-    // resume loses the race against Chromium's background media suspension.
     runCatching {
       webView.onResume()
       webView.resumeTimers()
@@ -86,8 +86,6 @@ class MainActivity : TauriActivity() {
     webView.evaluateJavascript(IS_PLAYING_JS) { value ->
       if (value?.trim()?.trim('"') == "true") {
         ensureMediaService()
-      } else {
-        webView.post { runCatching { webView.onPause() } }
       }
     }
   }
