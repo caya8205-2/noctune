@@ -576,8 +576,8 @@ export async function startMobileCompanion(overrides?: {
         }
       });
 
-      // Wait briefly (up to 4.5s) so Quick Tunnel URL or Named Tunnel registration is captured immediately when possible
-      const tunnelWaitDeadline = Date.now() + 4500;
+      // Wait briefly (up to 7s) so Quick Tunnel URL or Named Tunnel registration is captured immediately when possible
+      const tunnelWaitDeadline = Date.now() + 7000;
       while (Date.now() < tunnelWaitDeadline) {
         if (!tunnelProc || tunnelProc.exitCode !== null) {
           throw new Error(lastError || 'Cloudflare tunnel process exited immediately.');
