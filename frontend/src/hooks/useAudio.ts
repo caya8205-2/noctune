@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { api, apiUrl, IS_TAURI, getSpotifyPlaybackSettingSync } from '../utils/api';
+import { api, apiUrl, IS_TAURI, IS_TAURI_MOBILE, getSpotifyPlaybackSettingSync } from '../utils/api';
 import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
@@ -925,6 +925,59 @@ export function useAudio() {
     };
     window.addEventListener('noctune:native-media-action', handler as EventListener);
     return () => window.removeEventListener('noctune:native-media-action', handler as EventListener);
+  }, []);
+
+  // Android background handoff. Chromium suspends the <audio> element while the
+  // page is hidden, no matter what the activity does, so playback is handed to
+  // ExoPlayer in the foreground service when the app leaves the foreground and
+  // taken back (at the same position) when it returns.
+  useEffect(() => {
+    if (!IS_TAURI_MOBILE || typeof document === 'undefined') return;
+
+    const host = window as any;
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleVisibility = () => {
+      const state = usePlayerStore.getState();
+      const element = host.__noctune_audio as HTMLAudioElement | undefined;
+
+      if (document.visibilityState === 'hidden') {
+        if (resumeTimer) {
+          clearTimeout(resumeTimer);
+          resumeTimer = null;
+        }
+        if (!state.isPlaying || !element || !element.src) return;
+        host.__noctune_native_request = {
+          type: 'handoff',
+          url: element.src,
+          positionMs: Math.round(element.currentTime * 1000),
+        };
+        element.pause();
+        return;
+      }
+
+      host.__noctune_native_request = { type: 'resume' };
+      // The service consumes the request on its 500ms tick and only then
+      // publishes the final native position.
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        resumeTimer = null;
+        const nativePosition = host.__noctune_native_position as number | undefined;
+        if (typeof nativePosition === 'number' && nativePosition > 0) {
+          delete host.__noctune_native_position;
+          if (element) element.currentTime = nativePosition / 1000;
+        }
+        if (usePlayerStore.getState().isPlaying && element) {
+          element.play().catch(() => {});
+        }
+      }, 900);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (resumeTimer) clearTimeout(resumeTimer);
+    };
   }, []);
 
   // Sync Discord Rich Presence through the local desktop backend.

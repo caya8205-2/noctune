@@ -22,6 +22,9 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.webkit.WebView
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -44,6 +47,9 @@ class MediaPlaybackService : Service() {
 
     private const val NOW_PLAYING_JS =
       "(function(){try{return window.__noctuneNowPlaying?window.__noctuneNowPlaying():null}catch(e){return null}})()"
+
+    private const val TAKE_REQUEST_JS =
+      "(function(){try{var r=window.__noctune_native_request;if(r){window.__noctune_native_request=null;return r;}return null;}catch(e){return null;}})()"
 
     @Volatile
     var webView: WebView? = null
@@ -84,6 +90,13 @@ class MediaPlaybackService : Service() {
   private var wifiLock: WifiManager.WifiLock? = null
   private val pollHandler = Handler(Looper.getMainLooper())
   private var pollRunnable: Runnable? = null
+  private var pollTicks = 0
+  private var player: ExoPlayer? = null
+  private var nativeUrl: String? = null
+
+  @Volatile
+  var nativeActive = false
+  private var nativeError: String? = null
 
   private fun acquirePlaybackLocks() {
     runCatching {
@@ -142,14 +155,14 @@ class MediaPlaybackService : Service() {
         playing = true
         isPlayingNow = true
         acquirePlaybackLocks()
-        dispatch("play")
+        if (nativeActive) player?.play() else dispatch("play")
         refreshNotification()
       }
       "pause" -> {
         playing = false
         isPlayingNow = false
         releasePlaybackLocks()
-        dispatch("pause")
+        if (nativeActive) player?.pause() else dispatch("pause")
         refreshNotification()
       }
       "next" -> dispatch("next")
@@ -171,12 +184,99 @@ class MediaPlaybackService : Service() {
     if (pollRunnable != null) return
     val runnable = object : Runnable {
       override fun run() {
-        pollNowPlaying()
-        pollHandler.postDelayed(this, 2000)
+        pollRequests()
+        if (pollTicks++ % 4 == 0) pollNowPlaying()
+        pollHandler.postDelayed(this, 500)
       }
     }
     pollRunnable = runnable
     pollHandler.post(runnable)
+  }
+
+  private fun pollRequests() {
+    val wv = webView ?: return
+    wv.evaluateJavascript(TAKE_REQUEST_JS) { raw ->
+      if (raw.isNullOrBlank() || raw == "null") return@evaluateJavascript
+      handleRequest(raw)
+    }
+  }
+
+  /**
+   * The web layer queues native playback commands on a plain global, so no
+   * JavaScript interface (which never reliably reaches the loaded document) is
+   * required. Used to hand playback over to ExoPlayer when the app is
+   * backgrounded, where Chromium suspends the HTML audio element.
+   */
+  private fun handleRequest(raw: String) {
+    val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
+    when (json.optString("type")) {
+      "handoff" -> {
+        val url = json.optString("url")
+        val position = json.optLong("positionMs", 0L)
+        if (url.isNotBlank()) startNativePlayback(url, position)
+      }
+      "resume" -> {
+        val position = stopNativePlayback()
+        webView?.evaluateJavascript("window.__noctune_native_position=$position", null)
+      }
+      "stop" -> {
+        stopNativePlayback()
+      }
+    }
+  }
+
+  private fun ensurePlayer(): ExoPlayer {
+    player?.let { return it }
+    val created = ExoPlayer.Builder(this).build()
+    created.addListener(object : Player.Listener {
+      override fun onIsPlayingChanged(isPlaying: Boolean) {
+        if (nativeActive) {
+          playing = isPlaying
+          isPlayingNow = isPlaying
+          refreshNotification()
+        }
+      }
+
+      override fun onPlaybackStateChanged(playbackState: Int) {
+        if (playbackState == Player.STATE_ENDED) dispatch("next")
+      }
+    })
+    player = created
+    return created
+  }
+
+  private fun startNativePlayback(url: String, positionMs: Long) {
+    try {
+      val exo = ensurePlayer()
+      nativeActive = true
+      if (nativeUrl != url) {
+        exo.setMediaItem(MediaItem.fromUri(url))
+        exo.prepare()
+        nativeUrl = url
+      }
+      exo.seekTo(positionMs)
+      exo.playWhenReady = true
+      acquirePlaybackLocks()
+      refreshNotification()
+      nativeError = null
+    } catch (err: Exception) {
+      nativeError = "${err.javaClass.simpleName}: ${err.message}"
+      nativeActive = false
+    }
+  }
+
+  private fun stopNativePlayback(): Long {
+    val exo = player ?: return 0L
+    val position = runCatching { exo.currentPosition }.getOrDefault(0L)
+    runCatching {
+      exo.pause()
+      exo.stop()
+      exo.clearMediaItems()
+    }
+    nativeUrl = null
+    nativeActive = false
+    refreshNotification()
+    return if (position > 0) position else 0L
   }
 
   private fun stopPolling() {
@@ -199,6 +299,21 @@ class MediaPlaybackService : Service() {
       if (raw.isNullOrBlank() || raw == "null" || raw.length < 4) return@evaluateJavascript
       applyPayload(raw)
     }
+    publishNativeState(wv)
+  }
+
+  private fun publishNativeState(wv: WebView) {
+    val exo = player
+    val payload = runCatching {
+      JSONObject()
+        .put("active", nativeActive)
+        .put("playing", exo?.isPlaying ?: false)
+        .put("state", exo?.playbackState ?: -1)
+        .put("pos", exo?.currentPosition ?: 0L)
+        .put("err", nativeError ?: "")
+        .toString()
+    }.getOrNull() ?: return
+    wv.evaluateJavascript("window.__noctune_native_state=$payload", null)
   }
 
   private fun startForegroundSafely() {
@@ -401,6 +516,9 @@ class MediaPlaybackService : Service() {
     instance = null
     serviceRunning = false
     stopPolling()
+    runCatching { player?.release() }
+    player = null
+    nativeActive = false
     runCatching { session?.release() }
     session = null
     super.onDestroy()
