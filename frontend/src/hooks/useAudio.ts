@@ -858,30 +858,27 @@ export function useAudio() {
     };
   }, [currentTrack]);
 
-  // Native Android bridge: push now-playing metadata to the foreground media
-  // service (system notification + process kept alive in background) and route
-  // notification button presses back into the player store.
+  // Android media service bridge: expose the playback snapshot as plain globals.
+  // The native foreground service polls these with evaluateJavascript, which
+  // works regardless of when the WebView was created (addJavascriptInterface
+  // only reaches documents that load after it is registered).
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const host = window as any;
 
-    const sendToNative = () => {
-      const native = (window as any).NoctuneNative;
-      if (!native || typeof native.updateMedia !== 'function') return;
+    host.__noctuneIsPlaying = () => usePlayerStore.getState().isPlaying;
+
+    host.__noctuneNowPlaying = () => {
       const state = usePlayerStore.getState();
       const track = state.currentTrack;
-      if (!track) {
-        try {
-          native.stopMedia();
-        } catch {}
-        return;
-      }
+      if (!track) return null;
       let artwork = track.thumbnail ?? '';
       if (artwork && !/^(https?:|data:)/.test(artwork)) {
         try {
           artwork = new URL(artwork, window.location.href).href;
         } catch {}
       }
-      const payload = JSON.stringify({
+      return {
         playing: state.isPlaying,
         title: track.title,
         artist: track.artist,
@@ -889,16 +886,14 @@ export function useAudio() {
         artwork,
         positionMs: Math.round((state.progress || 0) * 1000),
         durationMs: Math.round((state.duration || track.duration || 0) * 1000),
-      });
-      try {
-        native.updateMedia(payload);
-      } catch {}
+      };
     };
 
-    sendToNative();
-    const interval = window.setInterval(sendToNative, 5000);
-    return () => window.clearInterval(interval);
-  }, [currentTrack?.id, isPlaying]);
+    return () => {
+      delete host.__noctuneIsPlaying;
+      delete host.__noctuneNowPlaying;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

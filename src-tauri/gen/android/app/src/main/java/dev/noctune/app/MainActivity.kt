@@ -1,51 +1,93 @@
 package dev.noctune.app
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
+  private val pollHandler = Handler(Looper.getMainLooper())
+
   override fun onCreate(savedInstanceState: Bundle?) {
     WebView.setWebContentsDebuggingEnabled(true)
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
 
     requestNotificationPermission()
-    attachMediaBridgeWithRetry(0)
+    cacheWebView(0)
   }
 
-  private fun attachMediaBridgeWithRetry(attempt: Int) {
-    val webView = findWebView(window.decorView)
-    if (webView != null) {
-      MediaPlaybackService.webView = webView
-      val attached = runCatching {
-        webView.addJavascriptInterface(NoctuneNativeBridge(applicationContext), "NoctuneNative")
-        true
-      }.getOrDefault(false)
-      android.util.Log.i("Noctune", "media bridge attached=$attached attempt=$attempt")
+  /**
+   * The web layer exposes `window.__noctuneIsPlaying` / `window.__noctuneNowPlaying`.
+   * Native reads them through evaluateJavascript instead of addJavascriptInterface,
+   * which only reaches documents created after registration and silently fails
+   * when the WebView is created or swapped late.
+   */
+  private fun currentWebView(): WebView? {
+    MediaPlaybackService.webView?.let { return it }
+    val found = findWebView(window.decorView)
+    if (found != null) MediaPlaybackService.webView = found
+    return found
+  }
+
+  private fun cacheWebView(attempt: Int) {
+    if (currentWebView() != null) return
+    if (attempt < 20) {
+      window.decorView.postDelayed({ cacheWebView(attempt + 1) }, 250)
+    }
+  }
+
+  private fun evaluatePlaybackState(onResult: (Boolean) -> Unit) {
+    val webView = currentWebView()
+    if (webView == null) {
+      onResult(false)
       return
     }
-    if (attempt < 20) {
-      window.decorView.postDelayed({ attachMediaBridgeWithRetry(attempt + 1) }, 250)
-    } else {
-      android.util.Log.w("Noctune", "media bridge: webview not found after retries")
+    webView.evaluateJavascript(IS_PLAYING_JS) { value ->
+      onResult(value?.trim()?.trim('"') == "true")
     }
+  }
+
+  private fun ensureMediaService() {
+    if (!MediaPlaybackService.serviceRunning) {
+      runCatching { MediaPlaybackService.start(this) }
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    val runnable = object : Runnable {
+      override fun run() {
+        evaluatePlaybackState { playing -> if (playing) ensureMediaService() }
+        pollHandler.postDelayed(this, 4000)
+      }
+    }
+    pollHandler.post(runnable)
   }
 
   override fun onPause() {
+    pollHandler.removeCallbacksAndMessages(null)
     super.onPause()
-    // WryActivity.onPause() calls WebView.onPause(), which halts media
-    // playback. While a track is playing the web layer must keep running so
-    // audio survives backgrounding, so immediately resume the WebView.
-    if (MediaPlaybackService.isPlayingNow) {
-      val wv = MediaPlaybackService.webView
-      wv?.post {
-        runCatching {
-          wv.onResume()
-          wv.resumeTimers()
-        }
+
+    // WryActivity.onPause() calls WebView.onPause(), which halts media and
+    // timers. Unpause immediately (and before any JS round-trip, which is
+    // itself blocked once the WebView is paused), then hand the session to the
+    // foreground service. If nothing is playing, pause it back.
+    val webView = currentWebView() ?: return
+    // Resume synchronously: WebView.onPause() suspends media, and a delayed
+    // resume loses the race against Chromium's background media suspension.
+    runCatching {
+      webView.onResume()
+      webView.resumeTimers()
+    }
+    webView.evaluateJavascript(IS_PLAYING_JS) { value ->
+      if (value?.trim()?.trim('"') == "true") {
+        ensureMediaService()
+      } else {
+        webView.post { runCatching { webView.onPause() } }
       }
     }
   }
@@ -58,12 +100,6 @@ class MainActivity : TauriActivity() {
     }
   }
 
-  private fun attachMediaBridge() {
-    val webView = findWebView(window.decorView) ?: return
-    MediaPlaybackService.webView = webView
-    runCatching { webView.addJavascriptInterface(NoctuneNativeBridge(applicationContext), "NoctuneNative") }
-  }
-
   private fun findWebView(view: View): WebView? {
     if (view is WebView) return view
     if (view is ViewGroup) {
@@ -73,5 +109,10 @@ class MainActivity : TauriActivity() {
       }
     }
     return null
+  }
+
+  companion object {
+    private const val IS_PLAYING_JS =
+      "(function(){try{return window.__noctuneIsPlaying?window.__noctuneIsPlaying():false}catch(e){return false}})()"
   }
 }

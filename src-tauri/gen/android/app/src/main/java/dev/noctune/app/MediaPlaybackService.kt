@@ -12,7 +12,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -36,14 +38,30 @@ class MediaPlaybackService : Service() {
     const val CHANNEL_ID = "noctune_playback"
     const val NOTIFICATION_ID = 4242
     const val ACTION_UPDATE = "dev.noctune.app.media.UPDATE"
+    const val ACTION_START = "dev.noctune.app.media.START"
     const val ACTION_STOP = "dev.noctune.app.media.STOP"
     const val EXTRA_PAYLOAD = "payload"
+
+    private const val NOW_PLAYING_JS =
+      "(function(){try{return window.__noctuneNowPlaying?window.__noctuneNowPlaying():null}catch(e){return null}})()"
 
     @Volatile
     var webView: WebView? = null
 
     @Volatile
     var isPlayingNow = false
+
+    @Volatile
+    var serviceRunning = false
+
+    fun start(context: Context) {
+      val intent = Intent(context, MediaPlaybackService::class.java).setAction(ACTION_START)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(intent)
+      } else {
+        context.startService(intent)
+      }
+    }
 
     @Volatile
     private var instance: MediaPlaybackService? = null
@@ -64,6 +82,8 @@ class MediaPlaybackService : Service() {
   private var artwork: Bitmap? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var wifiLock: WifiManager.WifiLock? = null
+  private val pollHandler = Handler(Looper.getMainLooper())
+  private var pollRunnable: Runnable? = null
 
   private fun acquirePlaybackLocks() {
     runCatching {
@@ -102,8 +122,14 @@ class MediaPlaybackService : Service() {
   override fun onCreate() {
     super.onCreate()
     instance = this
+    serviceRunning = true
     createChannel()
     setupSession()
+    // Post the foreground notification immediately: startForegroundService gives
+    // the service a few seconds before the system kills it, and metadata from
+    // the web layer arrives asynchronously via the poll below.
+    startForegroundSafely()
+    startPolling()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -114,11 +140,15 @@ class MediaPlaybackService : Service() {
       }
       "play" -> {
         playing = true
+        isPlayingNow = true
+        acquirePlaybackLocks()
         dispatch("play")
         refreshNotification()
       }
       "pause" -> {
         playing = false
+        isPlayingNow = false
+        releasePlaybackLocks()
         dispatch("pause")
         refreshNotification()
       }
@@ -126,11 +156,49 @@ class MediaPlaybackService : Service() {
       "prev" -> dispatch("prev")
       else -> {
         intent?.getStringExtra(EXTRA_PAYLOAD)?.let { applyPayload(it) }
-        startForegroundSafely()
       }
     }
     if (intent?.action != ACTION_STOP) startForegroundSafely()
     return START_STICKY
+  }
+
+  /**
+   * Reads the now-playing snapshot straight out of the web layer. This avoids a
+   * JavaScript interface, which is only injected into documents registered
+   * after addJavascriptInterface and silently never appears in the live page.
+   */
+  private fun startPolling() {
+    if (pollRunnable != null) return
+    val runnable = object : Runnable {
+      override fun run() {
+        pollNowPlaying()
+        pollHandler.postDelayed(this, 2000)
+      }
+    }
+    pollRunnable = runnable
+    pollHandler.post(runnable)
+  }
+
+  private fun stopPolling() {
+    pollRunnable?.let { pollHandler.removeCallbacks(it) }
+    pollRunnable = null
+  }
+
+  private fun pollNowPlaying() {
+    val wv = webView ?: return
+    // Keep the web layer unpaused: WryActivity pauses the WebView whenever the
+    // activity does, which suspends media. Re-asserting resume here (service
+    // side, independent of the activity lifecycle) keeps playback alive.
+    wv.post {
+      runCatching {
+        wv.onResume()
+        wv.resumeTimers()
+      }
+    }
+    wv.evaluateJavascript(NOW_PLAYING_JS) { raw ->
+      if (raw.isNullOrBlank() || raw == "null" || raw.length < 4) return@evaluateJavascript
+      applyPayload(raw)
+    }
   }
 
   private fun startForegroundSafely() {
@@ -316,6 +384,8 @@ class MediaPlaybackService : Service() {
   private fun stopPlayback() {
     playing = false
     isPlayingNow = false
+    serviceRunning = false
+    stopPolling()
     releasePlaybackLocks()
     runCatching { session?.isActive = false }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -329,6 +399,8 @@ class MediaPlaybackService : Service() {
 
   override fun onDestroy() {
     instance = null
+    serviceRunning = false
+    stopPolling()
     runCatching { session?.release() }
     session = null
     super.onDestroy()
