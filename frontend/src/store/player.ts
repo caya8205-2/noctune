@@ -479,6 +479,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentId: track.id,
             nextIds,
           });
+          if (typeof window !== 'undefined') {
+            (window as any).__noctune_prefetch_plan = { currentId: track.id, nextIds };
+          }
           api.prefetchTracks(nextTracks).catch(() => {});
         }
       }
@@ -636,18 +639,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     await get().playTrack(queue[prevIdx], queue);
   },
 
-  toggleShuffle: () =>
-    set((s) => {
-      // A fresh plan whenever the mode flips so the new order anchors on the
-      // track that is playing right now.
-      shuffleOrder = [];
-      return { shuffle: !s.shuffle };
-    }),
+  toggleShuffle: () => {
+    // A fresh plan whenever the mode flips so the new order anchors on the
+    // track that is playing right now, and prefetch immediately follows it.
+    shuffleOrder = [];
+    set((s) => ({ shuffle: !s.shuffle }));
+    refreshPrefetchPlan();
+  },
   cycleRepeat: () =>
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
-  cyclePlaybackMode: () =>
+  cyclePlaybackMode: () => {
+    shuffleOrder = [];
     set((s) => {
-      shuffleOrder = [];
       if (!s.shuffle && s.repeat === 'off') {
         return { shuffle: true, repeat: 'off' };
       }
@@ -658,7 +661,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         return { shuffle: false, repeat: 'one' };
       }
       return { shuffle: false, repeat: 'off' };
-    }),
+    });
+    refreshPrefetchPlan();
+  },
 
   playNext: (track) => {
     set(s => {
@@ -1031,6 +1036,24 @@ function ensureShuffleOrder(queue: Track[], currentId?: string): void {
       shuffleOrder.unshift(currentId);
     }
   }
+}
+
+/**
+ * Recompute and re-issue the prefetch window for the current queue position.
+ * Called after playback-mode changes so the first skip afterwards is already
+ * resolved instead of hitting the network.
+ */
+function refreshPrefetchPlan(): void {
+  const state = usePlayerStore.getState();
+  const { queue, queueIndex, shuffle } = state;
+  if (!queue.length || queueIndex < 0) return;
+  const nextTracks = getNextCandidateTracks(queue, queueIndex, shuffle, 5);
+  if (!nextTracks.length) return;
+  const nextIds = nextTracks.map((track) => track.id);
+  if (typeof window !== 'undefined') {
+    (window as any).__noctune_prefetch_plan = { currentId: queue[queueIndex]?.id, nextIds };
+  }
+  api.prefetchTracks(nextTracks).catch(() => {});
 }
 
 function shuffleUpcoming(
