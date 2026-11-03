@@ -70,14 +70,14 @@ fn open_external_url(url: String) -> Result<(), String> {
 
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
-    #[cfg(not(debug_assertions))]
+    #[cfg(all(not(debug_assertions), desktop))]
     kill_backend_sidecar(&app);
     app.exit(0);
 }
 
 #[tauri::command]
 fn kill_backend() -> Result<(), String> {
-    #[cfg(not(debug_assertions))]
+    #[cfg(all(not(debug_assertions), desktop))]
     {
         #[cfg(target_os = "windows")]
         {

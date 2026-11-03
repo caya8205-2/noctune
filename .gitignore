@@ -6,6 +6,7 @@ backend/data/
 backend/dist/
 frontend/dist/
 .codex/
+.hermes/
 automations/
 reports/
 docs/**

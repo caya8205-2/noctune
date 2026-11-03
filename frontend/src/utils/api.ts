@@ -37,6 +37,129 @@ function isTauriProduction(): boolean {
 
 // IS_TAURI is true for both dev and prod Tauri
 export const IS_TAURI = detectTauriEnvironment();
+export const IS_TAURI_MOBILE =
+  IS_TAURI && typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+export const IS_TAURI_DESKTOP = IS_TAURI && !IS_TAURI_MOBILE;
+
+export function isMobileClientMode(): boolean {
+  if (IS_TAURI_MOBILE) return true;
+  if (typeof window !== 'undefined' && !IS_TAURI) {
+    try {
+      return window.localStorage.getItem('noctune:mobile-emulate') === '1';
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export const IS_MOBILE_CLIENT = isMobileClientMode();
+
+const MOBILE_SERVER_STORAGE_KEY = 'noctune:mobile-server';
+
+export interface MobileServerConfig {
+  baseUrl: string;
+  apiKey: string;
+}
+
+export function normalizeServerUrl(raw: string): string {
+  const trimmed = (raw || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(trimmed)) {
+    return `http://${trimmed}`;
+  }
+  return `https://${trimmed}`;
+}
+
+export function getMobileServerConfig(): MobileServerConfig | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(MOBILE_SERVER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<MobileServerConfig>;
+    const baseUrl = normalizeServerUrl(parsed.baseUrl || '');
+    const apiKey = (parsed.apiKey || '').trim();
+    if (!baseUrl) return null;
+    return { baseUrl, apiKey };
+  } catch {
+    return null;
+  }
+}
+
+export function setMobileServerConfig(baseUrl: string, apiKey: string): MobileServerConfig {
+  const normalized: MobileServerConfig = {
+    baseUrl: normalizeServerUrl(baseUrl),
+    apiKey: apiKey.trim(),
+  };
+  apiBasePromise = null;
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(MOBILE_SERVER_STORAGE_KEY, JSON.stringify(normalized));
+    window.dispatchEvent(new CustomEvent('noctune:mobile-auth-changed', { detail: { connected: true } }));
+  }
+  return normalized;
+}
+
+export function clearMobileServerConfig(): void {
+  apiBasePromise = null;
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(MOBILE_SERVER_STORAGE_KEY);
+    window.dispatchEvent(new CustomEvent('noctune:mobile-auth-changed', { detail: { connected: false } }));
+  }
+}
+
+export async function verifyRemoteServer(
+  rawUrl: string,
+  rawApiKey: string
+): Promise<{ ok: boolean; version?: string; error?: string }> {
+  const baseUrl = normalizeServerUrl(rawUrl);
+  const apiKey = rawApiKey.trim();
+  if (!baseUrl) {
+    return { ok: false, error: 'Enter a valid server URL.' };
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers['X-Noctune-Api-Key'] = apiKey;
+    }
+    const res = await fetch(`${baseUrl}/auth/verify`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, error: 'Invalid access key. Check the key shown in Desktop Settings.' };
+    }
+    if (res.status === 502 || res.status === 503 || res.status === 530) {
+      return {
+        ok: false,
+        error: 'Tunnel is offline. Start the Mobile Server in Noctune Desktop Settings first.',
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `Server responded with HTTP ${res.status}.` };
+    }
+    const body = (await res.json()) as { ok?: boolean; version?: string };
+    if (!body?.ok) {
+      return { ok: false, error: 'Endpoint is not a valid Noctune server.' };
+    }
+    return { ok: true, version: body.version };
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') {
+      return { ok: false, error: 'Connection timed out. Verify the URL and make sure Desktop is online.' };
+    }
+    return {
+      ok: false,
+      error: 'Cannot reach server. Make sure Mobile Companion is active on your desktop.',
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 // In production Tauri builds the Vite proxy doesn't exist, so we call the backend directly.
 // In dev mode (even Tauri dev), we use the Vite proxy at /api
@@ -73,6 +196,10 @@ export async function canReachBackend(base: string): Promise<boolean> {
 }
 
 export async function getApiBase(): Promise<string> {
+  if (isMobileClientMode()) {
+    return getMobileServerConfig()?.baseUrl ?? '';
+  }
+
   // In pure web mode, use the static API_BASE (Vite proxy)
   if (!detectTauriEnvironment()) return API_BASE;
 
@@ -121,12 +248,26 @@ export async function getApiBase(): Promise<string> {
 }
 
 export async function checkBackendStatus(): Promise<boolean> {
+  if (isMobileClientMode()) {
+    const cfg = getMobileServerConfig();
+    if (!cfg?.baseUrl) return false;
+    const verified = await verifyRemoteServer(cfg.baseUrl, cfg.apiKey);
+    return verified.ok;
+  }
   const base = await getApiBase();
   return canReachBackend(base);
 }
 
 export async function apiUrl(path: string): Promise<string> {
-  return `${await getApiBase()}${path}`;
+  const base = await getApiBase();
+  if (isMobileClientMode()) {
+    const cfg = getMobileServerConfig();
+    if (cfg?.apiKey) {
+      const sep = path.includes('?') ? '&' : '?';
+      return `${base}${path}${sep}apiKey=${encodeURIComponent(cfg.apiKey)}`;
+    }
+  }
+  return `${base}${path}`;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -134,8 +275,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (options?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+  if (isMobileClientMode()) {
+    const cfg = getMobileServerConfig();
+    if (cfg?.apiKey && !headers.has('X-Noctune-Api-Key')) {
+      headers.set('X-Noctune-Api-Key', cfg.apiKey);
+    }
+  }
 
-  const res = await fetch(`${await getApiBase()}${path}`, {
+  const base = await getApiBase();
+  if (isMobileClientMode() && !base) {
+    throw new Error('Mobile server is not configured');
+  }
+
+  const res = await fetch(`${base}${path}`, {
     ...options,
     headers,
   });
@@ -198,7 +350,7 @@ export const api = {
     request<SpotifyTrackMetadata>(`/metadata/track/${encodeURIComponent(spotifyId)}`),
   youtubeMetadata: async (videoId: string) => {
     const cleanId = videoId.replace(/^(youtube|ytdlp):/, '');
-    if (detectTauriEnvironment()) {
+    if (IS_TAURI_DESKTOP) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const info = await invoke<{
@@ -296,7 +448,7 @@ export const api = {
 
   browseArtist: async (artistId: string) => {
     const cleanId = artistId.replace(/:(videos|playlists)$/, '');
-    if (detectTauriEnvironment() && (cleanId.startsWith('ytchannel:') || cleanId.startsWith('UC') || cleanId.startsWith('@'))) {
+    if (IS_TAURI_DESKTOP && (cleanId.startsWith('ytchannel:') || cleanId.startsWith('UC') || cleanId.startsWith('@'))) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         return await invoke<ArtistView>('get_youtube_channel', { channelId: cleanId });
@@ -307,7 +459,7 @@ export const api = {
     return request<ArtistView>(`/browse/artist/${encodeURIComponent(cleanId)}`);
   },
   getChannelPosts: async (channelId: string, continuationToken?: string): Promise<ChannelPostsResult> => {
-    if (detectTauriEnvironment()) {
+    if (IS_TAURI_DESKTOP) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         return await invoke<ChannelPostsResult>('get_channel_posts', {
@@ -323,7 +475,7 @@ export const api = {
   browseAlbum: (albumId: string) =>
     request<AlbumView>(`/browse/album/${encodeURIComponent(albumId)}`),
   browseYoutubePlaylist: async (playlistId: string) => {
-    if (detectTauriEnvironment()) {
+    if (IS_TAURI_DESKTOP) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         return await invoke<YouTubePlaylistView>('get_youtube_playlist', { playlistId });
@@ -379,7 +531,7 @@ export const api = {
 
   // Local files
   scanLocalFiles: async (path: string) => {
-    if (detectTauriEnvironment()) {
+    if (IS_TAURI_DESKTOP) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const files = await invoke<LocalFile[]>('scan_local_folder', { folderPath: path });
@@ -406,7 +558,7 @@ export const api = {
     });
   },
   getLocalFiles: async (limit = 50, offset = 0, importRoot?: string | null) => {
-    if (detectTauriEnvironment()) {
+    if (IS_TAURI_DESKTOP) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const files = await invoke<LocalFile[]>('get_local_files', { folderPath: importRoot || undefined });
@@ -461,7 +613,7 @@ export const api = {
 
   // ── Spotify Direct (spotstream) IPC ───────────────────────────────────────
   spotifyAuthStatus: async (): Promise<SpotifyAuthStatus> => {
-    if (!detectTauriEnvironment()) return { authenticated: false, cacheDir: '', credentialsFile: '', username: null };
+    if (!IS_TAURI_DESKTOP) return { authenticated: false, cacheDir: '', credentialsFile: '', username: null };
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<SpotifyAuthStatus>('spotify_auth_status');
@@ -491,7 +643,7 @@ export const api = {
     return await invoke<SpotifyPlaylistInfo>('spotify_playlist_info', { playlistId });
   },
   spotifyGetRadioTracks: async (seedTrackId: string, limit?: number): Promise<SpotifyRadioTrack[]> => {
-    if (!detectTauriEnvironment()) return [];
+    if (!IS_TAURI_DESKTOP) return [];
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<SpotifyRadioTrack[]>('spotify_get_radio_tracks', { seedTrackId, limit: limit ?? null });
@@ -501,7 +653,52 @@ export const api = {
     }
   },
 
+  // Desktop Mobile Companion host controls
+  getMobileHostStatus: () => request<MobileCompanionStatus>('/mobile-host/status'),
+  startMobileHost: (body?: {
+    separateDb?: boolean;
+    apiKey?: string;
+    tunnelMode?: 'quick' | 'token';
+    tunnelToken?: string;
+    customDomain?: string;
+  }) =>
+    request<MobileCompanionStatus>('/mobile-host/start', {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    }),
+  stopMobileHost: () =>
+    request<MobileCompanionStatus>('/mobile-host/stop', {
+      method: 'POST',
+      body: '{}',
+    }),
+  installCloudflared: () =>
+    request<MobileCompanionStatus>('/mobile-host/install-cloudflared', {
+      method: 'POST',
+      body: '{}',
+    }),
+
 };
+
+export interface MobileCompanionStatus {
+  state: 'stopped' | 'starting' | 'running' | 'error';
+  port: number;
+  backendRunning: boolean;
+  backendPid: number | null;
+  tunnelRunning: boolean;
+  tunnelConnected: boolean;
+  tunnelPid: number | null;
+  publicUrl: string | null;
+  lastError: string | null;
+  cloudflaredInstalled: boolean;
+  cloudflaredPath: string | null;
+  installingCloudflared: boolean;
+  separateDb: boolean;
+  tunnelMode: 'quick' | 'token';
+  hasTunnelToken: boolean;
+  customDomain: string;
+  apiKey: string;
+  logs: string[];
+}
 
 export async function resolveYouTubeChannelId(track: Track): Promise<string | undefined> {
   const isYouTubeTrack = Boolean(track.youtubeId || track.id.startsWith('youtube:') || track.id.startsWith('ytdlp:'));
@@ -913,8 +1110,14 @@ export function setSpotifyPlaybackSetting(val: 'youtube-match' | 'spotify-direct
 }
 
 // Initial fetch of settings to populate in-memory playback engine state
-apiUrl('/settings').then(url => fetch(url)).then(res => res.json()).then(data => {
-  if (data?.spotifyPlayback) {
-    cachedSpotifyPlaybackSetting = data.spotifyPlayback;
-  }
-}).catch(() => {});
+if (!isMobileClientMode() || getMobileServerConfig()?.baseUrl) {
+  apiUrl('/settings')
+    .then((url) => fetch(url))
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data?.spotifyPlayback) {
+        cachedSpotifyPlaybackSetting = data.spotifyPlayback;
+      }
+    })
+    .catch(() => {});
+}

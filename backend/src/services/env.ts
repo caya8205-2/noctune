@@ -31,6 +31,11 @@ export interface EnvConfig {
     apiKey: string;
     allowLocalhostBypass: boolean;
     downloadDir: string;
+    mobileSeparateDb: boolean;
+    mobileApiKey: string;
+    mobileTunnelMode: 'quick' | 'token';
+    mobileTunnelToken: string;
+    mobileCustomDomain: string;
 }
 
 const DEFAULTS: EnvConfig = {
@@ -46,6 +51,11 @@ const DEFAULTS: EnvConfig = {
     apiKey: '',
     allowLocalhostBypass: true,
     downloadDir: getDefaultDownloadDir(),
+    mobileSeparateDb: true,
+    mobileApiKey: '',
+    mobileTunnelMode: 'quick',
+    mobileTunnelToken: '',
+    mobileCustomDomain: '',
 };
 
 function withProcessEnv(config: EnvConfig): EnvConfig {
@@ -54,6 +64,7 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
     const envClientId = process.env.SPOTIFY_CLIENT_ID?.trim();
     const envClientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
     const envApiKey = process.env.NOCTUNE_API_KEY?.trim();
+    const envBypass = process.env.ALLOW_LOCALHOST_BYPASS;
 
     // If user hasn't explicitly saved an engine choice via Settings UI, default to innertube-rs
     let recEngine = config.recommendationEngine ?? 'innertube-rs';
@@ -61,12 +72,19 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
         recEngine = 'innertube-rs';
     }
 
+    const allowLocalhostBypass =
+        envBypass === 'false'
+            ? false
+            : envBypass === 'true'
+            ? true
+            : (config.allowLocalhostBypass ?? true);
+
     return {
         ...config,
         spotifyClientId: (envClientId || config.spotifyClientId || '').trim(),
         spotifyClientSecret: (envClientSecret || config.spotifyClientSecret || '').trim(),
         apiKey: (envApiKey || config.apiKey || '').trim(),
-        allowLocalhostBypass: config.allowLocalhostBypass ?? true,
+        allowLocalhostBypass,
         searchEngine: envSearchEngine === 'spotify' || envSearchEngine === 'ytdlp'
             ? envSearchEngine
             : config.searchEngine,
@@ -75,6 +93,11 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
             : (config.spotifyPlayback || 'youtube-match'),
         recommendationEngine: recEngine,
         downloadDir: config.downloadDir || getDefaultDownloadDir(),
+        mobileSeparateDb: config.mobileSeparateDb ?? true,
+        mobileApiKey: (config.mobileApiKey || '').trim(),
+        mobileTunnelMode: config.mobileTunnelMode === 'token' ? 'token' : 'quick',
+        mobileTunnelToken: (config.mobileTunnelToken || '').trim(),
+        mobileCustomDomain: (config.mobileCustomDomain || '').trim(),
     };
 }
 

@@ -18,6 +18,7 @@ import { updateRoutes } from './routes/updates.js';
 import { debugRoutes } from './routes/debug.js';
 import { statsRoutes } from './routes/stats.js';
 import { localFilesRoutes } from './routes/localFiles.js';
+import { mobileRoutes } from './routes/mobile.js';
 import { initDb } from './services/playlist.js';
 import { initLocalFilesDb } from './services/localFiles.js';
 import { getCacheStats } from './services/cache.js';
@@ -30,6 +31,7 @@ import { getPlaybackBlacklist } from './services/playbackBlacklist.js';
 import { getMatchCacheStats } from './services/youtubeMatcher.js';
 import { isDemoMode, scheduleDemoStateReset } from './services/demoMode.js';
 import { getDiscordRpcStatus } from './services/discordRpc.js';
+import { stopMobileCompanionSync } from './services/mobileCompanion.js';
 let rootPkg: { version: string };
 try {
   rootPkg = require('../../package.json');
@@ -42,18 +44,23 @@ try {
 }
 export const APP_VERSION: string = rootPkg.version;
 
+const IS_MOBILE_INSTANCE = process.env.NOCTUNE_MOBILE_INSTANCE === '1';
+
 for (const envPath of [
   path.resolve(process.cwd(), '.env'),
   path.resolve(process.cwd(), 'backend/.env'),
   path.resolve(process.cwd(), '..', '.env'),
 ]) {
   if (existsSync(envPath)) {
-    loadEnv({ path: envPath, override: true });
+    loadEnv({ path: envPath, override: !IS_MOBILE_INSTANCE });
   }
 }
 
 const PID_FILE = process.env.APP_DATA_DIR
-  ? path.join(path.resolve(process.env.APP_DATA_DIR), 'noctune-backend.pid')
+  ? path.join(
+      path.resolve(process.env.APP_DATA_DIR),
+      IS_MOBILE_INSTANCE ? 'noctune-mobile-backend.pid' : 'noctune-backend.pid'
+    )
   : null;
 
 function writePidFile() {
@@ -70,8 +77,8 @@ function cleanupPidFile() {
   } catch {}
 }
 
-const PREFERRED_PORT = Number(process.env.PORT ?? 3131);
-const MAX_PORT_ATTEMPTS = 10;
+const PREFERRED_PORT = Number(process.env.PORT ?? (IS_MOBILE_INSTANCE ? 3130 : 3131));
+const MAX_PORT_ATTEMPTS = IS_MOBILE_INSTANCE ? 1 : 10;
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 function decodeFormValue(value: string): string {
@@ -121,7 +128,7 @@ async function bootstrap() {
     if (request.method === 'OPTIONS') return;
 
     const url = request.url.split('?')[0];
-    if (url === '/status' || url === '/status/' || url.startsWith('/changelog') || url.startsWith('/image/proxy')) return;
+    if (url === '/status' || url === '/status/' || url.startsWith('/changelog')) return;
 
     const envConfig = getEnvConfig();
     const apiKey = envConfig.apiKey?.trim();
@@ -181,6 +188,13 @@ async function bootstrap() {
   await app.register(debugRoutes);
   await app.register(statsRoutes);
   await app.register(localFilesRoutes);
+  await app.register(mobileRoutes);
+
+  app.get('/auth/verify', async () => ({
+    ok: true,
+    version: APP_VERSION,
+    mobileInstance: IS_MOBILE_INSTANCE,
+  }));
 
   app.addHook('onResponse', (request, reply, done) => {
     addRequestLog({
@@ -286,6 +300,11 @@ async function bootstrap() {
 
 function shutdownCleanly() {
   cleanupPidFile();
+  if (!IS_MOBILE_INSTANCE) {
+    try {
+      stopMobileCompanionSync();
+    } catch {}
+  }
   try {
     const { stopSpotifyDaemon } = require('./services/spotifyDirect.js');
     stopSpotifyDaemon();

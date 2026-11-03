@@ -15,6 +15,7 @@ import { clearPlaybackBlacklist, getPlaybackBlacklist } from '../services/playba
 import { clearMatchCache, getMatchCacheStats } from '../services/youtubeMatcher.js';
 import { clearPrefetchCache } from '../services/prefetch.js';
 import { clearDiscordActivity, refreshDiscordActivity } from '../services/discordRpc.js';
+import { normalizeTunnelToken } from '../services/mobileCompanion.js';
 
 import { exec } from 'child_process';
 
@@ -30,6 +31,11 @@ const UpdateBody = z.object({
     apiKey: z.string().optional(),
     allowLocalhostBypass: z.boolean().optional(),
     downloadDir: z.string().optional(),
+    mobileSeparateDb: z.boolean().optional(),
+    mobileApiKey: z.string().max(256).optional(),
+    mobileTunnelMode: z.enum(['quick', 'token']).optional(),
+    mobileTunnelToken: z.string().max(2048).optional(),
+    mobileCustomDomain: z.string().max(256).optional(),
 });
 
 const TestBody = z.object({
@@ -51,6 +57,11 @@ export async function settingsRoutes(app: FastifyInstance) {
             apiKey: config.apiKey ?? '',
             allowLocalhostBypass: config.allowLocalhostBypass ?? true,
             downloadDir: config.downloadDir,
+            mobileSeparateDb: config.mobileSeparateDb ?? true,
+            mobileApiKey: config.mobileApiKey ?? '',
+            mobileTunnelMode: config.mobileTunnelMode ?? 'quick',
+            hasMobileTunnelToken: Boolean(config.mobileTunnelToken),
+            mobileCustomDomain: config.mobileCustomDomain ?? '',
             cache: {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),
@@ -92,7 +103,17 @@ export async function settingsRoutes(app: FastifyInstance) {
             return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
         }
         const previous = getEnvConfig();
-        const updated = saveEnvConfig(parsed.data);
+        const updates = { ...parsed.data };
+        if (updates.mobileTunnelToken !== undefined) {
+            updates.mobileTunnelToken = normalizeTunnelToken(updates.mobileTunnelToken);
+        }
+        if (updates.mobileCustomDomain !== undefined) {
+            updates.mobileCustomDomain = updates.mobileCustomDomain.trim().replace(/\/+$/, '');
+        }
+        if (updates.mobileApiKey !== undefined) {
+            updates.mobileApiKey = updates.mobileApiKey.trim();
+        }
+        const updated = saveEnvConfig(updates);
 
         // Invalidate Spotify token if credentials changed
         if (parsed.data.spotifyClientId || parsed.data.spotifyClientSecret) {
@@ -132,6 +153,11 @@ export async function settingsRoutes(app: FastifyInstance) {
             apiKey: updated.apiKey ?? '',
             allowLocalhostBypass: updated.allowLocalhostBypass ?? true,
             downloadDir: updated.downloadDir,
+            mobileSeparateDb: updated.mobileSeparateDb ?? true,
+            mobileApiKey: updated.mobileApiKey ?? '',
+            mobileTunnelMode: updated.mobileTunnelMode ?? 'quick',
+            hasMobileTunnelToken: Boolean(updated.mobileTunnelToken),
+            mobileCustomDomain: updated.mobileCustomDomain ?? '',
             cache: {
                 learning: getCacheStats(),
                 lyrics: getLyricsCacheStats(),

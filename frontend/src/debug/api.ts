@@ -1,6 +1,8 @@
 // Self-contained backend discovery + fetch helpers for the debug dashboard.
 // Runs via `vite preview` (no dev proxy) so it must locate the backend itself.
 
+import { getMobileServerConfig, isMobileClientMode } from '../utils/api';
+
 const HOST = '127.0.0.1';
 const PREFERRED_PORT = Number(import.meta.env.VITE_BACKEND_PORT ?? 3131);
 const MAX_PORT_ATTEMPTS = Number(import.meta.env.VITE_BACKEND_PORT_ATTEMPTS ?? 10);
@@ -8,6 +10,9 @@ const MAX_PORT_ATTEMPTS = Number(import.meta.env.VITE_BACKEND_PORT_ATTEMPTS ?? 1
 let cachedBase: string | null = null;
 
 export async function discoverBackend(): Promise<string | null> {
+  if (isMobileClientMode()) {
+    return getMobileServerConfig()?.baseUrl ?? null;
+  }
   if (cachedBase) return cachedBase;
   for (let attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
     const origin = `http://${HOST}:${PREFERRED_PORT + attempt}`;
@@ -30,8 +35,21 @@ export async function discoverBackend(): Promise<string | null> {
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const base = await discoverBackend();
-  if (!base) throw new Error('Backend not found on 127.0.0.1:3131-3140');
-  const res = await fetch(`${base}${path}`, options);
+  if (!base) throw new Error('Backend not found');
+  const headers = new Headers(options?.headers);
+  if (options?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (isMobileClientMode()) {
+    const cfg = getMobileServerConfig();
+    if (cfg?.apiKey && !headers.has('X-Noctune-Api-Key')) {
+      headers.set('X-Noctune-Api-Key', cfg.apiKey);
+    }
+  }
+  const res = await fetch(`${base}${path}`, {
+    ...options,
+    headers,
+  });
   const text = await res.text();
   if (!res.ok) {
     let err: { message?: string; error?: string } = {};

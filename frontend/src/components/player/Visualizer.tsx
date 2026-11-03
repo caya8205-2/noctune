@@ -109,9 +109,13 @@ export async function extractPalette(src: string): Promise<typeof FALLBACK_PALET
   try {
     if (src.startsWith('http://') || src.startsWith('https://')) {
       const apiModule = await import('../../utils/api').catch(() => null);
-      const apiBase = apiModule ? await apiModule.getApiBase().catch(() => '') : '';
-      if (apiBase) {
-        pixels = await tryLoad(`${apiBase}/image/proxy?url=${encodeURIComponent(src)}`, 'anonymous');
+      const proxyUrl = apiModule
+        ? await apiModule.apiUrl(`/image/proxy?url=${encodeURIComponent(src)}`).catch(() => '')
+        : '';
+      if (proxyUrl && !proxyUrl.startsWith('/image/proxy')) {
+        pixels = await tryLoad(proxyUrl, 'anonymous');
+      } else if (proxyUrl) {
+        pixels = await tryLoad(proxyUrl, 'anonymous');
       }
     }
     if (!pixels) {

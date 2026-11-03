@@ -17,13 +17,14 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI, setSpotifyPlaybackSetting } from '../../utils/api';
+import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI, IS_TAURI_DESKTOP, isMobileClientMode, setSpotifyPlaybackSetting } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
 import { usePlayerStore } from '../../store/player';
 import { openChangelogModal } from '../ui/ChangelogModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { MobileCompanionSection, MobileServerConnectionSection } from './MobileSettingsSection';
 const APP_VERSION = __APP_VERSION__;
 
 interface SettingsData {
@@ -101,6 +102,7 @@ const licenseGroups: Array<{ layer: string; items: Array<{ name: string; license
 
 export function SettingsView() {
   const queryClient = useQueryClient();
+  const isMobileClient = isMobileClientMode();
   const [data, setData] = useState<SettingsData | null>(null);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -248,10 +250,10 @@ export function SettingsView() {
 
   useEffect(() => {
     loadSettings().catch(console.error);
-    if (!IS_TAURI) {
+    if (!IS_TAURI && !isMobileClient) {
       api.checkForUpdates().then(setUpdateInfo).catch(console.error);
     }
-  }, []);
+  }, [isMobileClient]);
 
   async function handleSave() {
     setSaving(true);
@@ -635,12 +637,15 @@ export function SettingsView() {
         </h1>
       </div>
 
-      {/* Updates */}
-      <section className="surface-panel flex flex-col gap-4 p-5">
-        <div>
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Updates
-          </h2>
+      {/* Mobile Client Server Connection (Mobile) or Updates (Desktop) */}
+      {isMobileClient ? (
+        <MobileServerConnectionSection onReconnected={() => loadSettings().catch(console.error)} />
+      ) : (
+        <section className="surface-panel flex flex-col gap-4 p-5">
+          <div>
+            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+              Updates
+            </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
             Noctune checks for updates in the background on startup and every 5 hours while open.
           </p>
@@ -732,9 +737,14 @@ export function SettingsView() {
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      )}
 
-      {/* Download Location */}
+      {/* Mobile Companion Host Setup (Desktop only) */}
+      {!isMobileClient && <MobileCompanionSection />}
+
+      {/* Download Location (Desktop only) */}
+      {!isMobileClient && (
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -775,6 +785,7 @@ export function SettingsView() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Spotify API Credentials */}
       {IS_TAURI && (
@@ -927,7 +938,7 @@ export function SettingsView() {
         )}
 
         {/* Close to System Tray */}
-        {IS_TAURI && (
+        {IS_TAURI_DESKTOP && (
           <button
             type="button"
             onClick={() => handleCloseToTrayToggle(!closeToTray)}
@@ -1428,7 +1439,8 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Keyboard Shortcuts */}
+      {/* Keyboard Shortcuts (Desktop only) */}
+      {!isMobileClient && (
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div className="flex items-start gap-3">
           <div>
@@ -1455,6 +1467,7 @@ export function SettingsView() {
           ))}
         </div>
       </section>
+      )}
 
       {/* Licenses */}
       <section className="surface-panel flex flex-col gap-4 p-5">

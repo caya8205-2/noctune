@@ -529,13 +529,13 @@ function AppInner() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <StartupGate>
-        <QueryClientProvider client={qc}>
+      <QueryClientProvider client={qc}>
+        <StartupGate>
           <DownloadProvider>
             <AppInner />
           </DownloadProvider>
-        </QueryClientProvider>
-      </StartupGate>
+        </StartupGate>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

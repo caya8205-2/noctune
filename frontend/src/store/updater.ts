@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { IS_TAURI } from '../utils/api';
+import { IS_TAURI, IS_TAURI_MOBILE } from '../utils/api';
 import type { Update } from '@tauri-apps/plugin-updater';
 
 let pendingUpdate: Update | null = null;
@@ -92,6 +92,11 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
     set({ checking: true, error: null, currentVersion: localVersion });
 
     try {
+      if (IS_TAURI_MOBILE) {
+        set({ checking: false, updateAvailable: false });
+        return;
+      }
+
       if (!IS_TAURI) {
         // Fallback for browser / web mode
         const { api } = await import('../utils/api');
