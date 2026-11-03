@@ -1732,12 +1732,12 @@ function BlacklistPanel() {
 
   return (
     <div className="surface-panel p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold text-white">Playback Blacklist</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={refresh} disabled={loading} className="btn-ghost" title="Refresh">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -1796,7 +1796,7 @@ function BlacklistPanel() {
                 </div>
                 <button
                   onClick={() => clearOne(e.videoId)}
-                  className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                  className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-100 sm:opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 sm:group-hover:opacity-100 min-h-[36px] min-w-[36px] flex items-center justify-center"
                   title="Remove from blacklist"
                 >
                   <Trash2 size={14} />
@@ -1868,8 +1868,8 @@ function AudioCachePanel() {
 
   return (
     <div className="surface-panel p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold text-white">Audio File Cache</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">
             {files.length} files · {formatBytes(totalBytes)}
@@ -1920,7 +1920,7 @@ function AudioCachePanel() {
               </div>
               <button
                 onClick={() => clearOne(f.videoId)}
-                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                className="flex-shrink-0 rounded-md p-1.5 text-muted opacity-100 sm:opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 sm:group-hover:opacity-100 min-h-[36px] min-w-[36px] flex items-center justify-center"
                 title="Delete cached file"
               >
                 <Trash2 size={14} />
@@ -2004,12 +2004,12 @@ function RequestLogPanel() {
 
   return (
     <div className="surface-panel p-5">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-white">Request Log</h2>
           <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs text-soft">{entries.length} entries</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setAutoRefresh((v) => !v)}
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -2406,7 +2406,7 @@ function MlModelPanel() {
           <span className="text-xs font-semibold text-white">
             Live ML Recommendation Sandbox
           </span>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 w-full">
             <input
               type="file"
               ref={fileInputRef}
@@ -2417,7 +2417,7 @@ function MlModelPanel() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
+              className="flex items-center justify-center sm:justify-start gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-2 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40 min-h-[40px]"
               title="Import telemetry JSON file or full seed-model.json from Cloudflare KV Collector to update persistent Roaming seed-model.json"
             >
               <FileText size={13} /> Import Telemetry JSON
@@ -2425,7 +2425,7 @@ function MlModelPanel() {
             <button
               onClick={handleContributeDataset}
               disabled={submitting || importing}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
+              className="flex items-center justify-center sm:justify-start gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-2 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40 min-h-[40px]"
               title="Submit anonymous listening dataset to help train Noctune's next base model"
             >
               {submitting ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
@@ -2434,7 +2434,7 @@ function MlModelPanel() {
             <button
               onClick={handleImportProd}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
+              className="flex items-center justify-center sm:justify-start gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-2 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40 min-h-[40px]"
               title="Import tracks & play history from songs.json into play-log.json in AppData Roaming (does not alter seed-model.json)"
             >
               {importing ? <RefreshCw size={13} className="animate-spin" /> : <HardDrive size={13} />}
@@ -2443,7 +2443,7 @@ function MlModelPanel() {
             <button
               onClick={handleClearDataset}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40"
+              className="flex items-center justify-center sm:justify-start gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40 min-h-[40px]"
               title="Clear all recorded play events and reset ML dataset"
             >
               <Trash2 size={13} /> Clear Dataset
@@ -2451,7 +2451,7 @@ function MlModelPanel() {
             <button
               onClick={handleTestPredictions}
               disabled={testing || !currentTrack}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-1.5 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
+              className="flex items-center justify-center sm:justify-start gap-1.5 rounded-lg border border-white/10 bg-base-900/60 px-3 py-2 text-xs font-medium text-soft hover:border-white/20 hover:text-white transition-colors disabled:opacity-40 min-h-[40px] col-span-1 sm:col-span-2 lg:col-span-1"
             >
               {testing ? <RefreshCw size={13} className="animate-spin" /> : <RotateCw size={13} />}
               {testing ? 'Predicting...' : 'Test ML Predictions'}

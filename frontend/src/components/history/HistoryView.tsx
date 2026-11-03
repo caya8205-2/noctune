@@ -136,7 +136,7 @@ export function HistoryView() {
           <p className="text-xs text-muted mt-2">
             {isLoading ? 'Loading playback history' : `${tracks.length} tracks from local playback`}
           </p>
-          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted">
+          <div className="hidden md:flex items-center gap-3 mt-2 text-[10px] text-muted">
             <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
             <span className="flex items-center gap-1"><Search size={10} /> Search</span>
             <span className="flex items-center gap-1"><House size={10} /> Home</span>

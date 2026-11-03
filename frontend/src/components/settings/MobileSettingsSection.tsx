@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { CheckCircle, Eye, EyeOff, Loader2, QrCode } from 'lucide-react';
 import {
   api,
   apiUrl,
@@ -11,6 +11,9 @@ import {
   verifyRemoteServer,
 } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
+import { QrCodeView } from '../ui/QrCodeView';
+import { QrScannerModal } from '../ui/QrScannerModal';
+import { parsePairingData } from '../../utils/qr';
 
 function generateRandomAccessKey(): string {
   const bytes = new Uint8Array(12);
@@ -34,6 +37,7 @@ export function MobileCompanionSection() {
   const [busyAction, setBusyAction] = useState<'start' | 'stop' | 'save' | 'install' | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [copiedField, setCopiedField] = useState<'url' | 'key' | null>(null);
+  const [showQr, setShowQr] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
@@ -274,20 +278,48 @@ export function MobileCompanionSection() {
         </div>
 
         {isRunning && status?.publicUrl && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-base-600/60 bg-base-950 px-3 py-2">
-            <div className="min-w-0">
-              <span className="block text-[10px] uppercase tracking-wider text-muted">Tunnel URL</span>
-              <span className="block truncate font-mono text-xs text-accent select-all mt-0.5">
-                {status.publicUrl}
-              </span>
+          <div className="flex flex-col gap-2 rounded-lg border border-base-600/60 bg-base-950 p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="block text-[10px] uppercase tracking-wider text-muted">Tunnel URL</span>
+                <span className="block truncate font-mono text-xs text-accent select-all mt-0.5">
+                  {status.publicUrl}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowQr((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors"
+                >
+                  <QrCode size={13} />
+                  <span>{showQr ? 'Hide QR' : 'Pairing QR'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyText(status.publicUrl || '', 'url')}
+                  className="rounded-lg border border-base-600 bg-base-800 px-3 py-1.5 text-xs font-medium text-soft hover:text-white hover:border-base-500 transition-colors"
+                >
+                  {copiedField === 'url' ? 'Copied!' : 'Copy URL'}
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => copyText(status.publicUrl || '', 'url')}
-              className="rounded-lg border border-base-600 bg-base-800 px-3 py-1.5 text-xs font-medium text-soft hover:text-white hover:border-base-500 transition-colors flex-shrink-0"
-            >
-              {copiedField === 'url' ? 'Copied!' : 'Copy URL'}
-            </button>
+
+            {showQr && (
+              <div className="mt-2 pt-3 border-t border-white/[0.08] flex flex-col sm:flex-row items-center gap-4">
+                <QrCodeView
+                  value={JSON.stringify({
+                    url: status.publicUrl,
+                    key: status.apiKey || apiKey,
+                  })}
+                  size={160}
+                />
+                <div className="text-center sm:text-left text-xs text-muted leading-relaxed max-w-sm">
+                  <p className="font-semibold text-white mb-1">Instant Mobile Pairing</p>
+                  <p>Open Noctune on your phone and tap <strong className="text-accent">Scan Pairing QR</strong> to connect immediately without typing.</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -497,22 +529,20 @@ export function MobileServerConnectionSection({ onReconnected }: { onReconnected
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
-  async function handleReconnect() {
-    if (!serverUrl.trim()) {
-      setError('Server URL cannot be empty.');
-      return;
-    }
+  async function applyConnection(url: string, key: string) {
+    if (!url.trim()) return;
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
-      const check = await verifyRemoteServer(serverUrl, accessKey);
+      const check = await verifyRemoteServer(url, key);
       if (!check.ok) {
         setError(check.error ?? 'Failed to verify server.');
         return;
       }
-      const next = setMobileServerConfig(serverUrl, accessKey);
+      const next = setMobileServerConfig(url, key);
       setServerUrl(next.baseUrl);
       setAccessKey(next.apiKey);
       await queryClient.invalidateQueries();
@@ -522,6 +552,21 @@ export function MobileServerConnectionSection({ onReconnected }: { onReconnected
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleScan(code: string) {
+    const data = parsePairingData(code);
+    if (data) {
+      setServerUrl(data.url);
+      setAccessKey(data.key);
+      void applyConnection(data.url, data.key);
+    } else {
+      setError('Invalid pairing QR code.');
+    }
+  }
+
+  async function handleReconnect() {
+    await applyConnection(serverUrl, accessKey);
   }
 
   function handleDisconnect() {
@@ -546,6 +591,15 @@ export function MobileServerConnectionSection({ onReconnected }: { onReconnected
           Connected
         </span>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setScannerOpen(true)}
+        className="flex items-center justify-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-4 py-2.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-all min-h-[42px] w-full"
+      >
+        <QrCode size={15} />
+        <span>Scan QR to Re-Pair</span>
+      </button>
 
       <div className="flex flex-col gap-3">
         <div>
@@ -622,6 +676,12 @@ export function MobileServerConnectionSection({ onReconnected }: { onReconnected
           )}
         </button>
       </div>
+
+      <QrScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScan}
+      />
     </section>
   );
 }

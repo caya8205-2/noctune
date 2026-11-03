@@ -29,6 +29,7 @@ import { DownloadProvider } from './hooks/useDownloadTrack';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ChangelogModal } from './components/ui/ChangelogModal';
 import { StartupGate } from './components/ui/StartupGate';
+import { IS_TAURI_DESKTOP } from './utils/api';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -239,6 +240,27 @@ function AppInner() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [IS_TAURI]);
 
+  // Open sidebar drawer and scroll to requested section on custom event
+  useEffect(() => {
+    function handleOpenSidebar(e: Event) {
+      setMobileMenuOpen(true);
+      const detail = (e as CustomEvent)?.detail;
+      if (detail?.scrollTo) {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const targets = document.querySelectorAll<HTMLElement>(`#${detail.scrollTo}`);
+            targets.forEach((target) => {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+          }, 150);
+        });
+      }
+    }
+
+    window.addEventListener('noctune:open-sidebar', handleOpenSidebar);
+    return () => window.removeEventListener('noctune:open-sidebar', handleOpenSidebar);
+  }, []);
+
   const mainRef = useRef<HTMLElement | null>(null);
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
 
@@ -340,18 +362,20 @@ function AppInner() {
 
       {/* Title bar */}
       <div
-        data-tauri-drag-region
-        className="relative z-10 grid h-14 grid-cols-[auto_1fr_auto] select-none items-center gap-3 border-b border-white/[0.06] bg-base-950/40 px-3 backdrop-blur-xl md:flex md:h-10 md:px-4"
+        {...(IS_TAURI_DESKTOP ? { 'data-tauri-drag-region': true } : {})}
+        className="relative z-20 grid min-h-[56px] grid-cols-[auto_1fr_auto] select-none items-center gap-2 border-b border-white/[0.06] bg-base-950/75 px-2.5 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:flex md:h-10 md:min-h-0 md:px-4 md:pt-0"
       >
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="btn-ghost p-2 md:hidden"
+          aria-label="Open navigation menu"
+          className="relative z-20 flex h-11 w-11 items-center justify-center rounded-xl text-soft transition-colors active:scale-95 active:bg-white/10 hover:bg-white/[0.06] hover:text-white touch-manipulation md:hidden"
           title="Open menu"
         >
-          <Menu size={20} />
+          <Menu size={22} />
         </button>
-        {IS_TAURI && (
+        <div className="pointer-events-none md:hidden" />
+        {IS_TAURI_DESKTOP && (
           <div className="group hidden items-center gap-1.5 md:flex">
             <button
               onClick={handleClose}
@@ -382,10 +406,11 @@ function AppInner() {
         <button
           type="button"
           onClick={() => setView('search')}
-          className="btn-ghost justify-self-end p-2 md:hidden"
+          aria-label="Search"
+          className="relative z-20 flex h-11 w-11 items-center justify-center justify-self-end rounded-xl text-accent transition-colors active:scale-95 active:bg-white/10 hover:bg-white/[0.06] touch-manipulation md:hidden"
           title="Search"
         >
-          <Search size={20} className="text-accent" />
+          <Search size={21} />
         </button>
       </div>
 
@@ -439,7 +464,7 @@ function AppInner() {
       </div>
 
       {currentTrack && (
-        <div className={playerBarClass}>
+        <div className={`${playerBarClass}${activeView === 'player' ? ' hidden md:block' : ''}`}>
           <PlayerBar />
         </div>
       )}
@@ -503,14 +528,15 @@ function AppInner() {
             aria-label="Close menu"
           />
           <aside className="absolute bottom-0 left-0 top-0 w-[82vw] max-w-80 animate-slide-up border-r border-white/[0.08] bg-base-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl">
-            <div className="absolute right-3 top-3 z-10">
+            <div className="absolute right-2.5 top-2.5 z-20">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="btn-ghost p-2"
+                aria-label="Close menu"
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-soft transition-colors active:bg-white/10 hover:bg-white/[0.06] hover:text-white touch-manipulation"
                 title="Close menu"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
             <Sidebar onNavigate={() => setMobileMenuOpen(false)} />

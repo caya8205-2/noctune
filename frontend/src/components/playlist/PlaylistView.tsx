@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, Grid, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, List, ListMusic, Loader2, Maximize2, Music2, Pencil, Play, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Grid, HardDrive, GripVertical, Heart, ImageOff, ImagePlus, List, ListMusic, Loader2, Maximize2, Music2, Pencil, Play, RefreshCw, Repeat, Repeat1, Save, Search, Shuffle, Trash2, X } from 'lucide-react';
 import { api, isTrackActive, resolveYouTubeChannelId, type Playlist, type Track } from '../../utils/api';
 import { formatDuration } from '../../utils/format';
 import { usePlayerStore } from '../../store/player';
@@ -301,7 +301,9 @@ export function PlaylistView() {
   const [refreshingDiscover, setRefreshingDiscover] = useState(false);
   const [showArtwork, setShowArtwork] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const { activePlaylistId, activePersonalMix, playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const { activePlaylistId, activePersonalMix, playTrack, currentTrack, isPlaying, setView, shuffle, repeat, cyclePlaybackMode } = usePlayerStore();
   const qc = useQueryClient();
   const isSmartPlaylist = Boolean(activePlaylistId?.startsWith('smart:'));
   const hasVirtualPlaylistId = Boolean(activePlaylistId?.startsWith('nightly:'));
@@ -469,8 +471,9 @@ export function PlaylistView() {
 
   function handlePlayAll() {
     if (tracks.length === 0) return;
+    const startIndex = shuffle ? Math.floor(Math.random() * tracks.length) : 0;
     playTrack(
-      { ...tracks[0], queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName },
+      { ...tracks[startIndex], queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName },
       tracks.map((track) => ({ ...track, queueSource, originalPlaylistId: activePlaylistId ?? undefined, originalPlaylistName: playlistName })),
       { queueSource }
     );
@@ -553,6 +556,26 @@ export function PlaylistView() {
     if (!activePlaylistId || isLikedPlaylist || isNightlyMix) return;
     setPendingRemoveTrack(track);
   }
+
+  useEffect(() => {
+    setIsScrolled(false);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activePlaylistId]);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const next = e.currentTarget.scrollTop > 120;
+    if (next !== isScrolled) setIsScrolled(next);
+  }
+
+  const modeTitle = shuffle
+    ? 'Playback mode: Shuffle on (click for Repeat all)'
+    : repeat === 'all'
+    ? 'Playback mode: Repeat all (click for Repeat one)'
+    : repeat === 'one'
+    ? 'Playback mode: Repeat one (click to turn off)'
+    : 'Playback mode: Normal (click for Shuffle)';
 
   async function confirmRemoveTrack() {
     if (!pendingRemoveTrack || !activePlaylistId || isLikedPlaylist || isNightlyMix) return;
@@ -666,184 +689,291 @@ export function PlaylistView() {
           onApply={handleApplyCover}
         />
       )}
-      <div className="relative px-4 pt-5 pb-4 sm:px-6 lg:px-9 lg:pt-8 lg:pb-5 flex flex-col gap-5">
-        {isYoutubePlaylist && (
-          <button
-            type="button"
-            onClick={() => history.back()}
-            className="btn-ghost absolute left-4 top-4 p-1.5 z-20 sm:left-6 lg:left-9"
-            title="Go back"
-          >
-            <ArrowLeft size={16} />
-          </button>
-        )}
-        {/* Top: Cover + Details */}
-        <div className={clsx('flex items-end gap-5 min-w-0', isYoutubePlaylist && 'pt-6 sm:pt-4')}>
-          <button
-            type="button"
-            onClick={() => playlistCover && setShowArtwork(true)}
-            disabled={!playlistCover}
-            title={playlistCover ? 'Click to view artwork' : undefined}
-            className="group relative flex h-28 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-600/60 bg-base-800 text-muted sm:h-32 sm:w-32 disabled:cursor-default"
-          >
+      {/* Unified single scroll container */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="relative flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-8"
+      >
+        {/* Compact Sticky Header Bar - transitions in when scrolled */}
+        <div
+          className={clsx(
+            'sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-9 px-4 sm:px-6 lg:px-9 flex items-center justify-between transition-all duration-200 border-b',
+            isScrolled
+              ? 'h-14 opacity-100 translate-y-0 border-white/[0.08] bg-base-950/92 backdrop-blur-xl'
+              : 'h-0 opacity-0 -translate-y-2 border-transparent overflow-hidden pointer-events-none'
+          )}
+        >
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+            {isYoutubePlaylist && (
+              <button
+                type="button"
+                onClick={() => history.back()}
+                className="btn-ghost p-1.5 shrink-0"
+                title="Go back"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
             {playlistCover ? (
-              <>
-                <img src={playlistCover} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                <span className="absolute inset-0 flex items-center justify-center gap-1 bg-black/45 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-                  <Maximize2 size={15} /> View Art
-                </span>
-              </>
-            ) : isYoutubePlaylist && isYoutubePlaylistLoading ? (
-              <Loader2 size={34} strokeWidth={1.3} className="animate-spin text-accent" />
+              <img src={playlistCover} alt="" className="h-8 w-8 rounded-lg object-cover flex-shrink-0" />
             ) : isLikedPlaylist ? (
-              <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
+              <div className="h-8 w-8 rounded-lg bg-base-800 border border-base-600/60 flex items-center justify-center shrink-0">
+                <Heart size={16} fill="currentColor" className="text-accent" />
+              </div>
             ) : (
-              <ListMusic size={34} strokeWidth={1.3} />
+              <div className="h-8 w-8 rounded-lg bg-base-800 border border-base-600/60 flex items-center justify-center shrink-0">
+                <ListMusic size={16} className="text-muted" />
+              </div>
             )}
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="section-label text-accent">{playlistLabel}</p>
-            {editing && canEditPlaylist ? (
-              <form onSubmit={handleRename} className="mt-2 flex items-center gap-2">
-                <input
-                  value={draftName}
-                  onChange={(e) => setDraftName(e.target.value)}
-                  className="min-w-0 max-w-xl bg-base-900 border border-base-600 rounded-lg px-3 py-2 text-2xl sm:text-3xl font-bold text-white focus:outline-none focus:border-accent"
-                  placeholder="Playlist name"
-                />
-                <button
-                  type="submit"
-                  disabled={savingDetails || !draftName.trim() || draftName.trim() === playlist?.name}
-                  className="btn-accent p-2.5 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                  title="Save name"
-                >
-                  <Save size={16} />
-                </button>
-              </form>
-            ) : (
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mt-1.5 truncate max-w-full" title={playlistName}>
-                {playlistName}
-              </h1>
-            )}
-            <p className="text-xs text-muted mt-2">
-              {isPlaylistLoading ? 'Loading tracks' : tracks.length + ' tracks'}
-            </p>
-            {playlistDescription && (
-              <p className="text-xs text-muted/90 mt-1.5 leading-relaxed max-w-2xl">
-                {playlistDescription}
+            <span className="truncate text-sm sm:text-base font-bold text-white leading-tight">
+              {playlistName}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handlePlayAll}
+              disabled={tracks.length === 0}
+              className="btn-accent h-9 w-9 rounded-full p-0 flex items-center justify-center shadow-md shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+              title="Play all"
+              aria-label="Play all"
+            >
+              <Play size={15} fill="currentColor" className="ml-0.5" />
+            </button>
+            <button
+              type="button"
+              onClick={cyclePlaybackMode}
+              className={clsx(
+                'h-9 w-9 rounded-full border p-0 flex items-center justify-center transition-all touch-manipulation',
+                shuffle
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_10px_rgba(234,177,76,0.2)]'
+                  : repeat !== 'off'
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_10px_rgba(234,177,76,0.2)]'
+                  : 'border-base-600/70 bg-base-900/80 text-muted hover:text-white'
+              )}
+              title={modeTitle}
+              aria-label={modeTitle}
+            >
+              {shuffle ? <Shuffle size={15} /> : repeat === 'one' ? <Repeat1 size={15} /> : <Repeat size={15} />}
+            </button>
+            <button
+              type="button"
+              onClick={handleCachePlaylist}
+              disabled={tracks.length === 0 || cachingAudio}
+              className="h-9 w-9 rounded-full border border-base-600/70 bg-base-900/80 text-soft hover:text-white flex items-center justify-center p-0 disabled:opacity-40 touch-manipulation"
+              title={isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+              aria-label={isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+            >
+              {cachingAudio ? <Loader2 size={14} className="animate-spin text-accent" /> : <HardDrive size={15} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Normal in-flow Hero Header */}
+        <div className="relative pt-4 pb-3 sm:pt-6 sm:pb-4 flex flex-col gap-4">
+          {isYoutubePlaylist && (
+            <button
+              type="button"
+              onClick={() => history.back()}
+              className="btn-ghost absolute left-0 top-1 p-1.5 z-20"
+              title="Go back"
+            >
+              <ArrowLeft size={16} />
+            </button>
+          )}
+          {/* Top: Cover + Details */}
+          <div className={clsx('flex items-end gap-5 min-w-0', isYoutubePlaylist && 'pt-6 sm:pt-4')}>
+            <button
+              type="button"
+              onClick={() => playlistCover && setShowArtwork(true)}
+              disabled={!playlistCover}
+              title={playlistCover ? 'Click to view artwork' : undefined}
+              className="group relative flex h-28 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-600/60 bg-base-800 text-muted sm:h-32 sm:w-32 disabled:cursor-default"
+            >
+              {playlistCover ? (
+                <>
+                  <img src={playlistCover} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  <span className="absolute inset-0 flex items-center justify-center gap-1 bg-black/45 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    <Maximize2 size={15} /> View Art
+                  </span>
+                </>
+              ) : isYoutubePlaylist && isYoutubePlaylistLoading ? (
+                <Loader2 size={34} strokeWidth={1.3} className="animate-spin text-accent" />
+              ) : isLikedPlaylist ? (
+                <Heart size={36} strokeWidth={1.4} fill="currentColor" className="text-accent" />
+              ) : (
+                <ListMusic size={34} strokeWidth={1.3} />
+              )}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="section-label text-accent">{playlistLabel}</p>
+              {editing && canEditPlaylist ? (
+                <form onSubmit={handleRename} className="mt-2 flex items-center gap-2">
+                  <input
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    className="min-w-0 max-w-xl bg-base-900 border border-base-600 rounded-lg px-3 py-2 text-2xl sm:text-3xl font-bold text-white focus:outline-none focus:border-accent"
+                    placeholder="Playlist name"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingDetails || !draftName.trim() || draftName.trim() === playlist?.name}
+                    className="btn-accent p-2.5 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    title="Save name"
+                  >
+                    <Save size={16} />
+                  </button>
+                </form>
+              ) : (
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mt-1.5 truncate max-w-full" title={playlistName}>
+                  {playlistName}
+                </h1>
+              )}
+              <p className="text-xs text-muted mt-2">
+                {isPlaylistLoading ? 'Loading tracks' : tracks.length + ' tracks'}
               </p>
-            )}
-            {editing && canEditPlaylist && (
-              <div className="flex items-center gap-2 mt-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={handleCoverFile}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={savingDetails}
-                  className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 whitespace-nowrap"
-                >
-                  <ImagePlus size={14} />
-                  Upload cover
-                </button>
-                {playlistCover && (
+              {playlistDescription && (
+                <p className="text-xs text-muted/90 mt-1.5 leading-relaxed max-w-2xl">
+                  {playlistDescription}
+                </p>
+              )}
+              {editing && canEditPlaylist && (
+                <div className="flex items-center gap-2 mt-3">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleCoverFile}
+                    className="hidden"
+                  />
                   <button
                     type="button"
-                    onClick={handleRemoveCover}
+                    onClick={() => fileInputRef.current?.click()}
                     disabled={savingDetails}
-                    className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 text-muted hover:text-red-400 disabled:opacity-40 whitespace-nowrap"
+                    className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 disabled:opacity-40 whitespace-nowrap"
                   >
-                    <ImageOff size={14} />
-                    Remove cover
+                    <ImagePlus size={14} />
+                    Upload cover
                   </button>
-                )}
-              </div>
+                  {playlistCover && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCover}
+                      disabled={savingDetails}
+                      className="btn-ghost px-3 py-1.5 text-xs gap-1.5 border border-base-600/40 text-muted hover:text-red-400 disabled:opacity-40 whitespace-nowrap"
+                    >
+                      <ImageOff size={14} />
+                      Remove cover
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom: Action bar (Circular icon-only actions) */}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handlePlayAll}
+              disabled={tracks.length === 0}
+              aria-label="Play all"
+              title="Play all"
+              className="btn-accent h-11 w-11 rounded-full p-0 flex items-center justify-center shadow-lg shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+            >
+              <Play size={18} fill="currentColor" className="ml-0.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={cyclePlaybackMode}
+              aria-label={modeTitle}
+              title={modeTitle}
+              className={clsx(
+                'h-11 w-11 rounded-full border p-0 flex items-center justify-center transition-all touch-manipulation',
+                shuffle
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_12px_rgba(234,177,76,0.25)]'
+                  : repeat !== 'off'
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_12px_rgba(234,177,76,0.25)]'
+                  : 'border-base-600/70 bg-base-900/80 text-muted hover:text-white'
+              )}
+            >
+              {shuffle ? <Shuffle size={17} /> : repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}
+            </button>
+
+            {(isSmartPlaylist || isNightlyMix) && (
+              <button
+                type="button"
+                onClick={handleRefreshMixOrSmartPlaylist}
+                disabled={refreshingDiscover || isSmartPlaylistLoading}
+                aria-label={isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
+                title={isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
+                className="h-11 w-11 rounded-full border border-base-600/70 bg-base-900/80 text-soft hover:text-white flex items-center justify-center p-0 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+              >
+                {refreshingDiscover ? <Loader2 size={16} className="animate-spin text-accent" /> : <RefreshCw size={16} />}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCachePlaylist}
+              disabled={tracks.length === 0 || cachingAudio}
+              aria-label={isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+              title={isNightlyMix ? 'Cache mix' : 'Cache playlist'}
+              className="h-11 w-11 rounded-full border border-base-600/70 bg-base-900/80 text-soft hover:text-white flex items-center justify-center p-0 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+            >
+              {cachingAudio ? <Loader2 size={16} className="animate-spin text-accent" /> : <HardDrive size={16} />}
+            </button>
+
+            {canEditPlaylist && (
+              editing ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={saveEditing}
+                    disabled={savingDetails}
+                    aria-label="Save changes"
+                    title="Save changes"
+                    className="btn-accent h-11 w-11 rounded-full p-0 flex items-center justify-center shadow-md touch-manipulation"
+                  >
+                    <Check size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    disabled={savingDetails}
+                    aria-label="Cancel editing"
+                    title="Cancel editing"
+                    className="btn-ghost h-11 w-11 rounded-full border border-base-600/60 p-0 flex items-center justify-center text-muted hover:text-white touch-manipulation"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  aria-label="Edit playlist"
+                  title="Edit playlist"
+                  className="btn-ghost h-11 w-11 rounded-full border border-base-600/70 bg-base-900/80 text-soft hover:text-white flex items-center justify-center p-0 touch-manipulation"
+                >
+                  <Pencil size={17} />
+                </button>
+              )
             )}
           </div>
         </div>
 
-        {/* Bottom: Action bar */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handlePlayAll}
-            disabled={tracks.length === 0}
-            className="btn-accent whitespace-nowrap px-5 py-2.5 text-xs gap-2 rounded-full shadow-lg shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
-          >
-            <Play size={14} fill="currentColor" />
-            Play all
-          </button>
-          {(isSmartPlaylist || isNightlyMix) && (
-            <button
-              type="button"
-              onClick={handleRefreshMixOrSmartPlaylist}
-              disabled={refreshingDiscover || isSmartPlaylistLoading}
-              className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
-              title={isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
-            >
-              {refreshingDiscover ? <Loader2 size={14} className="animate-spin text-accent" /> : <RefreshCw size={14} />}
-              {isNightlyMix ? 'Refresh mix' : 'Refresh playlist'}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleCachePlaylist}
-            disabled={tracks.length === 0 || cachingAudio}
-            className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {cachingAudio ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
-            {isNightlyMix ? 'Cache mix' : 'Cache playlist'}
-          </button>
-          {canEditPlaylist && (
-            editing ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={saveEditing}
-                  disabled={savingDetails}
-                  className="btn-accent whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 rounded-xl shadow-md font-medium"
-                >
-                  <Check size={14} />
-                  Done
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEditing}
-                  disabled={savingDetails}
-                  className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl text-muted hover:text-white"
-                >
-                  <X size={14} />
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={startEditing}
-                className="btn-ghost whitespace-nowrap px-3.5 py-2 text-xs gap-1.5 border border-base-600/40 rounded-xl"
-              >
-                <Pencil size={14} />
-                Edit playlist
-              </button>
-            )
-          )}
-        </div>
-      </div>
+        {cacheMessage && (
+          <div className="pb-3 -mt-2">
+            <p className="rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
+              {cacheMessage}
+            </p>
+          </div>
+        )}
 
-      {cacheMessage && (
-        <div className="px-4 sm:px-6 lg:px-9 pb-3 -mt-2">
-          <p className="rounded-lg border border-base-600/60 bg-base-800 px-3 py-2 text-xs text-muted">
-            {cacheMessage}
-          </p>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-6">
         {isPlaylistLoading && (
           <div className="flex min-h-[18rem] h-full flex-col items-center justify-center gap-3 text-muted">
             <Loader2 size={28} strokeWidth={1.5} className="animate-spin text-accent" />
@@ -859,49 +989,52 @@ export function PlaylistView() {
           </div>
         )}
 
+        {/* Filter bar - in-flow so it scrolls off naturally on mobile */}
         {tracks.length > 0 && (
-          <div className="sticky top-0 z-20 -mx-4 mb-3 flex flex-col gap-2 bg-base-950/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:flex-row sm:px-6 lg:-mx-9 lg:px-9">
+          <div className="my-2 flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 value={trackFilter}
                 onChange={(event) => setTrackFilter(event.target.value)}
                 placeholder="Filter this playlist"
-                className="input-base h-10 pl-8 text-xs"
+                className="input-base h-10 pl-8 text-xs w-full"
               />
             </div>
-            <select
-              value={sortMode}
-              onChange={(event) => setSortMode(event.target.value as PlaylistSort)}
-              className="input-base h-10 sm:w-44 text-xs"
-            >
-              <option value="custom">Custom order</option>
-              <option value="title-asc">Title A-Z</option>
-              <option value="title-desc">Title Z-A</option>
-              <option value="artist-asc">Artist A-Z</option>
-              <option value="artist-desc">Artist Z-A</option>
-              <option value="duration-asc">Duration (Shortest-Longest)</option>
-              <option value="duration-desc">Duration (Longest-Shortest)</option>
-            </select>
-            <div className="flex shrink-0 rounded-lg border border-base-600/50 bg-base-900 p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={clsx('rounded-md p-2 transition-colors', viewMode === 'grid' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white')}
-                title="Grid view"
-                aria-label="Grid view"
+            <div className="flex items-center gap-2">
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value as PlaylistSort)}
+                className="input-base h-10 flex-1 sm:w-44 text-xs"
               >
-                <Grid size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={clsx('rounded-md p-2 transition-colors', viewMode === 'list' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white')}
-                title="List view"
-                aria-label="List view"
-              >
-                <List size={15} />
-              </button>
+                <option value="custom">Custom order</option>
+                <option value="title-asc">Title A-Z</option>
+                <option value="title-desc">Title Z-A</option>
+                <option value="artist-asc">Artist A-Z</option>
+                <option value="artist-desc">Artist Z-A</option>
+                <option value="duration-asc">Duration (Shortest-Longest)</option>
+                <option value="duration-desc">Duration (Longest-Shortest)</option>
+              </select>
+              <div className="flex shrink-0 rounded-lg border border-base-600/50 bg-base-900 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={clsx('rounded-md p-2 transition-colors', viewMode === 'grid' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white')}
+                  title="Grid view"
+                  aria-label="Grid view"
+                >
+                  <Grid size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={clsx('rounded-md p-2 transition-colors', viewMode === 'list' ? 'bg-accent/20 text-accent' : 'text-muted hover:text-white')}
+                  title="List view"
+                  aria-label="List view"
+                >
+                  <List size={15} />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -966,24 +1099,23 @@ export function PlaylistView() {
                 if (!editing) handlePlay(track);
               }}
             >
-              <div
-                className={clsx(
-                  'w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted transition-opacity',
-                  canReorder ? 'opacity-100 cursor-grab active:cursor-grabbing' : 'opacity-30'
-                )}
-                onPointerDown={(event) => {
-                  if (!canReorder || event.button !== 0) return;
-                  event.preventDefault();
-                  dragFromIndexRef.current = originalIndex;
-                  dragCurrentIndexRef.current = originalIndex;
-                  dragLastHoverTrackIdRef.current = playlistTrackId(track);
-                  setDraggedTrackId(playlistTrackId(track));
-                  setDragOverIndex(originalIndex);
-                }}
-                title={canReorder ? 'Drag to reorder track' : undefined}
-              >
-                <GripVertical size={14} />
-              </div>
+              {editing && canReorder && (
+                <div
+                  className="w-4 mr-1 flex-shrink-0 flex items-center justify-center text-muted cursor-grab active:cursor-grabbing"
+                  onPointerDown={(event) => {
+                    if (!canReorder || event.button !== 0) return;
+                    event.preventDefault();
+                    dragFromIndexRef.current = originalIndex;
+                    dragCurrentIndexRef.current = originalIndex;
+                    dragLastHoverTrackIdRef.current = playlistTrackId(track);
+                    setDraggedTrackId(playlistTrackId(track));
+                    setDragOverIndex(originalIndex);
+                  }}
+                  title="Drag to reorder track"
+                >
+                  <GripVertical size={14} />
+                </div>
+              )}
               <div className="w-5 flex-shrink-0 flex items-center justify-center">
                 {isActive && isPlaying ? (
                   <div className="flex gap-0.5 items-end h-3 justify-center">
@@ -1013,6 +1145,20 @@ export function PlaylistView() {
                 <PlaylistTrackTitle track={track} isActive={isActive} setView={setView} />
               </div>
               <div className="flex flex-shrink-0 items-center gap-1">
+                {editing && canEditPlaylist && (
+                  <button
+                    type="button"
+                    className="flex sm:hidden items-center justify-center min-h-[36px] min-w-[36px] p-1.5 text-muted hover:text-red-400 touch-manipulation"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestRemoveTrack(track);
+                    }}
+                    title="Remove from playlist"
+                    aria-label="Remove from playlist"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
                 <TrackActionButtons
                   track={track}
                   queueSource={queueSource}

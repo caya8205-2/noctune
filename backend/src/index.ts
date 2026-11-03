@@ -119,8 +119,23 @@ async function bootstrap() {
   // CORS — allow Tauri WebView and dev server
   await app.register(cors, {
     origin: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Noctune-Api-Key', 'X-Api-Key'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Range',
+      'If-Range',
+      'Accept',
+      'X-Noctune-Api-Key',
+      'X-Api-Key',
+    ],
+    exposedHeaders: [
+      'Content-Range',
+      'Accept-Ranges',
+      'Content-Length',
+      'Content-Type',
+    ],
+    maxAge: 86400,
   });
 
   // API Key Authentication Hook
@@ -255,7 +270,7 @@ async function bootstrap() {
       reply
         .header('Content-Type', contentType)
         .header('Cache-Control', 'public, max-age=86400')
-        .header('Access-Control-Allow-Origin', '*')
+        .header('Cross-Origin-Resource-Policy', 'cross-origin')
         .send(buffer);
     } catch (err) {
       reply.status(500).send({ error: (err as Error).message });

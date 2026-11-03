@@ -871,17 +871,23 @@ export function SettingsView() {
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <button
+              type="button"
               onClick={handleTest}
               disabled={testing || (!data?.spotify.configured && !clientId)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex min-h-[44px] w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-base-600 px-4 py-2.5 text-xs font-semibold text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {testing ? <Loader2 size={14} className="animate-spin" /> : null}
               Test Connection
             </button>
 
-            <button onClick={handleSave} disabled={saving} className="btn-accent flex-1">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-accent flex min-h-[44px] w-full sm:flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold"
+            >
               {saving ? (
                 <>
                   <Loader2 size={14} className="animate-spin" /> Saving...
@@ -974,13 +980,13 @@ export function SettingsView() {
                 High may use larger streams when available, then falls back automatically if a format fails.
               </p>
             </div>
-            <div className="flex shrink-0 rounded-xl border border-base-600/70 bg-base-950 p-1">
+            <div className="grid grid-cols-2 sm:flex shrink-0 rounded-xl border border-base-600/70 bg-base-950 p-1 w-full sm:w-auto">
               {(['auto', 'high'] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => handleAudioQualityChange(option)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold transition-colors min-h-[38px] ${
                     audioQualityPreference === option
                       ? 'bg-accent text-base-950'
                       : 'text-muted hover:bg-base-800 hover:text-white'
@@ -996,7 +1002,7 @@ export function SettingsView() {
         {/* 3. Spotify Playback Engine */}
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex-1 pr-4">
+            <div className="flex-1 sm:pr-4">
               <div className="flex items-center gap-2">
                 <label htmlFor="spotify-playback-select" className="block text-sm font-medium text-white">
                   Spotify Playback Engine
@@ -1023,7 +1029,7 @@ export function SettingsView() {
                   setRecommendationEngine('spotify-radio');
                 }
               }}
-              className="rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
+              className="w-full sm:w-auto min-h-[44px] rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
             >
               <option value="youtube-match" className="bg-base-900 text-white">
                 YouTube Match (default)
@@ -1049,7 +1055,7 @@ export function SettingsView() {
         {/* 4. Recommendation Engine */}
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex-1 pr-4">
+            <div className="flex-1 sm:pr-4">
               <label htmlFor="rec-engine-select" className="block text-sm font-medium text-white">
                 Active Recommendation Engine
               </label>
@@ -1067,7 +1073,7 @@ export function SettingsView() {
               id="rec-engine-select"
               value={recommendationEngine}
               onChange={(e) => setRecommendationEngine(e.target.value as any)}
-              className="rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
+              className="w-full sm:w-auto min-h-[44px] rounded-xl border border-base-600/80 bg-base-800 px-3.5 py-2 text-xs font-medium text-white hover:border-accent/40 focus:border-accent focus:outline-none shrink-0 cursor-pointer shadow-sm transition-colors"
             >
               <option value="innertube-rs" className="bg-base-900 text-white">
                 InnerTube-rs (Recommended)
@@ -1105,7 +1111,7 @@ export function SettingsView() {
         {(spotifyPlayback === 'spotify-direct' || recommendationEngine === 'spotify-radio') && IS_TAURI && (
           <div className="rounded-lg border border-base-600/70 bg-base-900 p-4">
             {spotifyAuthStatus?.authenticated ? (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="h-2 w-2 rounded-full bg-[#1DB954] shadow-[0_0_8px_rgba(29,185,84,0.6)]" />
                   <span className="text-xs font-medium text-[#1DB954]">
@@ -1116,14 +1122,14 @@ export function SettingsView() {
                 <button
                   type="button"
                   onClick={handleSpotifyDisconnect}
-                  className="btn-danger text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
+                  className="btn-danger text-xs px-3 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto min-h-[40px]"
                 >
                   Disconnect
                 </button>
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-xs text-amber-400 font-medium">
                       Requires Spotify Premium account pairing via RFC 8628 (device code).
@@ -1138,7 +1144,7 @@ export function SettingsView() {
                     <button
                       type="button"
                       onClick={handleStartSpotifyPairing}
-                      className="rounded-lg bg-[#1DB954] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1ed760] transition-colors shrink-0 ml-3"
+                      className="rounded-lg bg-[#1DB954] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#1ed760] transition-colors shrink-0 w-full sm:w-auto min-h-[40px]"
                     >
                       Pair Spotify Account
                     </button>
@@ -1185,7 +1191,7 @@ export function SettingsView() {
             type="button"
             onClick={handleEnginesSave}
             disabled={engineSaving}
-            className="btn-accent flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold"
+            className="btn-accent flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold w-full sm:w-auto min-h-[44px]"
           >
             {engineSaving ? (
               <>
@@ -1221,7 +1227,7 @@ export function SettingsView() {
 
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-5 flex flex-col items-center sm:flex-row sm:items-start gap-6">
           {/* Live Visualizer Preview Box (Vinyl disc with live visualizer preview) */}
-          <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center rounded-2xl border border-white/10 bg-base-950/90 shadow-2xl overflow-hidden p-2 shrink-0">
+          <div className="relative w-40 h-40 sm:w-52 sm:h-52 flex items-center justify-center rounded-2xl border border-white/10 bg-base-950/90 shadow-2xl overflow-hidden p-2 shrink-0">
             {/* Vinyl Disc Body (No album art) */}
             <div className="absolute inset-[10%] rounded-full bg-base-900 border border-base-700/80 shadow-2xl flex items-center justify-center">
               {/* Vinyl Grooves */}
@@ -1281,16 +1287,16 @@ export function SettingsView() {
                 Opens the full Noctune debug and diagnostic dashboard in a separate window.
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => void handleOpenDebugDashboard()}
                 disabled={!!previewBusy}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 w-full sm:w-auto min-h-[42px]"
               >
                 {previewBusy === 'open'
                   ? <><Loader2 size={12} className="animate-spin" /> Opening</>
-                  : <><ExternalLink size={12} /> Open</>
+                  : <><ExternalLink size={12} /> Open Dashboard</>
                 }
               </button>
             </div>
@@ -1351,24 +1357,26 @@ export function SettingsView() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3 flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-xs text-muted mb-1.5 block">Audio cache limit</label>
-            <input
-              type="number"
-              min={128}
-              max={10240}
-              step={128}
-              value={audioCacheLimitMb}
-              onChange={(e) => setAudioCacheLimitMb(Number(e.target.value))}
-              className="input-base font-mono text-xs"
-            />
+        <div className="rounded-lg border border-base-600/70 bg-base-900 p-3 flex flex-col sm:flex-row sm:items-end gap-2.5">
+          <div className="flex-1 flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-muted mb-1.5 block">Audio cache limit</label>
+              <input
+                type="number"
+                min={128}
+                max={10240}
+                step={128}
+                value={audioCacheLimitMb}
+                onChange={(e) => setAudioCacheLimitMb(Number(e.target.value))}
+                className="input-base font-mono text-xs min-h-[42px]"
+              />
+            </div>
+            <span className="text-xs text-muted pt-5">MB</span>
           </div>
-          <span className="text-xs text-muted pb-2">MB</span>
           <button
             onClick={handleSaveAudioCacheLimit}
             disabled={cacheBusy}
-            className="btn-accent px-4 py-2 rounded-xl text-sm disabled:opacity-40"
+            className="btn-accent px-5 py-2.5 rounded-xl text-xs font-semibold w-full sm:w-auto min-h-[42px] justify-center disabled:opacity-40"
           >
             Save
           </button>
@@ -1378,13 +1386,13 @@ export function SettingsView() {
           <button
             onClick={handleExportCache}
             disabled={cacheBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all min-h-[42px] disabled:opacity-40"
           >
             <Download size={14} />
             Export
           </button>
 
-          <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all cursor-pointer">
+          <label className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all min-h-[42px] cursor-pointer">
             <FileUp size={14} />
             Import
             <input
@@ -1400,11 +1408,11 @@ export function SettingsView() {
           </label>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button
             onClick={() => requestCacheClear('Clear track cache?', 'Cached track metadata will be removed from this device.', handleClearTrackCache)}
             disabled={cacheBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all min-h-[42px] disabled:opacity-40"
           >
             <Trash2 size={14} />
             Tracks
@@ -1413,7 +1421,7 @@ export function SettingsView() {
           <button
             onClick={() => requestCacheClear('Clear lyrics cache?', 'Cached lyrics will be removed and fetched again when needed.', handleClearLyricsCache)}
             disabled={cacheBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all min-h-[42px] disabled:opacity-40"
           >
             <Trash2 size={14} />
             Lyrics
@@ -1422,7 +1430,7 @@ export function SettingsView() {
           <button
             onClick={() => requestCacheClear('Clear audio cache?', 'Downloaded audio files will be removed from the local cache.', handleClearAudioCache)}
             disabled={cacheBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-base-600 text-soft hover:text-white hover:border-base-500 transition-all min-h-[42px] disabled:opacity-40"
           >
             <Trash2 size={14} />
             Audio
@@ -1431,7 +1439,7 @@ export function SettingsView() {
           <button
             onClick={() => requestCacheClear('Clear all cache?', 'All cached tracks, lyrics, audio, and resolver data will be removed.', handleClearCache)}
             disabled={cacheBusy}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all disabled:opacity-40"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 transition-all min-h-[42px] disabled:opacity-40"
           >
             <Trash2 size={14} />
             Clear all

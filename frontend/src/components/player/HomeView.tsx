@@ -383,6 +383,7 @@ function AutoScrollCarousel({
   const trackRef = useRef<HTMLDivElement>(null);
   const isHoveredRef = useRef(false);
   const offsetXRef = useRef(0);
+  const hasDraggedRef = useRef(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -391,7 +392,11 @@ function AutoScrollCarousel({
 
     let rafId: number;
     let holdTimeout: ReturnType<typeof setTimeout> | null = null;
+    let touchResumeTimeout: ReturnType<typeof setTimeout> | null = null;
     let isHolding = false;
+    let isTouching = false;
+    let touchStartX = 0;
+    let touchStartOffset = 0;
     const speed = 0.35;
 
     const handleWheel = (e: WheelEvent) => {
@@ -405,10 +410,45 @@ function AutoScrollCarousel({
       }
     };
 
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (touchResumeTimeout) clearTimeout(touchResumeTimeout);
+      isTouching = true;
+      hasDraggedRef.current = false;
+      touchStartX = e.touches[0].clientX;
+      touchStartOffset = offsetXRef.current;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isTouching || e.touches.length !== 1) return;
+      const deltaX = touchStartX - e.touches[0].clientX;
+      if (Math.abs(deltaX) > 6) {
+        hasDraggedRef.current = true;
+      }
+      const maxScroll = track.scrollWidth - container.clientWidth;
+      if (maxScroll > 0) {
+        offsetXRef.current = Math.min(maxScroll, Math.max(0, touchStartOffset + deltaX));
+        track.style.transform = `translate3d(-${offsetXRef.current}px, 0, 0)`;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isTouching) return;
+      if (touchResumeTimeout) clearTimeout(touchResumeTimeout);
+      touchResumeTimeout = setTimeout(() => {
+        isTouching = false;
+        hasDraggedRef.current = false;
+      }, 2500);
+    };
+
     container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
     const step = () => {
-      if (!isHoveredRef.current && !isHolding) {
+      if (!isHoveredRef.current && !isHolding && !isTouching) {
         const maxScroll = track.scrollWidth - container.clientWidth;
         if (maxScroll > 0) {
           if (offsetXRef.current >= maxScroll - 1) {
@@ -428,10 +468,16 @@ function AutoScrollCarousel({
     };
 
     rafId = requestAnimationFrame(step);
+
     return () => {
       cancelAnimationFrame(rafId);
       if (holdTimeout) clearTimeout(holdTimeout);
+      if (touchResumeTimeout) clearTimeout(touchResumeTimeout);
       container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [tracks]);
 
@@ -440,7 +486,7 @@ function AutoScrollCarousel({
       ref={containerRef}
       onMouseEnter={() => (isHoveredRef.current = true)}
       onMouseLeave={() => (isHoveredRef.current = false)}
-      className="w-full overflow-hidden pb-2"
+      className="w-full overflow-hidden pb-2 select-none touch-pan-y"
     >
       <div
         ref={trackRef}
@@ -454,7 +500,11 @@ function AutoScrollCarousel({
               subtitle={track.artist}
               cover={track.thumbnail}
               track={track}
-              onClick={() => onPlay(track)}
+              onClick={() => {
+                if (!hasDraggedRef.current) {
+                  onPlay(track);
+                }
+              }}
             />
           </div>
         ))}
@@ -485,7 +535,7 @@ function ManualHorizontalCarousel({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={containerRef}
-      className="scrollbar-hidden flex gap-4 overflow-x-auto pb-2 scroll-smooth"
+      className="scrollbar-hidden touch-pan-x flex gap-4 overflow-x-auto pb-2 scroll-smooth"
     >
       {children}
     </div>
@@ -582,6 +632,12 @@ export function HomeView() {
 
   function handlePlay(track: Track) {
     playTrack(track, [track], { autoQueue: true, queueSource: 'recommendation' });
+  }
+
+  function handleOpenPlaylists() {
+    window.dispatchEvent(
+      new CustomEvent('noctune:open-sidebar', { detail: { scrollTo: 'user-playlists' } })
+    );
   }
 
   function handleRecentlyPlayedPlay(track: Track) {
@@ -742,9 +798,13 @@ export function HomeView() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-white">Your Playlists</h2>
-            <span className="text-xs text-muted font-medium">
+            <button
+              type="button"
+              onClick={handleOpenPlaylists}
+              className="text-xs text-muted hover:text-accent font-medium touch-manipulation"
+            >
               {playlists.length} {playlists.length === 1 ? 'playlist' : 'playlists'}
-            </span>
+            </button>
           </div>
           <ManualHorizontalCarousel>
             {playlists.map((playlist) => (

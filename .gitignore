@@ -44,3 +44,5 @@ src-tauri/*.pub
 src-tauri/resources/
 mobile/**
 !docs/RULES.md
+*.apk
+/*.exe

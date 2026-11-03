@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, Loader2, QrCode, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   checkBackendStatus,
@@ -9,6 +9,8 @@ import {
   setMobileServerConfig,
   verifyRemoteServer,
 } from '../../utils/api';
+import { QrScannerModal } from './QrScannerModal';
+import { parsePairingData } from '../../utils/qr';
 
 interface StartupGateProps {
   children: ReactNode;
@@ -32,6 +34,7 @@ export function StartupGate({ children }: StartupGateProps) {
   const [showKey, setShowKey] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   async function handleClose() {
     if (!IS_TAURI_DESKTOP) return;
@@ -148,9 +151,8 @@ export function StartupGate({ children }: StartupGateProps) {
     setTimeout(() => setIsRetrying(false), 800);
   }
 
-  async function handleMobileConnect(e: FormEvent) {
-    e.preventDefault();
-    if (!serverUrl.trim()) {
+  async function connectWithCredentials(url: string, key: string) {
+    if (!url.trim()) {
       setConnectError('Enter your desktop server URL.');
       return;
     }
@@ -158,12 +160,12 @@ export function StartupGate({ children }: StartupGateProps) {
     setConnecting(true);
     setConnectError(null);
     try {
-      const result = await verifyRemoteServer(serverUrl, accessKey);
+      const result = await verifyRemoteServer(url, key);
       if (!result.ok) {
         setConnectError(result.error ?? 'Connection failed.');
         return;
       }
-      const saved = setMobileServerConfig(serverUrl, accessKey);
+      const saved = setMobileServerConfig(url, key);
       setServerUrl(saved.baseUrl);
       setAccessKey(saved.apiKey);
       queryClient.clear();
@@ -171,6 +173,22 @@ export function StartupGate({ children }: StartupGateProps) {
     } finally {
       setConnecting(false);
     }
+  }
+
+  function handleScan(code: string) {
+    const data = parsePairingData(code);
+    if (data) {
+      setServerUrl(data.url);
+      setAccessKey(data.key);
+      void connectWithCredentials(data.url, data.key);
+    } else {
+      setConnectError('Invalid QR code format.');
+    }
+  }
+
+  async function handleMobileConnect(e: FormEvent) {
+    e.preventDefault();
+    await connectWithCredentials(serverUrl, accessKey);
   }
 
   if (isReady) {
@@ -211,10 +229,26 @@ export function StartupGate({ children }: StartupGateProps) {
             </div>
 
             <p className="mt-3 text-xs text-muted leading-relaxed">
-              Open Noctune on your PC, start Mobile Companion in Settings, and enter the tunnel URL and access key below.
+              Open Noctune on your PC, start Mobile Companion in Settings, and scan the QR code or enter credentials below.
             </p>
 
-            <form onSubmit={handleMobileConnect} className="mt-5 flex flex-col gap-3.5">
+            {/* Quick QR pairing button */}
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-accent/40 bg-accent/15 px-4 py-3 text-xs font-semibold text-accent hover:bg-accent/25 transition-all min-h-[46px] w-full touch-manipulation shadow-lg shadow-accent/10"
+            >
+              <QrCode size={16} />
+              <span>Scan Pairing QR Code</span>
+            </button>
+
+            <div className="my-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/[0.08]" />
+              <span className="text-[11px] uppercase tracking-wider text-muted">or enter manually</span>
+              <div className="h-px flex-1 bg-white/[0.08]" />
+            </div>
+
+            <form onSubmit={handleMobileConnect} className="flex flex-col gap-3.5">
               <div>
                 <label htmlFor="mobile-server-url" className="mb-1.5 block text-xs font-medium text-soft">
                   Server URL
@@ -284,6 +318,12 @@ export function StartupGate({ children }: StartupGateProps) {
             </form>
           </div>
         )}
+
+        <QrScannerModal
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={handleScan}
+        />
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import AudioMotionAnalyzer from 'audiomotion-analyzer';
 import { usePlayerStore } from '../../store/player';
 
@@ -40,9 +40,9 @@ export const VISUALIZER_PRESETS: Array<{ id: VisualizerMode; name: string; desc:
 type Rgb = [number, number, number];
 
 const FALLBACK_PALETTE = {
-  primary: 'rgb(250 204 21)',   // Amber Gold (#facc15)
-  secondary: 'rgb(245 158 11)', // Warm Amber (#f59e0b)
-  accent: 'rgb(217 119 6)',     // Honey Amber (#d97706)
+  primary: 'rgb(34 211 238)',
+  secondary: 'rgb(217 70 239)',
+  accent: 'rgb(200 241 53)',
 };
 
 function getAnalyser(): AnalyserNode | null {
@@ -54,8 +54,12 @@ function getAudioCtx(): AudioContext | null {
 }
 
 function resumeAudioCtx() {
+  if (typeof (window as any).__noctune_resumeAudioCtx === 'function') {
+    (window as any).__noctune_resumeAudioCtx();
+    return;
+  }
   const ctx = getAudioCtx();
-  if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
 }
 
 function colorDistance(a: Rgb, b: Rgb) {
@@ -81,46 +85,58 @@ function enhanceColor([r, g, b]: Rgb): Rgb {
 }
 
 export async function extractPalette(src: string): Promise<typeof FALLBACK_PALETTE> {
-  const tryLoad = async (url: string, crossOrigin?: string): Promise<Uint8ClampedArray | null> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      if (crossOrigin) img.crossOrigin = crossOrigin;
-      img.decoding = 'async';
-      img.onload = () => {
-        try {
-          const size = 32;
-          const canvas = document.createElement('canvas');
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (!ctx) return resolve(null);
-          ctx.drawImage(img, 0, 0, size, size);
-          resolve(ctx.getImageData(0, 0, size, size).data);
-        } catch {
-          resolve(null);
+  const tryLoad = async (url: string): Promise<Uint8ClampedArray | null> => {
+    let blobUrl: string | null = null;
+    try {
+      let finalUrl = url;
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const apiModule = await import('../../utils/api').catch(() => null);
+        const proxyUrl = apiModule
+          ? await apiModule.apiUrl(`/image/proxy?url=${encodeURIComponent(url)}`).catch(() => '')
+          : '';
+        if (proxyUrl) {
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            blobUrl = URL.createObjectURL(blob);
+            finalUrl = blobUrl;
+          }
         }
-      };
-      img.onerror = () => resolve(null);
-      img.src = url;
-    });
+      }
+
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.decoding = 'async';
+        img.onload = () => {
+          try {
+            const size = 32;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return resolve(null);
+            ctx.drawImage(img, 0, 0, size, size);
+            resolve(ctx.getImageData(0, 0, size, size).data);
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = finalUrl;
+      });
+    } finally {
+      if (blobUrl) {
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch {}
+      }
+    }
   };
 
   let pixels: Uint8ClampedArray | null = null;
   try {
-    if (src.startsWith('http://') || src.startsWith('https://')) {
-      const apiModule = await import('../../utils/api').catch(() => null);
-      const proxyUrl = apiModule
-        ? await apiModule.apiUrl(`/image/proxy?url=${encodeURIComponent(src)}`).catch(() => '')
-        : '';
-      if (proxyUrl && !proxyUrl.startsWith('/image/proxy')) {
-        pixels = await tryLoad(proxyUrl, 'anonymous');
-      } else if (proxyUrl) {
-        pixels = await tryLoad(proxyUrl, 'anonymous');
-      }
-    }
-    if (!pixels) {
-      pixels = await tryLoad(src, 'anonymous');
-    }
+    pixels = await tryLoad(src);
   } catch {
     return FALLBACK_PALETTE;
   }
@@ -184,9 +200,16 @@ interface VisualizerProps {
 }
 
 export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: VisualizerProps) {
+  const uid = useId().replace(/:/g, '');
+  const gradId = `vis-grad-${uid}`;
+  const glowId = `vis-glow-${uid}`;
+
   const pathRef = useRef<SVGPathElement>(null);
   const wavePathRef = useRef<SVGPathElement>(null);
+  const ambientRingRef = useRef<SVGCircleElement>(null);
   const orbitGroupRef = useRef<SVGGElement>(null);
+  const rawFreqRef = useRef<Uint8Array | null>(null);
+  const autoGainRef = useRef(1);
   const rafRef = useRef(0);
   const motionRef = useRef<AudioMotionAnalyzer | null>(null);
   const valuesRef = useRef<number[]>([]);
@@ -270,39 +293,133 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
       velocityRef.current = Array.from({ length: count }, () => 0);
     }
 
-    function getSymmetricalBar(bars: ReturnType<AudioMotionAnalyzer['getBars']>, index: number) {
-      if (bars.length === 0) return 0;
+    function getSymmetricalBar(values: number[], index: number) {
+      if (values.length === 0) return 0;
       const half = count / 2;
       const mirroredIdx = index < half ? index : count - 1 - index;
       const normalizedPos = Math.pow(mirroredIdx / half, 0.85);
-      const barPos = Math.floor(normalizedPos * bars.length);
-      const safeIdx = Math.max(0, Math.min(bars.length - 1, barPos));
-      return bars[safeIdx]?.value?.[0] ?? 0;
+      const barPos = Math.floor(normalizedPos * values.length);
+      const safeIdx = Math.max(0, Math.min(values.length - 1, barPos));
+      return values[safeIdx] ?? 0;
+    }
+
+    // Primary spectrum source: the AnalyserNode tapped from the live audio graph.
+    // AudioMotionAnalyzer is only used as a secondary source when it actually
+    // reports a meaningful signal (its headless bar map is unreliable on Android
+    // WebView and used to return near-zero values that froze the visualizer).
+    function readRawSpectrum() {
+      const analyser = getAnalyser();
+      if (!analyser) return null;
+
+      if (!rawFreqRef.current || rawFreqRef.current.length !== analyser.frequencyBinCount) {
+        rawFreqRef.current = new Uint8Array(analyser.frequencyBinCount);
+      }
+      const freqData = rawFreqRef.current;
+      analyser.getByteFrequencyData(freqData as any);
+
+      const totalBins = freqData.length;
+      let peak = 0;
+      for (let i = 0; i < totalBins; i++) {
+        if (freqData[i] > peak) peak = freqData[i];
+      }
+
+      const getBandEnergy = (startRatio: number, endRatio: number) => {
+        const start = Math.floor(startRatio * totalBins);
+        const end = Math.max(start + 1, Math.floor(endRatio * totalBins));
+        let max = 0;
+        let sum = 0;
+        for (let k = start; k < end; k++) {
+          const v = freqData[k];
+          sum += v;
+          if (v > max) max = v;
+        }
+        // Blend peak and mean: peak keeps transients punchy, mean keeps the
+        // band from flickering on a single noisy bin.
+        const mean = sum / (end - start);
+        return (max * 0.7 + mean * 0.3) / 255;
+      };
+
+      const barCount = 64;
+      const maxBin = Math.max(1, Math.min(totalBins - 1, Math.floor(totalBins * 0.75)));
+      const rawBars = new Array<number>(barCount);
+      for (let i = 0; i < barCount; i++) {
+        const startRatio = Math.pow(i / barCount, 2.0);
+        const endRatio = Math.pow((i + 1) / barCount, 2.0);
+        const startBin = Math.floor(startRatio * maxBin);
+        const endBin = Math.max(startBin + 1, Math.floor(endRatio * maxBin));
+        let max = 0;
+        let sum = 0;
+        for (let k = startBin; k < endBin; k++) {
+          const v = freqData[k];
+          sum += v;
+          if (v > max) max = v;
+        }
+        const mean = sum / (endBin - startBin);
+        rawBars[i] = (max * 0.75 + mean * 0.25) / 255;
+      }
+
+      return {
+        peak,
+        bars: rawBars,
+        bass: getBandEnergy(0.002, 0.04),
+        lowMid: getBandEnergy(0.04, 0.12),
+        mid: getBandEnergy(0.12, 0.35),
+        highMid: getBandEnergy(0.35, 0.70),
+      };
+    }
+
+    // Per-track loudness normalisation so quiet masters still make the ring
+    // breathe: nudge a slow gain so the loudest band sits near 0.8.
+    function applyAutoGain(bars: number[]) {
+      let framePeak = 0;
+      for (let i = 0; i < bars.length; i++) if (bars[i] > framePeak) framePeak = bars[i];
+      const targetGain = framePeak > 0.02 ? Math.min(4.5, 0.8 / framePeak) : autoGainRef.current;
+      autoGainRef.current += (targetGain - autoGainRef.current) * 0.06;
+      const gain = autoGainRef.current;
+      for (let i = 0; i < bars.length; i++) bars[i] = Math.min(1, bars[i] * gain);
+      return bars;
     }
 
     function draw() {
-      const activeMotion = motionRef.current;
-      let bars = activeMotion ? activeMotion.getBars() : [];
-      let bass = activeMotion ? activeMotion.getEnergy('bass') || 0 : 0;
-      let lowMid = activeMotion ? activeMotion.getEnergy('lowMid') || 0 : 0;
-      let mid = activeMotion ? activeMotion.getEnergy('mid') || 0 : 0;
-      let highMid = activeMotion ? activeMotion.getEnergy('highMid') || 0 : 0;
+      const raw = readRawSpectrum();
+      const hasRawSignal = Boolean(raw && raw.peak > 2);
 
-      // Fallback: If AudioMotionAnalyzer returns empty bars but AnalyserNode exists, read directly
-      const rawAnalyser = getAnalyser();
-      if ((!bars || bars.length === 0) && rawAnalyser && isPlaying) {
-        const freqData = new Uint8Array(rawAnalyser.frequencyBinCount);
-        rawAnalyser.getByteFrequencyData(freqData);
-        bars = Array.from({ length: 64 }, (_, i) => ({
-          value: [freqData[Math.min(freqData.length - 1, Math.floor((i / 64) * (freqData.length * 0.75)))] / 255],
-        })) as any;
-        const bCount = Math.max(1, Math.floor(freqData.length * 0.08));
-        let bSum = 0;
-        for (let b = 0; b < bCount; b++) bSum += freqData[b];
-        bass = (bSum / bCount) / 255;
+      let barValues: number[] = raw ? applyAutoGain(raw.bars) : [];
+      let bass = raw ? raw.bass : 0;
+      let lowMid = raw ? raw.lowMid : 0;
+      let mid = raw ? raw.mid : 0;
+      let highMid = raw ? raw.highMid : 0;
+
+      if (!hasRawSignal) {
+        const activeMotion = motionRef.current;
+        if (activeMotion) {
+          const motionBars = activeMotion.getBars();
+          const motionPeak = motionBars.reduce((acc, b) => Math.max(acc, b.value?.[0] ?? 0), 0);
+          if (motionPeak > 0.02) {
+            barValues = motionBars.map((b) => b.value?.[0] ?? 0);
+            bass = activeMotion.getEnergy('bass') || 0;
+            lowMid = activeMotion.getEnergy('lowMid') || 0;
+            mid = activeMotion.getEnergy('mid') || 0;
+            highMid = activeMotion.getEnergy('highMid') || 0;
+          } else {
+            barValues = [];
+            bass = 0;
+            lowMid = 0;
+            mid = 0;
+            highMid = 0;
+          }
+        } else {
+          barValues = [];
+        }
       }
 
       const globalEnergy = Math.min(1, bass * 0.35 + lowMid * 0.25 + mid * 0.22 + highMid * 0.12);
+
+      if (ambientRingRef.current) {
+        const pulse = isPlaying ? bass : 0;
+        ambientRingRef.current.setAttribute('r', (39.4 + pulse * 3.4).toFixed(2));
+        ambientRingRef.current.setAttribute('opacity', (0.45 + pulse * 0.5).toFixed(2));
+      }
 
       const active = isPlaying || preview;
 
@@ -322,8 +439,8 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
             const mirrorIdx = i < half ? i : count - 1 - i;
             target = 0.25 + Math.sin(t + mirrorIdx * 0.18) * 0.28 + Math.cos(t * 1.6 + mirrorIdx * 0.12) * 0.15;
           } else if (isPlaying) {
-            const raw = getSymmetricalBar(bars, i);
-            target = Math.min(0.88, Math.pow(raw * 0.92 + globalEnergy * 0.08, 0.92));
+            const raw = getSymmetricalBar(barValues, i);
+            target = Math.min(0.92, Math.pow(Math.min(1, raw * 1.05 + globalEnergy * 0.1), 0.55));
           }
 
           const current = valuesRef.current[i] ?? 0;
@@ -365,8 +482,8 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
             const mirrorIdx = i < half ? i : count - 1 - i;
             target = 0.22 + Math.sin(t + mirrorIdx * 0.16) * 0.26 + Math.cos(t * 1.4 + mirrorIdx * 0.1) * 0.14;
           } else if (isPlaying) {
-            const raw = getSymmetricalBar(bars, i);
-            target = Math.min(0.85, Math.pow(raw * 0.95 + globalEnergy * 0.08, 0.92));
+            const raw = getSymmetricalBar(barValues, i);
+            target = Math.min(0.9, Math.pow(Math.min(1, raw * 1.05 + globalEnergy * 0.1), 0.55));
           }
 
           const current = valuesRef.current[i] ?? 0;
@@ -413,8 +530,8 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
             const mirrorIdx = i < half ? i : count - 1 - i;
             target = 0.25 + Math.sin(t + mirrorIdx * 0.2) * 0.3;
           } else if (isPlaying) {
-            const raw = getSymmetricalBar(bars, i);
-            target = Math.min(0.85, Math.pow(raw * 0.95 + globalEnergy * 0.1, 0.92));
+            const raw = getSymmetricalBar(barValues, i);
+            target = Math.min(0.9, Math.pow(Math.min(1, raw * 1.05 + globalEnergy * 0.1), 0.55));
           }
 
           const current = valuesRef.current[i] ?? 0;
@@ -483,12 +600,12 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id="visualizerGradient" x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gradId} x1="12" y1="12" x2="88" y2="88" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={palette.primary} />
           <stop offset="50%" stopColor={palette.secondary} />
           <stop offset="100%" stopColor={palette.accent} />
         </linearGradient>
-        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id={glowId} filterUnits="userSpaceOnUse" x="-20" y="-20" width="140" height="140">
           <feGaussianBlur stdDeviation="1.2" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -498,6 +615,7 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
       </defs>
 
       <circle
+        ref={ambientRingRef}
         cx="50"
         cy="50"
         r="39.4"
@@ -511,32 +629,32 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
       {(mode === 'ncs' || mode === 'bars') && (
         <path
           ref={pathRef}
-          d=""
+          d="M 50 10 A 40 40 0 1 1 49.99 10"
           fill="none"
-          stroke="url(#visualizerGradient)"
+          stroke={`url(#${gradId})`}
           strokeWidth={mode === 'bars' ? '1.4' : '1.25'}
           strokeLinecap="round"
           opacity="0.95"
-          filter="url(#neonGlow)"
+          filter={`url(#${glowId})`}
         />
       )}
 
       {mode === 'wave' && (
         <path
           ref={wavePathRef}
-          d=""
+          d="M 50 10 A 40 40 0 1 1 49.99 10"
           fill="none"
-          stroke="url(#visualizerGradient)"
+          stroke={`url(#${gradId})`}
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity="0.95"
-          filter="url(#neonGlow)"
+          filter={`url(#${glowId})`}
         />
       )}
 
       {mode === 'orbit' && (
-        <g ref={orbitGroupRef} filter="url(#neonGlow)">
+        <g ref={orbitGroupRef} filter={`url(#${glowId})`}>
           {Array.from({ length: 48 }).map((_, i) => (
             <circle
               key={i}
@@ -556,10 +674,10 @@ export function Visualizer({ mode = 'ncs', onBassEnergy, preview = false }: Visu
           cy="50"
           r="41"
           fill="none"
-          stroke="url(#visualizerGradient)"
+          stroke={`url(#${gradId})`}
           strokeWidth="1.5"
           opacity="0.5"
-          filter="url(#neonGlow)"
+          filter={`url(#${glowId})`}
           className="animate-pulse"
         />
       )}

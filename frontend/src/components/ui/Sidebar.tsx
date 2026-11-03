@@ -10,8 +10,10 @@ import {
   ListMusic,
   ListOrdered,
   Loader2,
+  MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -49,6 +51,7 @@ function getGreeting(): string {
 }
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const isMobileDrawer = Boolean(onNavigate);
   const {
     activeView,
     activePlaylistId,
@@ -56,6 +59,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     sidebarCompact,
     toggleSidebarCompact,
   } = usePlayerStore();
+  const compact = isMobileDrawer ? false : sidebarCompact;
   const qc = useQueryClient();
   const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -64,6 +68,38 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [pendingDeletePlaylist, setPendingDeletePlaylist] = useState<{ id: string; name: string } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const userPlaylistsRef = useRef<HTMLDivElement | null>(null);
+  const [openMenuPlaylistId, setOpenMenuPlaylistId] = useState<string | null>(null);
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  useEffect(() => {
+    function handleOpenSidebar(e: Event) {
+      const detail = (e as CustomEvent<{ scrollTo?: string }>).detail;
+      if (detail?.scrollTo === 'user-playlists') {
+        if (!isMobileDrawer && sidebarCompact) {
+          toggleSidebarCompact();
+        }
+        setTimeout(() => {
+          userPlaylistsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+
+    window.addEventListener('noctune:open-sidebar', handleOpenSidebar);
+    return () => window.removeEventListener('noctune:open-sidebar', handleOpenSidebar);
+  }, [isMobileDrawer, sidebarCompact, toggleSidebarCompact]);
+
+  useEffect(() => {
+    if (!openMenuPlaylistId) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (!(event.target as HTMLElement)?.closest('[data-playlist-menu]')) {
+        setOpenMenuPlaylistId(null);
+      }
+    }
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuPlaylistId]);
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -133,6 +169,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     setPendingDeletePlaylist({ id, name });
   }
 
+  async function handleSaveRename(playlistId: string, currentName: string) {
+    const newName = editName.trim();
+    setEditingPlaylistId(null);
+    if (!newName || newName === currentName) return;
+    try {
+      await api.updatePlaylist(playlistId, { name: newName });
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      if (activePlaylistId === playlistId) {
+        qc.invalidateQueries({ queryKey: ['playlist', playlistId] });
+      }
+    } catch (err) {
+      setDeleteError((err as Error).message);
+    }
+  }
+
   const navItems = [
     { icon: Home, label: 'Home', view: 'home' as const },
     { icon: Search, label: 'Search', view: 'search' as const },
@@ -149,10 +200,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className={clsx('flex h-full flex-col bg-transparent py-5', sidebarCompact ? 'px-1.5' : 'px-3')}>
+    <div className={clsx('flex h-full flex-col bg-transparent py-5', compact ? 'px-1.5' : 'px-3')}>
       {/* Top Header with Compact Toggle Button */}
-      <div className={clsx('mb-3 flex flex-shrink-0 items-center', sidebarCompact ? 'justify-center w-full' : 'justify-between px-0.5')}>
-        {!sidebarCompact && (
+      <div className={clsx('mb-3 flex flex-shrink-0 items-center', compact ? 'justify-center w-full' : 'justify-between px-0.5', isMobileDrawer && 'pr-12')}>
+        {!compact && (
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2">
               <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
@@ -169,17 +220,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={toggleSidebarCompact}
-          className={clsx(
-            'flex items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white',
-            sidebarCompact ? 'w-full py-2.5' : 'h-8 w-8'
-          )}
-          title={sidebarCompact ? 'Expand sidebar' : 'Compact sidebar'}
-        >
-          {sidebarCompact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={16} />}
-        </button>
+        {!isMobileDrawer && (
+          <button
+            type="button"
+            onClick={toggleSidebarCompact}
+            className={clsx(
+              'flex items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white',
+              compact ? 'w-full py-2.5' : 'h-8 w-8'
+            )}
+            title={compact ? 'Expand sidebar' : 'Compact sidebar'}
+          >
+            {compact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={16} />}
+          </button>
+        )}
       </div>
 
       {/* Nav */}
@@ -190,10 +243,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <button
               key={view}
               onClick={() => navigate(view)}
-              title={sidebarCompact ? label : undefined}
+              title={compact ? label : undefined}
               className={clsx(
-                'group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200',
-                sidebarCompact ? 'justify-center px-0 py-2.5 w-full' : 'gap-3 px-3 py-2.5',
+                'group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200 touch-manipulation',
+                compact ? 'justify-center px-0 py-2.5 w-full' : 'gap-3 px-3 py-2.5',
+                isMobileDrawer && 'min-h-[44px]',
                 active
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -206,7 +260,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 )}
               />
               <Icon size={18} className={clsx('transition-colors flex-shrink-0', active && 'text-accent')} />
-              {!sidebarCompact && <span>{label}</span>}
+              {!compact && <span>{label}</span>}
             </button>
           );
         })}
@@ -214,20 +268,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Playlists */}
       <div className="flex-1 min-h-0 flex flex-col mt-4">
-        {!sidebarCompact && (
+        {!compact && (
           <div className="relative mb-2 flex flex-shrink-0 items-center justify-between px-0.5" ref={menuRef}>
             <span className="section-label">Playlists</span>
             <button
               type="button"
               onClick={() => setPlaylistMenuOpen((open) => !open)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-muted transition-colors hover:bg-white/[0.05] hover:text-white touch-manipulation"
               title="New playlist"
             >
               <Plus size={16} />
             </button>
 
             {playlistMenuOpen && (
-              <div className="dropdown-panel absolute left-full top-0 z-50 ml-2 w-60 animate-slide-up p-2">
+              <div className={clsx(
+                'dropdown-panel absolute z-50 animate-slide-up p-2',
+                isMobileDrawer ? 'right-0 top-full mt-2 w-64' : 'left-full top-0 ml-2 w-60'
+              )}>
                 <div className="border-b border-base-600/60 pb-1.5 mb-1.5 px-2 pt-1 flex items-center justify-between">
                   <span className="text-xs font-semibold text-white">Create Playlist</span>
                 </div>
@@ -269,7 +326,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
 
-        {sidebarCompact && (
+        {compact && (
           <div className="relative flex-shrink-0 mb-1" ref={menuRef}>
             <button
               type="button"
@@ -323,7 +380,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
 
-        {deleteError && !sidebarCompact && (
+        {deleteError && !compact && (
           <p className="mb-2 px-3 text-[11px] leading-relaxed text-red-400 flex-shrink-0">{deleteError}</p>
         )}
 
@@ -332,10 +389,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           {likedPlaylist && (
             <button
               onClick={() => navigate('playlist', likedPlaylist.id)}
-              title={sidebarCompact ? likedPlaylist.name : undefined}
+              title={compact ? likedPlaylist.name : undefined}
               className={clsx(
-                'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
-                sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
+                compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                isMobileDrawer && 'min-h-[40px]',
                 activeView === 'playlist' && activePlaylistId === likedPlaylist.id
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -349,7 +407,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   activeView === 'playlist' && activePlaylistId === likedPlaylist.id && 'text-accent'
                 )}
               />
-              {!sidebarCompact && <span className="flex-1 truncate text-left">{likedPlaylist.name}</span>}
+              {!compact && <span className="flex-1 truncate text-left">{likedPlaylist.name}</span>}
             </button>
           )}
 
@@ -365,26 +423,27 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 <button
                   key={id}
                   onClick={() => navigate('playlist', id)}
-                  title={sidebarCompact ? label : undefined}
+                  title={compact ? label : undefined}
                   className={clsx(
-                    'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150',
-                    sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                    'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
+                    compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                    isMobileDrawer && 'min-h-[40px]',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
                   )}
                 >
                   <Icon size={16} className={clsx('flex-shrink-0', active && 'text-accent')} />
-                  {!sidebarCompact && <span className="flex-1 truncate text-left">{label}</span>}
+                  {!compact && <span className="flex-1 truncate text-left">{label}</span>}
                 </button>
               );
             })}
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div ref={userPlaylistsRef} id="user-playlists" className="flex flex-col gap-1">
             {playlistsLoading && playlists.length === 0 && (
               <div className="flex flex-col gap-2 py-1">
-                {sidebarCompact ? (
+                {compact ? (
                   <div className="flex flex-col items-center gap-2">
                     <div className="h-6 w-6 rounded-lg bg-white/[0.06] animate-pulse" />
                     <div className="h-6 w-6 rounded-lg bg-white/[0.06] animate-pulse" />
@@ -401,35 +460,111 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             )}
             {userPlaylists.map((pl) => {
               const active = activeView === 'playlist' && activePlaylistId === pl.id;
+              const isEditing = editingPlaylistId === pl.id;
+              const isMenuOpen = openMenuPlaylistId === pl.id;
               return (
                 <div
                   key={pl.id}
-                  title={sidebarCompact ? pl.name : undefined}
+                  title={compact ? pl.name : undefined}
                   className={clsx(
-                    'group flex cursor-pointer items-center rounded-xl text-sm transition-all duration-150',
-                    sidebarCompact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                    'group relative flex cursor-pointer items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
+                    compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
+                    isMobileDrawer && 'min-h-[40px]',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
                   )}
-                  onClick={() => navigate('playlist', pl.id)}
+                  onClick={() => {
+                    if (!isEditing) navigate('playlist', pl.id);
+                  }}
                 >
                   {pl.coverDataUrl ? (
                     <img src={pl.coverDataUrl} alt="" className="h-6 w-6 flex-shrink-0 rounded-md object-cover" />
                   ) : (
                     <ListMusic size={16} className={clsx('flex-shrink-0', active && 'text-accent')} />
                   )}
-                  {!sidebarCompact && (
+                  {!compact && (
                     <>
-                      <span className="flex-1 truncate">{pl.name}</span>
-                      <button
-                        className="btn-ghost p-0.5 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
-                        disabled={deleteMut.isPending}
-                        title="Delete playlist"
-                        onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id, pl.name); }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      {isEditing ? (
+                        <form
+                          className="flex-1 min-w-0 mr-1"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSaveRename(pl.id, pl.name);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onBlur={() => handleSaveRename(pl.id, pl.name)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.stopPropagation();
+                                setEditingPlaylistId(null);
+                              }
+                            }}
+                            className="w-full rounded bg-base-800 px-1.5 py-0.5 text-xs text-white outline-none ring-1 ring-accent"
+                          />
+                        </form>
+                      ) : (
+                        <span className="flex-1 truncate">{pl.name}</span>
+                      )}
+
+                      <div className="relative flex items-center" data-playlist-menu>
+                        <button
+                          type="button"
+                          className={clsx(
+                            'btn-ghost transition rounded-lg hover:text-white',
+                            isMobileDrawer
+                              ? 'p-1.5 opacity-70 hover:opacity-100'
+                              : 'p-1 opacity-0 group-hover:opacity-100',
+                            isMenuOpen && '!opacity-100 text-white bg-white/[0.08]'
+                          )}
+                          disabled={deleteMut.isPending}
+                          title="Playlist options"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuPlaylistId(isMenuOpen ? null : pl.id);
+                          }}
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+
+                        {isMenuOpen && (
+                          <div
+                            className="absolute right-0 top-full mt-1 z-30 w-32 rounded-xl border border-white/[0.08] bg-base-900/95 p-1 shadow-xl backdrop-blur-xl animate-fade-in"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-soft hover:bg-white/[0.08] hover:text-white transition-colors"
+                              onClick={() => {
+                                setOpenMenuPlaylistId(null);
+                                setEditingPlaylistId(pl.id);
+                                setEditName(pl.name);
+                              }}
+                            >
+                              <Pencil size={12} className="text-muted" />
+                              <span>Rename</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                              onClick={() => {
+                                setOpenMenuPlaylistId(null);
+                                handleDeletePlaylist(pl.id, pl.name);
+                              }}
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

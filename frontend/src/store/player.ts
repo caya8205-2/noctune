@@ -85,6 +85,7 @@ interface PlayerState {
   prev: () => Promise<void>;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  cyclePlaybackMode: () => void;
   playNext: (track: Track) => void;
   addToQueue: (track: Track, source?: Track['queueSource']) => void;
   topUpQueue: () => Promise<void>;
@@ -631,6 +632,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleShuffle: () => set(s => ({ shuffle: !s.shuffle })),
   cycleRepeat: () =>
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
+  cyclePlaybackMode: () =>
+    set((s) => {
+      if (!s.shuffle && s.repeat === 'off') {
+        return { shuffle: true, repeat: 'off' };
+      }
+      if (s.shuffle) {
+        return { shuffle: false, repeat: 'all' };
+      }
+      if (s.repeat === 'all') {
+        return { shuffle: false, repeat: 'one' };
+      }
+      return { shuffle: false, repeat: 'off' };
+    }),
 
   playNext: (track) => {
     set(s => {

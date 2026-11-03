@@ -170,7 +170,7 @@ export function QueueView() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted py-0.5">
+        <div className="hidden md:flex flex-wrap items-center gap-2 text-[10px] text-muted py-0.5">
           <span className="flex items-center gap-1"><ListMusic size={10} /> Playlist</span>
           <span className="flex items-center gap-1"><Search size={10} /> Search</span>
           <span className="flex items-center gap-1"><House size={10} /> Home</span>

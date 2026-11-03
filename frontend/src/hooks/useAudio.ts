@@ -13,15 +13,26 @@ function getAudioContext(): AudioContext | null {
   return ((window as any).__noctune_audioCtx as AudioContext | undefined) ?? null;
 }
 
-async function resumeAudioContext() {
-  const ctx = getAudioContext();
-  if (ctx?.state === 'suspended') {
-    await ctx.resume();
+export async function resumeAudioContext() {
+  const visCtx = getAudioContext();
+  if (visCtx && visCtx.state !== 'running') {
+    try {
+      await visCtx.resume();
+    } catch {}
   }
 }
 
+if (typeof window !== 'undefined') {
+  (window as any).__noctune_resumeAudioCtx = resumeAudioContext;
+}
+
 async function playAudio(audio: HTMLAudioElement) {
-  await resumeAudioContext();
+  const visCtx = getAudioContext();
+  if (visCtx && visCtx.state !== 'running') {
+    try {
+      await visCtx.resume();
+    } catch {}
+  }
   await audio.play();
 }
 
@@ -65,6 +76,15 @@ export function seekAudio(seconds: number) {
       activeAudio.currentTime = target;
     }
     state.setProgress(target);
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration,
+          playbackRate: state.playbackRate || 1.0,
+          position: target,
+        });
+      } catch {}
+    }
   } catch (err) {
     console.warn('[audio] seek failed:', err);
   }
@@ -145,13 +165,15 @@ export function useAudio() {
   useEffect(() => {
     const audioA = new Audio();
     audioA.id = 'noctune-audio-a';
+    audioA.crossOrigin = 'anonymous';
     const audioB = new Audio();
     audioB.id = 'noctune-audio-b';
+    audioB.crossOrigin = 'anonymous';
 
     try {
       const visCtx = new AudioContext();
       const visAnalyser = visCtx.createAnalyser();
-      visAnalyser.fftSize = 256;
+      visAnalyser.fftSize = 1024;
       visAnalyser.smoothingTimeConstant = 0.8;
 
       const srcA = visCtx.createMediaElementSource(audioA);
@@ -162,10 +184,12 @@ export function useAudio() {
       createEqualizerNodes(visCtx, visAnalyser);
       (window as any).__noctune_analyser = visAnalyser;
       (window as any).__noctune_audioCtx = visCtx;
+      (window as any).__noctune_resumeAudioCtx = resumeAudioContext;
     } catch {}
 
     const setupAudio = (audio: HTMLAudioElement) => {
       audio.preload = 'auto';
+      audio.crossOrigin = 'anonymous';
 
       audio.addEventListener('timeupdate', () => {
         if (activeAudio === audio) {
@@ -287,7 +311,7 @@ export function useAudio() {
             const streamPath = `/player/stream/${newYtId}?retry=${Date.now()}`;
             return apiUrl(streamPath)
               .then((src) => {
-                target.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+                target.crossOrigin = 'anonymous';
                 target.src = src;
                 target.load();
                 return waitForAudioReady(target);
@@ -367,7 +391,7 @@ export function useAudio() {
       delete recoveryAttemptsRef.current[currentTrack.id];
       if (audio.src !== prebufferedAudio.src) {
         suppressNextErrorRef.current = true;
-        audio.crossOrigin = prebufferedAudio.crossOrigin;
+        audio.crossOrigin = 'anonymous';
         audio.src = prebufferedAudio.src;
       }
       setLoading(false);
@@ -395,7 +419,7 @@ export function useAudio() {
         delete recoveryAttemptsRef.current[currentTrack.id];
         if (audio.src !== src) {
           suppressNextErrorRef.current = true;
-          audio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+          audio.crossOrigin = 'anonymous';
           audio.src = src;
           audio.load();
         }
@@ -469,9 +493,10 @@ export function useAudio() {
 
         const preAudio = new Audio();
         preAudio.preload = 'auto';
+        preAudio.crossOrigin = 'anonymous';
         apiUrl('/player/stream/' + cleanId)
           .then((src) => {
-            preAudio.crossOrigin = src.startsWith('http') ? 'anonymous' : null;
+            preAudio.crossOrigin = 'anonymous';
             preAudio.src = src;
             preAudio.load();
             preloadedAudiosRef.current.set(cleanId, preAudio);
@@ -605,6 +630,7 @@ export function useAudio() {
       apiUrl('/player/stream/' + targetId)
         .then((src) => {
           if (!crossfadeActiveRef.current || audioRef.current !== audio) return;
+          nextAudio.crossOrigin = 'anonymous';
           nextAudio.src = src;
           nextAudio.load();
           return waitForAudioReady(nextAudio);
@@ -681,41 +707,227 @@ export function useAudio() {
     seekAudio(seconds);
   }, [setProgress]);
 
+  // Ensure AudioContext is unlocked on user interaction (especially touch on mobile)
+  useEffect(() => {
+    const handleInteraction = () => {
+      resumeAudioContext().catch(() => {});
+    };
+
+    window.addEventListener('touchstart', handleInteraction, { passive: true });
+    window.addEventListener('touchend', handleInteraction, { passive: true });
+    window.addEventListener('pointerdown', handleInteraction, { passive: true });
+    window.addEventListener('click', handleInteraction, { passive: true });
+    window.addEventListener('keydown', handleInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('touchend', handleInteraction);
+      window.removeEventListener('pointerdown', handleInteraction);
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+    };
+  }, []);
+
+  // Screen / Audio WakeLock: Keep screen/CPU awake during active playback
+  useEffect(() => {
+    let released = false;
+    let wakeLockSentinel: any = null;
+
+    async function acquireLock() {
+      if (!isPlaying || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+      try {
+        wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        if (released && wakeLockSentinel) {
+          wakeLockSentinel.release().catch(() => {});
+          wakeLockSentinel = null;
+        } else if (wakeLockSentinel) {
+          wakeLockSentinel.addEventListener(
+            'release',
+            () => {
+              wakeLockSentinel = null;
+            },
+            { once: true }
+          );
+        }
+      } catch {
+        // Ignored: wakeLock may be rejected or unsupported in background/headless
+      }
+    }
+
+    if (isPlaying) {
+      acquireLock();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isPlaying && !wakeLockSentinel) {
+        acquireLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+        wakeLockSentinel = null;
+      }
+    };
+  }, [isPlaying]);
+
   // Sync Media Session API (system media controls)
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
+    let artworkUrl = currentTrack.thumbnail || '';
+    if (
+      artworkUrl &&
+      !artworkUrl.startsWith('http://') &&
+      !artworkUrl.startsWith('https://') &&
+      !artworkUrl.startsWith('data:')
+    ) {
+      try {
+        artworkUrl = new URL(artworkUrl, window.location.href).href;
+      } catch {}
+    }
+
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title,
       artist: currentTrack.artist,
-      album: currentTrack.youtubeTitle ?? '',
-      artwork: currentTrack.thumbnail
-        ? [{ src: currentTrack.thumbnail, sizes: '640x640', type: 'image/jpeg' }]
+      album: currentTrack.youtubeTitle || currentTrack.artist || 'Noctune',
+      artwork: artworkUrl
+        ? [
+            { src: artworkUrl, sizes: '96x96', type: 'image/jpeg' },
+            { src: artworkUrl, sizes: '128x128', type: 'image/jpeg' },
+            { src: artworkUrl, sizes: '192x192', type: 'image/jpeg' },
+            { src: artworkUrl, sizes: '256x256', type: 'image/jpeg' },
+            { src: artworkUrl, sizes: '384x384', type: 'image/jpeg' },
+            { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' },
+          ]
         : [],
     });
 
-    const actions = ['play','pause','previoustrack','nexttrack','seekforward','seekbackward','seekto'] as const;
-    for (const a of actions) {
-      navigator.mediaSession.setActionHandler(a, null);
-    }
-    navigator.mediaSession.setActionHandler('play', () => usePlayerStore.getState().togglePlay());
-    navigator.mediaSession.setActionHandler('pause', () => usePlayerStore.getState().togglePlay());
-    navigator.mediaSession.setActionHandler('previoustrack', () => usePlayerStore.getState().prev());
-    navigator.mediaSession.setActionHandler('nexttrack', () => usePlayerStore.getState().next());
-    navigator.mediaSession.setActionHandler('seekforward', () => {
+    const safeSetAction = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {}
+    };
+
+    safeSetAction('play', () => {
+      resumeAudioContext().catch(() => {});
+      usePlayerStore.getState().setIsPlaying(true);
+    });
+    safeSetAction('pause', () => {
+      usePlayerStore.getState().setIsPlaying(false);
+    });
+    safeSetAction('previoustrack', () => {
+      resumeAudioContext().catch(() => {});
+      usePlayerStore.getState().prev();
+    });
+    safeSetAction('nexttrack', () => {
+      resumeAudioContext().catch(() => {});
+      usePlayerStore.getState().next();
+    });
+    safeSetAction('seekforward', () => {
       const s = usePlayerStore.getState();
       seekAudio(Math.min(s.duration, s.progress + 10));
     });
-    navigator.mediaSession.setActionHandler('seekbackward', () => {
+    safeSetAction('seekbackward', () => {
       const s = usePlayerStore.getState();
       seekAudio(Math.max(0, s.progress - 10));
     });
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
+    safeSetAction('seekto', (details) => {
       if (typeof details.seekTime === 'number' && Number.isFinite(details.seekTime)) {
         seekAudio(details.seekTime);
       }
     });
+
+    return () => {
+      const actions: MediaSessionAction[] = [
+        'play',
+        'pause',
+        'previoustrack',
+        'nexttrack',
+        'seekforward',
+        'seekbackward',
+        'seekto',
+      ];
+      for (const a of actions) {
+        safeSetAction(a, null);
+      }
+    };
   }, [currentTrack]);
+
+  // Native Android bridge: push now-playing metadata to the foreground media
+  // service (system notification + process kept alive in background) and route
+  // notification button presses back into the player store.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const sendToNative = () => {
+      const native = (window as any).NoctuneNative;
+      if (!native || typeof native.updateMedia !== 'function') return;
+      const state = usePlayerStore.getState();
+      const track = state.currentTrack;
+      if (!track) {
+        try {
+          native.stopMedia();
+        } catch {}
+        return;
+      }
+      let artwork = track.thumbnail ?? '';
+      if (artwork && !/^(https?:|data:)/.test(artwork)) {
+        try {
+          artwork = new URL(artwork, window.location.href).href;
+        } catch {}
+      }
+      const payload = JSON.stringify({
+        playing: state.isPlaying,
+        title: track.title,
+        artist: track.artist,
+        album: track.album ?? track.youtubeTitle ?? 'Noctune',
+        artwork,
+        positionMs: Math.round((state.progress || 0) * 1000),
+        durationMs: Math.round((state.duration || track.duration || 0) * 1000),
+      });
+      try {
+        native.updateMedia(payload);
+      } catch {}
+    };
+
+    sendToNative();
+    const interval = window.setInterval(sendToNative, 5000);
+    return () => window.clearInterval(interval);
+  }, [currentTrack?.id, isPlaying]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: string }>)?.detail?.action;
+      const state = usePlayerStore.getState();
+      switch (action) {
+        case 'play':
+          resumeAudioContext().catch(() => {});
+          state.setIsPlaying(true);
+          break;
+        case 'pause':
+          state.setIsPlaying(false);
+          break;
+        case 'next':
+          resumeAudioContext().catch(() => {});
+          state.next();
+          break;
+        case 'prev':
+          resumeAudioContext().catch(() => {});
+          state.prev();
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('noctune:native-media-action', handler as EventListener);
+    return () => window.removeEventListener('noctune:native-media-action', handler as EventListener);
+  }, []);
 
   // Sync Discord Rich Presence through the local desktop backend.
   useEffect(() => {

@@ -1,6 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, ListMusic, Maximize2, MessageSquare, Music2, ThumbsUp, Users } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  ExternalLink,
+  ListMusic,
+  Maximize2,
+  MessageSquare,
+  Music2,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  ThumbsUp,
+  Users,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, isTrackActive, type ChannelPost, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
@@ -83,10 +96,41 @@ export function ArtistView({ artistId }: { artistId: string }) {
     artist: string;
     album?: string;
   } | null>(null);
-  const { playTrack, currentTrack, isPlaying, setView, activeChannelTab } = usePlayerStore();
+  const {
+    playTrack,
+    currentTrack,
+    isPlaying,
+    setView,
+    activeChannelTab,
+    shuffle,
+    repeat,
+    cyclePlaybackMode,
+  } = usePlayerStore();
   const cleanArtistId = artistId.replace(/:(videos|playlists|posts)$/, '');
   const channelTab = activeChannelTab ?? 'videos';
   const isYouTubeChannelId = cleanArtistId.startsWith('ytchannel:') || cleanArtistId.startsWith('UC') || cleanArtistId.startsWith('@');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    setIsScrolled(false);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [cleanArtistId]);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const next = e.currentTarget.scrollTop > 120;
+    if (next !== isScrolled) setIsScrolled(next);
+  }
+
+  const modeTitle = shuffle
+    ? 'Playback mode: Shuffle on (click for Repeat all)'
+    : repeat === 'all'
+    ? 'Playback mode: Repeat all (click for Repeat one)'
+    : repeat === 'one'
+    ? 'Playback mode: Repeat one (click to turn off)'
+    : 'Playback mode: Normal (click for Shuffle)';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['artist', cleanArtistId],
@@ -94,6 +138,12 @@ export function ArtistView({ artistId }: { artistId: string }) {
     staleTime: isYouTubeChannelId ? 1000 * 60 * 5 : 1000 * 60 * 10,
     refetchOnMount: true,
   });
+
+  function handlePlayAll() {
+    if (!data?.topTracks || data.topTracks.length === 0) return;
+    const startIndex = shuffle ? Math.floor(Math.random() * data.topTracks.length) : 0;
+    playTrack(data.topTracks[startIndex], data.topTracks);
+  }
 
   // ── Posts lazy-fetch state ──
   const [posts, setPosts] = useState<ChannelPost[]>([]);
@@ -176,101 +226,202 @@ export function ArtistView({ artistId }: { artistId: string }) {
           onClose={() => setLightboxImage(null)}
         />
       )}
-      {/* Header */}
-      <div className="relative flex-shrink-0 overflow-hidden">
-        {/* Background blur */}
-        {data.image && (
-          <div
-            className="absolute inset-0 scale-110 bg-cover bg-center opacity-20 blur-xl"
-            style={{ backgroundImage: `url(${data.image})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-base-900" />
-
-        <div className="relative flex items-start gap-5 px-6 pb-4 pt-12">
-          <button
-            onClick={() => history.back()}
-            className="btn-ghost absolute left-4 top-4 p-1.5"
-            title="Go back"
-          >
-            <ArrowLeft size={16} />
-          </button>
-
-          {/* Artist image - anchored at top-left with self-start */}
-          {data.image ? (
+      {/* Unified single scroll container */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="relative flex-1 overflow-y-auto px-4 sm:px-6 lg:px-9 pb-8"
+      >
+        {/* Compact Sticky Header Bar - transitions in when scrolled */}
+        <div
+          className={clsx(
+            'sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-9 px-4 sm:px-6 lg:px-9 flex items-center justify-between transition-all duration-200 border-b',
+            isScrolled
+              ? 'h-14 opacity-100 translate-y-0 border-white/[0.08] bg-base-950/92 backdrop-blur-xl'
+              : 'h-0 opacity-0 -translate-y-2 border-transparent overflow-hidden pointer-events-none'
+          )}
+        >
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
             <button
               type="button"
-              onClick={() => setLightboxImage({
-                url: data.image!,
-                title: data.name,
-                artist: isYouTubeChannel ? 'Channel Avatar' : 'Artist Profile',
-              })}
-              className="group relative h-28 w-28 flex-shrink-0 self-start rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
-              title="Click to view artwork"
+              onClick={() => history.back()}
+              className="btn-ghost p-1.5 shrink-0"
+              title="Go back"
             >
-              <img
-                src={data.image}
-                alt={data.name}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 text-xs font-medium">
-                <Maximize2 size={16} />
-              </div>
+              <ArrowLeft size={16} />
             </button>
-          ) : (
-            <div className="flex h-28 w-28 flex-shrink-0 self-start items-center justify-center rounded-full bg-base-800 ring-2 ring-white/10">
-              <Users size={36} className="text-muted" />
-            </div>
-          )}
-
-          <div className="min-w-0 flex-1 pb-1">
-            <p className="section-label mb-1">{isYouTubeChannel ? 'CHANNEL' : 'ARTIST'}</p>
-            <h1 className="font-display text-3xl font-semibold text-white leading-tight truncate">
-              {data.name}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
-              {data.followers != null && typeof data.followers !== 'string' && (
-                <span className="flex items-center gap-1">
-                  <Users size={11} />
-                  {`${compactNumber(data.followers as number)} followers`}
-                </span>
-              )}
-              {data.genres.slice(0, 3).map(g => (
-                <span key={g} className="rounded-full border border-white/10 bg-base-800 px-2 py-0.5">
-                  {g}
-                </span>
-              ))}
-            </div>
-
-            {/* Clamped long bio description for topic/official channels */}
-            {data.followers != null && typeof data.followers === 'string' && (
-              <p
-                className="mt-2 text-xs text-muted line-clamp-2 max-w-3xl leading-relaxed"
-                title={data.followers}
-              >
-                {data.followers}
-              </p>
+            {data.image ? (
+              <img src={data.image} alt="" className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-base-800 border border-base-600/60 flex items-center justify-center shrink-0">
+                <Users size={16} className="text-muted" />
+              </div>
             )}
+            <span className="truncate text-sm sm:text-base font-bold text-white leading-tight">
+              {data.name}
+            </span>
           </div>
 
-          {data.spotifyUrl && (
-            <a
-              href={data.spotifyUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-ghost ml-auto flex-shrink-0 gap-1.5 text-xs text-muted"
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handlePlayAll}
+              disabled={!data.topTracks || data.topTracks.length === 0}
+              className="btn-accent h-9 w-9 rounded-full p-0 flex items-center justify-center shadow-md shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+              title="Play all"
+              aria-label="Play all"
             >
-              <ExternalLink size={12} />
-              {data.spotifyUrl.includes('youtube.com') ? 'YouTube' : 'Spotify'}
-            </a>
-          )}
+              <Play size={15} fill="currentColor" className="ml-0.5" />
+            </button>
+            <button
+              type="button"
+              onClick={cyclePlaybackMode}
+              className={clsx(
+                'h-9 w-9 rounded-full border p-0 flex items-center justify-center transition-all touch-manipulation',
+                shuffle
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_10px_rgba(234,177,76,0.2)]'
+                  : repeat !== 'off'
+                  ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_10px_rgba(234,177,76,0.2)]'
+                  : 'border-base-600/70 bg-base-900/80 text-muted hover:text-white'
+              )}
+              title={modeTitle}
+              aria-label={modeTitle}
+            >
+              {shuffle ? <Shuffle size={15} /> : repeat === 'one' ? <Repeat1 size={15} /> : <Repeat size={15} />}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {/* Normal in-flow Hero Header */}
+        <div className="relative -mx-4 sm:-mx-6 lg:-mx-9 overflow-hidden mb-6">
+          {/* Background blur */}
+          {data.image && (
+            <div
+              className="absolute inset-0 scale-110 bg-cover bg-center opacity-20 blur-xl"
+              style={{ backgroundImage: `url(${data.image})` }}
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-base-900" />
+
+          <div className="relative flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left gap-4 sm:gap-5 px-4 sm:px-6 lg:px-9 pb-4 pt-10 sm:pt-12">
+            <button
+              type="button"
+              onClick={() => history.back()}
+              className="btn-ghost absolute left-4 top-4 p-1.5"
+              title="Go back"
+            >
+              <ArrowLeft size={16} />
+            </button>
+
+            {/* Artist image */}
+            {data.image ? (
+              <button
+                type="button"
+                onClick={() => setLightboxImage({
+                  url: data.image!,
+                  title: data.name,
+                  artist: isYouTubeChannel ? 'Channel Avatar' : 'Artist Profile',
+                })}
+                className="group relative h-28 w-28 flex-shrink-0 rounded-full overflow-hidden shadow-2xl ring-2 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+                title="Click to view artwork"
+              >
+                <img
+                  src={data.image}
+                  alt={data.name}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 text-xs font-medium">
+                  <Maximize2 size={16} />
+                </div>
+              </button>
+            ) : (
+              <div className="flex h-28 w-28 flex-shrink-0 items-center justify-center rounded-full bg-base-800 ring-2 ring-white/10">
+                <Users size={36} className="text-muted" />
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1 pb-1">
+              <p className="section-label mb-1">{isYouTubeChannel ? 'CHANNEL' : 'ARTIST'}</p>
+              <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white leading-tight truncate">
+                {data.name}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2.5 sm:gap-3 text-xs text-muted">
+                {data.followers != null && typeof data.followers !== 'string' && (
+                  <span className="flex items-center gap-1">
+                    <Users size={11} />
+                    {`${compactNumber(data.followers as number)} followers`}
+                  </span>
+                )}
+                {data.genres.slice(0, 3).map(g => (
+                  <span key={g} className="rounded-full border border-white/10 bg-base-800 px-2 py-0.5">
+                    {g}
+                  </span>
+                ))}
+              </div>
+
+              {/* Clamped long bio description for topic/official channels */}
+              {data.followers != null && typeof data.followers === 'string' && (
+                <p
+                  className="mt-2 text-xs text-muted line-clamp-2 max-w-3xl leading-relaxed text-center sm:text-left"
+                  title={data.followers}
+                >
+                  {data.followers}
+                </p>
+              )}
+
+              {/* Action Buttons: Play All + Mode Switcher */}
+              <div className="mt-4 flex items-center justify-center sm:justify-start gap-2.5">
+                <button
+                  type="button"
+                  onClick={handlePlayAll}
+                  disabled={!data.topTracks || data.topTracks.length === 0}
+                  aria-label="Play all"
+                  title="Play all"
+                  className="btn-accent h-11 w-11 rounded-full p-0 flex items-center justify-center shadow-lg shadow-accent/15 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+                >
+                  <Play size={18} fill="currentColor" className="ml-0.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cyclePlaybackMode}
+                  aria-label={modeTitle}
+                  title={modeTitle}
+                  className={clsx(
+                    'h-11 w-11 rounded-full border p-0 flex items-center justify-center transition-all touch-manipulation',
+                    shuffle
+                      ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_12px_rgba(234,177,76,0.25)]'
+                      : repeat !== 'off'
+                      ? 'border-accent/60 bg-accent/15 text-accent shadow-[0_0_12px_rgba(234,177,76,0.25)]'
+                      : 'border-base-600/70 bg-base-900/80 text-muted hover:text-white'
+                  )}
+                >
+                  {shuffle ? <Shuffle size={17} /> : repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}
+                </button>
+
+                {data.spotifyUrl && (
+                  <a
+                    href={data.spotifyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-ghost flex-shrink-0 gap-1.5 text-xs text-muted ml-1"
+                  >
+                    <ExternalLink size={12} />
+                    {data.spotifyUrl.includes('youtube.com') ? 'YouTube' : 'Spotify'}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {isYouTubeChannel && (
-          <div className="sticky top-0 z-20 -mx-6 mb-5 flex items-center gap-6 border-b border-white/[0.08] bg-base-900/95 px-6 py-1 backdrop-blur-md">
+          <div
+            className={clsx(
+              'sticky z-20 -mx-4 sm:-mx-6 lg:-mx-9 mb-5 flex items-center gap-6 border-b border-white/[0.08] bg-base-900/95 px-4 sm:px-6 lg:px-9 py-1 backdrop-blur-md transition-[top] duration-200',
+              isScrolled ? 'top-14' : 'top-0'
+            )}
+          >
             <button
               type="button"
               onClick={() => changeChannelTab('videos')}

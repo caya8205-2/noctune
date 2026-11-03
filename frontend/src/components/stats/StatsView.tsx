@@ -164,7 +164,7 @@ function TopArtistRow({
   );
 }
 
-function DailyChart({ data }: { data: StatsDailyEntry[] }) {
+function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?: Period }) {
   const maxPlays = useMemo(
     () => Math.max(1, ...data.map((d) => d.playCount)),
     [data]
@@ -231,58 +231,66 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
           setTooltip({ visible: true, x: clampedX, y: clampedY, content: `${dateLabel}: ${d.playCount} plays · ${formatMinutes(d.minutes)}` });
         }
 
+        const chartWidth = period === 'all' ? Math.max(320, data.length * 18) : undefined;
+
         return (
-          <div
-            ref={containerRef}
-            className="relative flex h-40 items-end gap-1 border-b border-l border-white/[0.06] px-2 pb-2"
-            onMouseMove={handleMove}
-            onMouseLeave={() => setTooltip({ visible: false, x: 0, y: 0, content: '' })}
-          >
-            {data.map((d, i) => {
-              const heightPct = (d.playCount / maxPlays) * 100;
-              const intensity = d.minutes / maxMinutes;
-              const showLabel = i % labelInterval === 0 || i === data.length - 1;
-              const dateLabel = new Date(d.date).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              });
-
-              return (
-                <div
-                  key={d.date}
-                  className="relative flex min-w-0 flex-1 flex-col items-center"
-                  style={{ height: '100%' }}
-                >
-                  <div
-                    className="mt-auto w-full max-w-[18px] rounded-t transition-colors relative"
-                    style={{
-                      height: `${Math.max(heightPct, d.playCount > 0 ? 4 : 0)}%`,
-                      backgroundColor: d.playCount === 0
-                        ? 'rgba(255,255,255,0.04)'
-                        : getIntensityColor(intensity),
-                    }}
-                  />
-
-                  {showLabel && (
-                    <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted">
-                      {dateLabel}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Cursor-following tooltip that follows both X and Y of the cursor */}
+          <div className="w-full overflow-x-auto scrollbar-hidden pb-4">
             <div
-              className="pointer-events-none absolute z-10 transition-opacity"
+              ref={containerRef}
+              className="relative flex h-40 items-end gap-1 border-b border-l border-white/[0.06] px-2 pb-2 min-w-[320px]"
               style={{
-                left: tooltip.x,
-                top: tooltip.y,
-                transform: 'translate(-50%, -120%)',
-                opacity: tooltip.visible ? 1 : 0,
+                width: chartWidth ? `${chartWidth}px` : '100%',
+                minWidth: chartWidth ? `${chartWidth}px` : undefined,
               }}
+              onMouseMove={handleMove}
+              onMouseLeave={() => setTooltip({ visible: false, x: 0, y: 0, content: '' })}
             >
-              <div className="rounded-md bg-black/80 px-2 py-1 text-xs text-white whitespace-nowrap max-w-[160px] truncate">{tooltip.content}</div>
+              {data.map((d, i) => {
+                const heightPct = (d.playCount / maxPlays) * 100;
+                const intensity = d.minutes / maxMinutes;
+                const showLabel = i % labelInterval === 0 || i === data.length - 1;
+                const dateLabel = new Date(d.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                });
+
+                return (
+                  <div
+                    key={d.date}
+                    className="relative flex min-w-0 flex-1 flex-col items-center"
+                    style={{ height: '100%' }}
+                  >
+                    <div
+                      className="mt-auto w-full max-w-[18px] rounded-t transition-colors relative"
+                      style={{
+                        height: `${Math.max(heightPct, d.playCount > 0 ? 4 : 0)}%`,
+                        backgroundColor: d.playCount === 0
+                          ? 'rgba(255,255,255,0.04)'
+                          : getIntensityColor(intensity),
+                      }}
+                    />
+
+                    {showLabel && (
+                      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted">
+                        {dateLabel}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Cursor-following tooltip that follows both X and Y of the cursor */}
+              <div
+                className="pointer-events-none absolute z-10 transition-opacity"
+                style={{
+                  left: tooltip.x,
+                  top: tooltip.y,
+                  transform: 'translate(-50%, -120%)',
+                  opacity: tooltip.visible ? 1 : 0,
+                }}
+              >
+                <div className="rounded-md bg-black/80 px-2 py-1 text-xs text-white whitespace-nowrap max-w-[160px] truncate">{tooltip.content}</div>
+              </div>
             </div>
           </div>
         );
@@ -312,8 +320,6 @@ function DailyChart({ data }: { data: StatsDailyEntry[] }) {
     </div>
   );
 }
-
-
 
 export function StatsView() {
   const [period, setPeriod] = useState<Period>('30d');
@@ -409,7 +415,7 @@ export function StatsView() {
             {dailyLoading ? 'Loading activity…' : 'No listening data yet.'}
           </div>
         ) : (
-          <DailyChart data={daily} />
+          <DailyActivityChart data={daily} period={period} />
         )}
       </section>
 
