@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { CachedTrack, PersonalMix, Track } from '../utils/api';
-import { api, getSpotifyPlaybackSettingSync } from '../utils/api';
+import { api, getSpotifyPlaybackSettingSync, isMobileClientMode } from '../utils/api';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -147,7 +147,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   sleepTimerEnd: null,
   crossfadeDuration: 0,
   eqEnabled: false,
-  eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  eqBands: isMobileClientMode() ? [0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   eqPreset: 'flat',
   lyricsOffsets: loadInitialLyricsOffsets(),
 
@@ -237,7 +237,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   }),
   resetEq: () => set({
     eqEnabled: false,
-    eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    eqBands: isMobileClientMode() ? [0, 0, 0, 0, 0] : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     eqPreset: 'flat',
   }),
 

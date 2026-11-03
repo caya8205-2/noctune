@@ -13,6 +13,7 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  SlidersHorizontal,
   Zap,
   Loader2,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ import { clsx } from 'clsx';
 import { usePlayerStore } from '../../store/player';
 import { seekAudio } from '../../hooks/useAudio';
 import { Visualizer, type VisualizerMode } from './Visualizer';
+import { EqualizerView } from './EqualizerView';
 import { TrackActionButtons } from '../ui/TrackActionButtons';
 import { TrackDetailsContent } from './TrackDetailsSidebar';
 import { api, resolveYouTubeChannelId, type LyricsResult, type Track } from '../../utils/api';
@@ -245,8 +247,10 @@ export function PlayerView() {
     toggleShuffle,
     cycleRepeat,
     setView,
+    eqEnabled,
   } = usePlayerStore();
   const [showLegend, setShowLegend] = useState(false);
+  const [showEqualizer, setShowEqualizer] = useState(false);
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>(() => {
     return (localStorage.getItem('noctune:visualizer-mode') as VisualizerMode) || 'ncs';
   });
@@ -395,6 +399,20 @@ export function PlayerView() {
                   showClearCache={false}
                   showMenu={false}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowEqualizer(true)}
+                  className={clsx(
+                    'inline-flex h-[30px] min-w-[42px] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                    eqEnabled
+                      ? 'border-accent/50 bg-accent/15 text-accent'
+                      : 'border-base-600/40 bg-base-900/60 text-soft hover:text-white'
+                  )}
+                  title="Equalizer"
+                >
+                  <SlidersHorizontal size={13} className={eqEnabled ? 'text-accent' : 'text-soft'} />
+                  <span className="text-xs font-medium">EQ</span>
+                </button>
               </div>
 
               {/* Badge Legend (toggleable on badge click) */}
@@ -489,6 +507,16 @@ export function PlayerView() {
           </div>
         )}
       </section>
+
+      {/* Equalizer Modal (Accessible on mobile & desktop) */}
+      {showEqualizer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div className="fixed inset-0" onClick={() => setShowEqualizer(false)} />
+          <div className="relative z-10 w-full max-w-lg">
+            <EqualizerView onClose={() => setShowEqualizer(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

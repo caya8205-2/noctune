@@ -21,6 +21,7 @@ import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairi
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
+import { EqualizerView } from '../player/EqualizerView';
 import { usePlayerStore } from '../../store/player';
 import { openChangelogModal } from '../ui/ChangelogModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -1269,6 +1270,19 @@ export function SettingsView() {
             </select>
           </div>
         </div>
+      </section>
+
+      {/* Audio Equalizer */}
+      <section className="surface-panel flex flex-col gap-4 p-5">
+        <div>
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+            Audio Equalizer
+          </h2>
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Fine-tune frequency bands and audio color profile to match your headphones or speakers.
+          </p>
+        </div>
+        <EqualizerView />
       </section>
 
       {/* Debug & Diagnostics */}

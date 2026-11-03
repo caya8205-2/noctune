@@ -1,8 +1,10 @@
 import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore } from '../store/player';
+import { isMobileClientMode } from '../utils/api';
 
-const EQ_CACHE_KEY = 'noctune-eq-cache';
+const EQ_CACHE_KEY_DESKTOP = 'noctune-eq-cache';
+const EQ_CACHE_KEY_MOBILE = 'noctune-eq-cache-mobile';
 
 interface EqCache {
   eqEnabled: boolean;
@@ -11,39 +13,68 @@ interface EqCache {
   updatedAt: number;
 }
 
-function readEqCache(): EqCache | null {
+function getEqCacheKey(isMobile: boolean): string {
+  return isMobile ? EQ_CACHE_KEY_MOBILE : EQ_CACHE_KEY_DESKTOP;
+}
+
+function readEqCache(isMobile: boolean): EqCache | null {
   try {
-    const raw = localStorage.getItem(EQ_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const raw = localStorage.getItem(getEqCacheKey(isMobile));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as EqCache;
+    const expectedLen = isMobile ? EQ_BANDS_5.length : EQ_BANDS_10.length;
+    if (!Array.isArray(parsed.eqBands) || parsed.eqBands.length !== expectedLen) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
 }
 
-function writeEqCache(data: Omit<EqCache, 'updatedAt'>) {
+function writeEqCache(data: Omit<EqCache, 'updatedAt'>, isMobile: boolean) {
   try {
     localStorage.setItem(
-      EQ_CACHE_KEY,
+      getEqCacheKey(isMobile),
       JSON.stringify({ ...data, updatedAt: Date.now() })
     );
   } catch {}
 }
 
-export const EQ_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+export const EQ_BANDS_10 = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+export const EQ_BANDS_5 = [60, 250, 1000, 4000, 14000];
 
-export type EqPreset = keyof typeof PRESETS;
+// Legacy export for backward compatibility
+export const EQ_BANDS = EQ_BANDS_10;
 
-export const PRESETS: Record<string, number[]> = {
-  flat:      [0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-  pop:       [ 1,  2,  3,  2, -1, -1,  1,  2,  3,  2],
-  rock:      [ 3,  2,  1,  1,  0, -1, -1,  1,  2,  3],
-  jazz:      [ 3,  2,  1,  1,  0,  1,  2,  2,  1,  1],
-  classical: [ 3,  2,  1,  0,  0,  0,  1,  2,  3,  3],
-  'hip-hop': [ 3,  2,  1,  1,  0, -1, -1, -2, -1,  0],
-  'bass-boost':   [ 4,  3,  2,  1,  0, -1, -2, -2, -1,  0],
-  'vocal-boost':  [-1, -1,  1,  2,  2,  2,  2,  1,  0, -1],
-  electronic: [ 4,  3,  2,  1,  0, -1,  1,  2,  3,  4],
+export type EqPreset = keyof typeof PRESETS_10;
+
+export const PRESETS_10: Record<string, number[]> = {
+  flat:        [0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+  pop:         [1,  2,  3,  2, -1, -1,  1,  2,  3,  2],
+  rock:        [3,  2,  1,  1,  0, -1, -1,  1,  2,  3],
+  jazz:        [3,  2,  1,  1,  0,  1,  2,  2,  1,  1],
+  classical:   [3,  2,  1,  0,  0,  0,  1,  2,  3,  3],
+  'hip-hop':   [3,  2,  1,  1,  0, -1, -1, -2, -1,  0],
+  'bass-boost': [4,  3,  2,  1,  0, -1, -2, -2, -1,  0],
+  'vocal-boost':[-1, -1, 1,  2,  2,  2,  2,  1,  0, -1],
+  electronic:  [4,  3,  2,  1,  0, -1,  1,  2,  3,  4],
 };
+
+export const PRESETS_5: Record<string, number[]> = {
+  flat:        [0,  0,  0,  0,  0],
+  pop:         [2,  3, -1,  2,  2],
+  rock:        [3,  1,  0,  1,  3],
+  jazz:        [3,  1,  1,  2,  1],
+  classical:   [3,  1,  0,  1,  3],
+  'hip-hop':   [4,  2,  0, -1,  1],
+  'bass-boost': [5,  3,  0, -1, -1],
+  'vocal-boost':[-1, 1,  3,  2,  0],
+  electronic:  [4,  2,  0,  2,  4],
+};
+
+// Legacy export for backward compatibility
+export const PRESETS = PRESETS_10;
 
 export const PRESET_LABELS: Record<string, string> = {
   flat: 'Flat',
@@ -57,7 +88,9 @@ export const PRESET_LABELS: Record<string, string> = {
   electronic: 'Electronic',
 };
 
-export const DEFAULT_EQ_BANDS = [...PRESETS.flat];
+export const DEFAULT_EQ_BANDS_10 = [...PRESETS_10.flat];
+export const DEFAULT_EQ_BANDS_5 = [...PRESETS_5.flat];
+export const DEFAULT_EQ_BANDS = DEFAULT_EQ_BANDS_10;
 
 /**
  * Applies current EQ state (enabled, band gains) to the Web Audio filter nodes
@@ -90,6 +123,10 @@ function applyEqToAudioNodes() {
  * Call once from any component that needs EQ reactivity (e.g., EqualizerView).
  */
 export function useEqualizer() {
+  const isMobile = isMobileClientMode();
+  const bands = isMobile ? EQ_BANDS_5 : EQ_BANDS_10;
+  const presets = isMobile ? PRESETS_5 : PRESETS_10;
+
   const {
     eqEnabled,
     eqBands,
@@ -100,7 +137,7 @@ export function useEqualizer() {
   } = usePlayerStore();
 
   // Hydrate store from localStorage cache on mount
-  const cachedEq = useMemo(() => readEqCache(), []);
+  const cachedEq = useMemo(() => readEqCache(isMobile), [isMobile]);
   const hydrated = useRef(false);
   useEffect(() => {
     if (cachedEq && !hydrated.current) {
@@ -110,13 +147,23 @@ export function useEqualizer() {
         eqBands: cachedEq.eqBands,
         eqPreset: cachedEq.eqPreset,
       });
+    } else if (!hydrated.current) {
+      // Ensure store eqBands array length matches active environment (5 on mobile, 10 on desktop)
+      const currentBands = usePlayerStore.getState().eqBands;
+      if (currentBands.length !== bands.length) {
+        usePlayerStore.setState({
+          eqBands: isMobile ? [...DEFAULT_EQ_BANDS_5] : [...DEFAULT_EQ_BANDS_10],
+          eqPreset: 'flat',
+        });
+      }
+      hydrated.current = true;
     }
-  }, [cachedEq]);
+  }, [cachedEq, isMobile, bands.length]);
 
   // Expose cache as TanStack Query (matching HomeView pattern)
   useQuery({
-    queryKey: ['eq-settings'],
-    queryFn: () => readEqCache(),
+    queryKey: ['eq-settings', isMobile ? 'mobile' : 'desktop'],
+    queryFn: () => readEqCache(isMobile),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     initialData: cachedEq,
@@ -134,15 +181,15 @@ export function useEqualizer() {
     const snapshot = JSON.stringify({ eqEnabled, eqBands, eqPreset });
     if (snapshot !== lastCache.current) {
       lastCache.current = snapshot;
-      writeEqCache({ eqEnabled, eqBands, eqPreset });
+      writeEqCache({ eqEnabled, eqBands, eqPreset }, isMobile);
     }
-  }, [eqEnabled, eqBands, eqPreset]);
+  }, [eqEnabled, eqBands, eqPreset, isMobile]);
 
   const applyPreset = useCallback((preset: string) => {
-    const gains = PRESETS[preset];
+    const gains = presets[preset];
     if (!gains) return;
     usePlayerStore.getState().setEqBands([...gains], preset);
-  }, []);
+  }, [presets]);
 
   return {
     eqEnabled,
@@ -152,7 +199,9 @@ export function useEqualizer() {
     setEqBand,
     applyPreset,
     resetEq,
-    bands: EQ_BANDS,
+    bands,
+    presets,
+    isMobile,
   };
 }
 
@@ -165,13 +214,17 @@ export function createEqualizerNodes(ctx: AudioContext, analyser: AnalyserNode) 
   // Disconnect the existing analyser → destination link
   try { analyser.disconnect(ctx.destination); } catch { /* not connected */ }
 
-  // Create 10 peaking filters
+  const isMobile = isMobileClientMode();
+  const bands = isMobile ? EQ_BANDS_5 : EQ_BANDS_10;
+
+  // Create peaking filters: 5 bands on mobile (Q=1.0 for smooth 2-octave curves),
+  // 10 bands on desktop (Q=1.41 for 1-octave precision).
   const filters: BiquadFilterNode[] = [];
-  for (const freq of EQ_BANDS) {
+  for (const freq of bands) {
     const filter = ctx.createBiquadFilter();
     filter.type = 'peaking';
     filter.frequency.value = freq;
-    filter.Q.value = 1.41;
+    filter.Q.value = isMobile ? 1.0 : 1.41;
     filter.gain.value = 0;
     filters.push(filter);
   }

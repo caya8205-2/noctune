@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { SlidersHorizontal, Volume2, VolumeX } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useEqualizer, EQ_BANDS, PRESETS, PRESET_LABELS } from '../../hooks/useEqualizer';
+import { useEqualizer, PRESET_LABELS } from '../../hooks/useEqualizer';
 import { usePlayerStore } from '../../store/player';
 
 interface EqualizerViewProps {
@@ -20,6 +20,9 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
     eqPreset,
     setEqEnabled,
     setEqBand,
+    bands,
+    presets,
+    isMobile,
   } = useEqualizer();
 
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -128,12 +131,12 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
 
   const handlePreset = useCallback(
     (presetKey: string) => {
-      const gains = PRESETS[presetKey];
+      const gains = presets[presetKey];
       if (!gains) return;
       if (!eqEnabled) setEqEnabled(true);
       animateBands(gains, presetKey);
     },
-    [eqEnabled, setEqEnabled, animateBands]
+    [eqEnabled, setEqEnabled, animateBands, presets]
   );
 
   return (
@@ -143,6 +146,9 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
         <div className="flex items-center gap-2">
           <SlidersHorizontal size={16} className="text-accent" />
           <h3 className="text-sm font-semibold text-white">Equalizer</h3>
+          <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[10px] font-mono text-soft">
+            {isMobile ? '5-band (Mobile)' : '10-band (Studio)'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {/* Bypass toggle */}
@@ -172,8 +178,11 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
       </div>
 
       {/* Frequency sliders */}
-      <div className="mb-4 flex items-end gap-1 sm:gap-2">
-        {EQ_BANDS.map((freq, index) => {
+      <div className={clsx(
+        'mb-4 flex items-end',
+        isMobile ? 'gap-2 sm:gap-3' : 'gap-1 sm:gap-2'
+      )}>
+        {bands.map((freq, index) => {
           const db = eqBands[index] ?? 0;
           const pct = ((db + 6) / 12) * 100; // -6dB = 0%, +6dB = 100%, 0dB = 50%
           const isAboveZero = db > 0;
@@ -202,8 +211,9 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
               <div className="relative flex flex-col items-center">
                 <div
                   className={clsx(
-                    'relative h-24 w-6 sm:h-28 sm:w-7',
-                    eqEnabled && 'cursor-pointer'
+                    'relative',
+                    isMobile ? 'h-28 w-10 sm:h-28 sm:w-8' : 'h-24 w-6 sm:h-28 sm:w-7',
+                    eqEnabled && 'cursor-pointer touch-manipulation'
                   )}
                   onMouseDown={(e) => handleSliderStart(e, index)}
                   onTouchStart={(e) => handleSliderStart(e, index)}
@@ -238,7 +248,8 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
                   <div
                     ref={el => { thumbRefs.current[index] = el; }}
                     className={clsx(
-                      'pointer-events-none absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2',
+                      'pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2',
+                      isMobile ? 'h-3.5 w-3.5' : 'h-2.5 w-2.5',
                       draggingIndex !== index && 'transition-all',
                       eqEnabled
                         ? db > 0
@@ -282,7 +293,7 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
         ))}
         {eqPreset !== 'flat' && (
           <button
-            onClick={() => animateBands(PRESETS.flat, 'flat')}
+            onClick={() => animateBands(presets.flat, 'flat')}
             className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-base-800 hover:text-red-400"
           >
             Reset
