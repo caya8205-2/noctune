@@ -83,7 +83,8 @@ export default defineConfig({
   },
   // Tauri expects a fixed port and won't work on random ports
   server: {
-    port: 5173,
+    host: process.env.TAURI_DEV_HOST || '0.0.0.0',
+    port: 5174,
     strictPort: true,
   },
   build: {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Download, Loader2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api, isMobileClientMode } from '../../utils/api';
@@ -188,8 +189,8 @@ export function ArtworkLightboxModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md animate-fade-in" onClick={(event) => {
+  const content = (
+    <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md animate-fade-in" onClick={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
       <div
@@ -198,9 +199,9 @@ export function ArtworkLightboxModal({
           if (event.target === event.currentTarget) onClose();
         }}
       >
-        {/* Header controls: clear of the desktop shell header and the mobile status bar */}
-        <div className="absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex flex-wrap items-center justify-end gap-2 md:inset-x-4 md:top-12">
-          <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-white/10 bg-base-950/75 p-1.5 shadow-xl backdrop-blur-md">
+        {/* Header controls: fully floating above all app bars */}
+        <div className="absolute inset-x-3 top-[max(1rem,env(safe-area-inset-top))] z-[10000] flex flex-wrap items-center justify-end gap-2 md:inset-x-4 md:top-12">
+          <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-white/10 bg-base-950/85 p-1.5 shadow-xl backdrop-blur-md">
             {downloadSuccess && savedPath && (
               <span className="hidden max-w-xs truncate px-2 text-xs font-medium text-emerald-400/90 sm:block" title={`Saved to ${savedPath}`}>
                 Saved to {savedPath}
@@ -378,4 +379,6 @@ export function ArtworkLightboxModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

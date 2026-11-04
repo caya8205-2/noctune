@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getAllCachedTracks } from '../services/cache.js';
+import { loadPlayLog } from '../services/mlRecommendation.js';
 import { getSpotifyTrackMetadata } from '../services/spotify.js';
 import type { CachedTrack } from '../types/index.js';
 
@@ -144,30 +145,53 @@ export async function statsRoutes(app: FastifyInstance) {
   // Daily activity (calendar heatmap data)
   app.get('/stats/daily', async (req, reply) => {
     const query = req.query as { days?: string };
-    // "All time" is the full year the desktop history can hold; the UI stopped
-    // asking for 90 days while labelling the tab "All time".
     const days = query.days === 'all'
       ? 365
       : Math.min(365, Math.max(7, Number(query.days) || 30));
     
     const allTracks = getAllCachedTracks();
-    
+    const trackDurations = new Map<string, number>();
+    for (const track of allTracks) {
+      if (track.id && track.duration) {
+        trackDurations.set(track.id, track.duration);
+      }
+    }
+
     // Aggregate by date
     const dayMap = new Map<string, { date: string; playCount: number; minutes: number }>();
-    
-    for (const track of allTracks) {
-      if (!track.lastPlayed) continue;
-      
-      const date = new Date(track.lastPlayed).toISOString().split('T')[0];
-      const plays = track.playCount || 0;
-      const minutes = (track.duration || 0) * plays / 60;
-      
-      if (!dayMap.has(date)) {
-        dayMap.set(date, { date, playCount: 0, minutes: 0 });
+    const playLog = loadPlayLog();
+
+    if (playLog && playLog.length > 0) {
+      // High-resolution real historical play events from play-log
+      for (const event of playLog) {
+        if (!event.timestamp) continue;
+        const dateStr = new Date(event.timestamp).toISOString().split('T')[0];
+        const durSec = trackDurations.get(event.trackId) || 210; // default 3.5 min
+        const minutes = durSec / 60;
+
+        if (!dayMap.has(dateStr)) {
+          dayMap.set(dateStr, { date: dateStr, playCount: 0, minutes: 0 });
+        }
+        const entry = dayMap.get(dateStr)!;
+        entry.playCount += 1;
+        entry.minutes += minutes;
       }
-      const entry = dayMap.get(date)!;
-      entry.playCount += plays;
-      entry.minutes += minutes;
+    } else {
+      // Fallback to track lastPlayed when playLog is empty
+      for (const track of allTracks) {
+        if (!track.lastPlayed) continue;
+        
+        const date = new Date(track.lastPlayed).toISOString().split('T')[0];
+        const plays = track.playCount || 0;
+        const minutes = (track.duration || 0) * plays / 60;
+        
+        if (!dayMap.has(date)) {
+          dayMap.set(date, { date, playCount: 0, minutes: 0 });
+        }
+        const entry = dayMap.get(date)!;
+        entry.playCount += plays;
+        entry.minutes += minutes;
+      }
     }
     
     // Generate last N days (fill missing days with 0)

@@ -46,7 +46,7 @@ function ensureDataDir() {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function loadPlayLog(): PlayLogEvent[] {
+export function loadPlayLog(): PlayLogEvent[] {
   if (playLogCache) return playLogCache;
   ensureDataDir();
   if (!fs.existsSync(PLAY_LOG_FILE)) {

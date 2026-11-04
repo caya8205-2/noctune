@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev --workspace=frontend",
     "beforeBuildCommand": "npm run build --workspace=frontend",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5174",
     "frontendDist": "../frontend/dist"
   },
   "app": {
@@ -32,6 +32,10 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
+    "publisher": "Caya8205",
+    "copyright": "Copyright © 2026 Caya8205",
+    "shortDescription": "Noctune music player",
+    "longDescription": "A lightweight desktop music player",
     "targets": "all",
     "externalBin": [
       "binaries/noctune-backend"

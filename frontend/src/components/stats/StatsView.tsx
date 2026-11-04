@@ -186,6 +186,15 @@ function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?
     return () => query.removeEventListener('change', handler);
   }, []);
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll to the end (most recent dates) whenever switching to a scrollable period
+  useEffect(() => {
+    if (period === 'all' && !isDesktop && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+    }
+  }, [period, isDesktop, data.length]);
+
   // Show date labels at intervals
   const labelInterval = isDesktop && data.length > 60
     ? Math.ceil(data.length / 12)
@@ -250,12 +259,17 @@ function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?
           : undefined;
 
         return (
-          <div className={period === 'all' && !isDesktop
-            ? 'w-full overflow-x-auto scrollbar-hidden pb-4'
-            : 'w-full pb-4'}>
+          <div
+            ref={scrollContainerRef}
+            className={period === 'all' && !isDesktop
+              ? 'w-full overflow-x-auto scrollbar-hidden pb-4'
+              : 'w-full pb-4'}
+          >
             <div
               ref={containerRef}
-              className={`relative flex h-40 items-end border-b border-l border-white/[0.06] px-2 pb-2 min-w-[320px] ${isDesktop && data.length > 120 ? 'gap-px' : 'gap-1'}`}
+              className={`relative flex h-40 items-end border-b border-l border-white/[0.06] px-1 pb-2 min-w-0 ${
+                isDesktop ? (data.length > 180 ? 'gap-0' : data.length > 60 ? 'gap-px' : 'gap-1') : 'gap-1 min-w-[320px]'
+              }`}
               style={{
                 width: chartWidth ? `${chartWidth}px` : '100%',
               }}
@@ -278,7 +292,9 @@ function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?
                     style={{ height: '100%' }}
                   >
                     <div
-                      className="mt-auto w-full max-w-[18px] rounded-t transition-colors relative"
+                      className={`mt-auto w-full rounded-t transition-colors relative ${
+                        isDesktop && data.length > 180 ? 'max-w-none' : 'max-w-[18px]'
+                      }`}
                       style={{
                         height: `${Math.max(heightPct, d.playCount > 0 ? 4 : 0)}%`,
                         backgroundColor: d.playCount === 0

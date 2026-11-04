@@ -107,6 +107,7 @@ export function useAudio() {
   const recoveryAttemptsRef = useRef<Record<string, number>>({});
   const trackEndedTriggeredRef = useRef(false);
   const handleTrackEndedRef = useRef<() => void>(() => {});
+  const pendingInitialSeekRef = useRef<number | null>(null);
 
   const cancelCrossfade = useCallback(() => {
     if (fadeIntervalRef.current) {
@@ -395,7 +396,17 @@ export function useAudio() {
         audio.src = prebufferedAudio.src;
       }
       setLoading(false);
+      if (pendingInitialSeekRef.current != null) {
+        const seekSec = pendingInitialSeekRef.current;
+        pendingInitialSeekRef.current = null;
+        if (Number.isFinite(seekSec) && seekSec > 0) {
+          audio.currentTime = seekSec;
+        }
+      }
       if (usePlayerStore.getState().isPlaying) {
+        if (IS_TAURI_MOBILE) {
+          (window as any).__noctune_native_request = { type: 'resume' };
+        }
         playAudio(audio).catch(() => {});
       }
       preloadedAudiosRef.current.delete(targetId);
@@ -443,7 +454,17 @@ export function useAudio() {
           .then(() => {
             if (cancelled) return;
             setLoading(false);
+            if (pendingInitialSeekRef.current != null) {
+              const seekSec = pendingInitialSeekRef.current;
+              pendingInitialSeekRef.current = null;
+              if (Number.isFinite(seekSec) && seekSec > 0) {
+                audio.currentTime = seekSec;
+              }
+            }
             if (usePlayerStore.getState().isPlaying) {
+              if (IS_TAURI_MOBILE) {
+                (window as any).__noctune_native_request = { type: 'resume' };
+              }
               return playAudio(audio);
             }
           })
@@ -891,11 +912,13 @@ export function useAudio() {
         return `${server.baseUrl}/player/stream/${encodeURIComponent(id)}${key}`;
       };
       const upcoming = state.queue
-        .slice(state.queueIndex + 1, state.queueIndex + 4)
+        .slice(state.queueIndex + 1, state.queueIndex + 5)
         .map((queued) => ({
+          trackId: queued.id,
           url: buildStreamUrl(queued.id),
           title: queued.title,
           artist: queued.artist,
+          album: queued.album ?? queued.youtubeTitle ?? 'Noctune',
           artwork: queued.thumbnail ?? '',
         }))
         .filter((entry) => Boolean(entry.url));
@@ -949,15 +972,84 @@ export function useAudio() {
     return () => window.removeEventListener('noctune:native-media-action', handler as EventListener);
   }, []);
 
-  // Android background handoff. Chromium suspends the <audio> element while the
-  // page is hidden, no matter what the activity does, so playback is handed to
-  // ExoPlayer in the foreground service when the app leaves the foreground and
-  // taken back (at the same position) when it returns.
+  // Android background handoff & cold-start state rehydration.
   useEffect(() => {
     if (!IS_TAURI_MOBILE || typeof document === 'undefined') return;
 
     const host = window as any;
     let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const applyNativePlaybackState = (nativeState: any) => {
+      if (!nativeState || (!nativeState.active && !nativeState.playing)) return;
+
+      const state = usePlayerStore.getState();
+      const current = state.currentTrack;
+      const element = host.__noctune_audio as HTMLAudioElement | undefined;
+      const trackId = nativeState.trackId as string | undefined;
+      const positionSec = typeof nativeState.positionMs === 'number' && nativeState.positionMs > 0
+        ? nativeState.positionMs / 1000
+        : 0;
+
+      // Determine if we need to switch or rehydrate currentTrack
+      const needsTrackUpdate = !current || (trackId && current.id !== trackId);
+
+      if (needsTrackUpdate) {
+        let matchedTrack: any = undefined;
+        let matchedIndex = -1;
+
+        if (trackId) {
+          matchedIndex = state.queue.findIndex((t) => t.id === trackId);
+          if (matchedIndex >= 0) matchedTrack = state.queue[matchedIndex];
+        }
+        if (!matchedTrack && nativeState.title) {
+          matchedIndex = state.queue.findIndex(
+            (t) =>
+              t.title.toLowerCase() === nativeState.title?.toLowerCase() &&
+              (!nativeState.artist || t.artist.toLowerCase() === nativeState.artist?.toLowerCase())
+          );
+          if (matchedIndex >= 0) matchedTrack = state.queue[matchedIndex];
+        }
+        if (!matchedTrack && (trackId || nativeState.title)) {
+          matchedTrack = {
+            id: trackId || 'native-track',
+            title: nativeState.title || 'Unknown Title',
+            artist: nativeState.artist || 'Unknown Artist',
+            album: nativeState.album || '',
+            duration: nativeState.durationMs ? nativeState.durationMs / 1000 : 0,
+            thumbnail: nativeState.artwork || '',
+            audioUrl: nativeState.streamUrl || undefined,
+          };
+        }
+
+        if (matchedTrack) {
+          if (positionSec > 0) {
+            pendingInitialSeekRef.current = positionSec;
+          }
+          usePlayerStore.setState({
+            currentTrack: matchedTrack,
+            queueIndex: matchedIndex >= 0 ? matchedIndex : (state.queueIndex >= 0 ? state.queueIndex : 0),
+            isPlaying: nativeState.playing ?? true,
+            progress: positionSec,
+            duration: (nativeState.durationMs ? nativeState.durationMs / 1000 : matchedTrack.duration) || 0,
+          });
+        }
+      } else {
+        // Same track is already loaded; sync position if element is paused or behind
+        if (element && positionSec > 0 && Math.abs(element.currentTime - positionSec) > 1.5) {
+          element.currentTime = positionSec;
+        }
+      }
+    };
+
+    const handleNativeStateEvent = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail || host.__noctune_native_state;
+      applyNativePlaybackState(detail);
+    };
+
+    window.addEventListener('noctune:native-state', handleNativeStateEvent);
+    if (host.__noctune_native_state) {
+      applyNativePlaybackState(host.__noctune_native_state);
+    }
 
     const handleVisibility = () => {
       const state = usePlayerStore.getState();
@@ -973,31 +1065,37 @@ export function useAudio() {
           type: 'handoff',
           url: element.src,
           positionMs: Math.round(element.currentTime * 1000),
+          trackId: state.currentTrack?.id,
+          title: state.currentTrack?.title,
+          artist: state.currentTrack?.artist,
+          album: state.currentTrack?.album ?? state.currentTrack?.youtubeTitle ?? 'Noctune',
+          artwork: state.currentTrack?.thumbnail,
         };
         element.pause();
         return;
       }
 
       host.__noctune_native_request = { type: 'resume' };
-      // The service consumes the request on its 500ms tick and only then
-      // publishes the final native position.
       if (resumeTimer) clearTimeout(resumeTimer);
       resumeTimer = setTimeout(() => {
         resumeTimer = null;
-        // MainActivity queries the :media process and writes the answer here.
-        const nativeState = host.__noctune_native_state as { positionMs?: number } | undefined;
+        const nativeState = host.__noctune_native_state;
+        applyNativePlaybackState(nativeState);
         const nativePosition = nativeState?.positionMs;
         if (typeof nativePosition === 'number' && nativePosition > 0) {
-          if (element) element.currentTime = nativePosition / 1000;
+          if (element && Math.abs(element.currentTime - (nativePosition / 1000)) > 1.2) {
+            element.currentTime = nativePosition / 1000;
+          }
         }
-        if (usePlayerStore.getState().isPlaying && element) {
+        if (usePlayerStore.getState().isPlaying && element && element.paused) {
           element.play().catch(() => {});
         }
-      }, 900);
+      }, 150);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
+      window.removeEventListener('noctune:native-state', handleNativeStateEvent);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (resumeTimer) clearTimeout(resumeTimer);
     };

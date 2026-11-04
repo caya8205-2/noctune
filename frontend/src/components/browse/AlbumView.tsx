@@ -127,26 +127,31 @@ export function AlbumView({ albumId }: { albumId: string }) {
       >
         {/* Compact bar that takes over once the hero scrolls away */}
         <div
-          className={`sticky top-0 z-30 flex items-center gap-3 overflow-hidden border-b bg-base-950/92 backdrop-blur-xl transition-all duration-200 ${collapsed
-            ? 'h-14 border-white/[0.08] px-3 opacity-100'
-            : 'h-0 border-transparent px-3 opacity-0'}`}
-        >
-          <button onClick={() => history.back()} className="btn-ghost h-9 w-9 flex-shrink-0 rounded-full p-0" title="Go back">
-            <ArrowLeft size={15} />
-          </button>
-          {data.image && (
-            <img src={data.image} alt="" className="h-9 w-9 flex-shrink-0 rounded-md object-cover ring-1 ring-white/10" />
+          className={clsx(
+            'sticky top-0 z-30 flex items-center justify-between transition-all duration-200 border-b',
+            collapsed
+              ? 'h-14 opacity-100 translate-y-0 border-white/[0.08] bg-base-950/92 backdrop-blur-xl px-4 sm:px-6'
+              : 'h-0 opacity-0 -translate-y-2 border-transparent overflow-hidden pointer-events-none px-4 sm:px-6'
           )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{data.name}</p>
-            <p className="truncate text-[11px] text-muted">{data.artists.map(a => a.name).join(', ')}</p>
+        >
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+            <button onClick={() => history.back()} className="btn-ghost p-1.5 shrink-0" title="Go back">
+              <ArrowLeft size={16} />
+            </button>
+            {data.image && (
+              <img src={data.image} alt="" className="h-8 w-8 rounded-lg object-cover flex-shrink-0 ring-1 ring-white/10" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white leading-tight">{data.name}</p>
+              <p className="truncate text-[11px] text-muted">{data.artists.map(a => a.name).join(', ')}</p>
+            </div>
           </div>
           <button
             onClick={handlePlayAll}
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-base-950"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-base-950 shadow-md shadow-accent/15"
             title="Play all"
           >
-            <Play size={15} fill="currentColor" />
+            <Play size={15} fill="currentColor" className="ml-0.5" />
           </button>
         </div>
 
@@ -160,10 +165,10 @@ export function AlbumView({ albumId }: { albumId: string }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-base-900" />
 
-        <div className="relative flex flex-col items-center gap-4 px-6 pb-6 pt-10 text-center sm:flex-row sm:items-end sm:gap-5 sm:text-left">
+        <div className="relative flex flex-col items-center gap-4 px-4 pb-6 pt-10 text-center sm:flex-row sm:items-end sm:gap-6 sm:px-6 sm:text-left">
           <button
             onClick={() => history.back()}
-            className="btn-ghost absolute left-4 top-4 p-1.5"
+            className="btn-ghost absolute left-3 top-3 p-1.5 sm:left-4 sm:top-4"
             title="Go back"
           >
             <ArrowLeft size={16} />
@@ -174,7 +179,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
             <button
               type="button"
               onClick={() => setShowLightbox(true)}
-              className="group relative h-40 w-40 flex-shrink-0 overflow-hidden rounded-lg text-left shadow-2xl ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent sm:h-28 sm:w-28"
+              className="group relative h-44 w-44 flex-shrink-0 overflow-hidden rounded-xl text-left shadow-2xl ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent sm:h-32 sm:w-32"
               title="Click to view artwork"
             >
               <img
@@ -188,17 +193,17 @@ export function AlbumView({ albumId }: { albumId: string }) {
               </div>
             </button>
           ) : (
-            <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-lg bg-base-800 ring-1 ring-white/10 sm:h-28 sm:w-28">
+            <div className="flex h-44 w-44 flex-shrink-0 items-center justify-center rounded-xl bg-base-800 ring-1 ring-white/10 sm:h-32 sm:w-32">
               <Music2 size={36} className="text-muted" />
             </div>
           )}
 
-          <div className="w-full min-w-0 pb-1 sm:w-auto sm:flex-1">
-            <p className="section-label mb-1 capitalize">{data.type}</p>
-            <h1 className="font-display text-2xl font-semibold text-white leading-tight">
+          <div className="w-full min-w-0 pb-1 flex flex-col items-center sm:items-start sm:flex-1">
+            <p className="section-label mb-1 capitalize text-accent">{data.type}</p>
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white leading-tight max-w-full">
               {data.name}
             </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+            <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs text-muted">
               {/* Artist names clickable */}
               {data.artists.map((artist, i) => (
                 <span key={artist.id}>
@@ -219,8 +224,8 @@ export function AlbumView({ albumId }: { albumId: string }) {
               {data.label && <span className="text-base-500">· {data.label}</span>}
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
-              <button onClick={handlePlayAll} className="btn-accent py-2 px-4 text-xs">
+            <div className="mt-4 flex items-center justify-center sm:justify-start gap-2">
+              <button onClick={handlePlayAll} className="btn-accent py-2 px-4 text-xs shadow-md shadow-accent/15">
                 ▶ Play all
               </button>
               {data.spotifyUrl && (

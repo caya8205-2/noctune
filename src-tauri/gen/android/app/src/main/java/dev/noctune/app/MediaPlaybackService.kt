@@ -113,6 +113,7 @@ class MediaPlaybackService : Service() {
 
   private var session: MediaSessionCompat? = null
   private var playing = false
+  private var trackId = ""
   private var title = "Noctune"
   private var artist = ""
   private var album = ""
@@ -125,6 +126,7 @@ class MediaPlaybackService : Service() {
   private var pollTicks = 0
   private var player: ExoPlayer? = null
   private var nativeUrl: String? = null
+  private var lastNativePositionMs: Long = 0L
   // Tracks the web player already queued, so the service can keep advancing after
   // the UI process (and its JS queue) is gone.
   private val upNext = ArrayDeque<org.json.JSONObject>()
@@ -255,11 +257,19 @@ class MediaPlaybackService : Service() {
       "handoff" -> {
         val url = json.optString("url")
         val position = json.optLong("positionMs", 0L)
+        trackId = json.optString("trackId", trackId)
+        title = json.optString("title", title).ifBlank { "Noctune" }
+        artist = json.optString("artist", artist)
+        album = json.optString("album", album)
+        val art = json.optString("artwork")
+        if (art.isNotBlank()) {
+          artworkUrl = art
+          loadArtwork(art)
+        }
         if (url.isNotBlank()) startNativePlayback(url, position)
       }
       "resume" -> {
-        val position = stopNativePlayback()
-        webView?.evaluateJavascript("window.__noctune_native_position=$position", null)
+        stopNativePlayback()
       }
       "stop" -> {
         stopNativePlayback()
@@ -294,10 +304,15 @@ class MediaPlaybackService : Service() {
         val next = upNext.removeFirstOrNull()
         if (next != null) {
           val url = next.optString("url")
+          trackId = next.optString("trackId", next.optString("id", ""))
           title = next.optString("title", title)
           artist = next.optString("artist", artist)
+          album = next.optString("album", album)
           val art = next.optString("artwork")
-          if (art.isNotBlank()) artworkUrl = art
+          if (art.isNotBlank()) {
+            artworkUrl = art
+            loadArtwork(art)
+          }
           nativeUrl = null
           startNativePlayback(url, 0L)
           refreshNotification()
@@ -314,12 +329,19 @@ class MediaPlaybackService : Service() {
     try {
       val exo = ensurePlayer()
       nativeActive = true
+      lastNativePositionMs = positionMs
       if (nativeUrl != url) {
-        exo.setMediaItem(MediaItem.fromUri(url))
-        exo.prepare()
         nativeUrl = url
+        exo.stop()
+        exo.clearMediaItems()
+        exo.setMediaItem(MediaItem.fromUri(url))
+        if (positionMs > 0L) {
+          exo.seekTo(positionMs)
+        }
+        exo.prepare()
+      } else if (positionMs > 0L && Math.abs(exo.currentPosition - positionMs) > 1500) {
+        exo.seekTo(positionMs)
       }
-      exo.seekTo(positionMs)
       exo.playWhenReady = true
       acquirePlaybackLocks()
       refreshNotification()
@@ -333,6 +355,7 @@ class MediaPlaybackService : Service() {
   private fun stopNativePlayback(): Long {
     val exo = player ?: return 0L
     val position = runCatching { exo.currentPosition }.getOrDefault(0L)
+    lastNativePositionMs = position
     runCatching {
       exo.pause()
       exo.stop()
@@ -458,6 +481,7 @@ class MediaPlaybackService : Service() {
 
   private fun applyPayload(raw: String) {
     val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
+    trackId = json.optString("trackId", trackId)
     playing = json.optBoolean("playing", playing)
     isPlayingNow = playing
     if (playing) acquirePlaybackLocks() else releasePlaybackLocks()
@@ -617,13 +641,19 @@ class MediaPlaybackService : Service() {
   private fun replyWithState(intent: Intent) {
     @Suppress("DEPRECATION")
     val receiver = intent.getParcelableExtra<android.os.ResultReceiver>(EXTRA_RECEIVER) ?: return
+    val currentPos = runCatching { player?.currentPosition ?: 0L }.getOrDefault(0L)
+    val effectivePos = if (currentPos > 0L) currentPos else lastNativePositionMs
+    val currentDur = runCatching { player?.duration ?: 0L }.getOrDefault(0L)
     val bundle = android.os.Bundle().apply {
       putBoolean("active", nativeActive)
       putBoolean("playing", player?.isPlaying ?: false)
-      putLong("positionMs", runCatching { player?.currentPosition ?: 0L }.getOrDefault(0L))
-      putLong("durationMs", runCatching { player?.duration ?: 0L }.getOrDefault(0L))
+      putLong("positionMs", effectivePos)
+      putLong("durationMs", if (currentDur > 0L) currentDur else 0L)
+      putString("trackId", trackId)
+      putString("streamUrl", nativeUrl ?: "")
       putString("title", title)
       putString("artist", artist)
+      putString("album", album)
       putString("artwork", artworkUrl ?: "")
     }
     receiver.send(0, bundle)

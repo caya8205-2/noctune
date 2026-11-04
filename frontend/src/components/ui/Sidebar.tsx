@@ -200,21 +200,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className={clsx('flex h-full flex-col bg-transparent py-5', compact ? 'px-1.5' : 'px-3')}>
+    <div className={clsx('flex h-full flex-col bg-transparent', isMobileDrawer ? 'py-1 px-3' : 'py-3 sm:py-4', compact ? 'px-1.5' : 'px-3')}>
       {/* Top Header with Compact Toggle Button */}
-      <div className={clsx('mb-3 flex flex-shrink-0 items-center', compact ? 'justify-center w-full' : 'justify-between px-0.5', isMobileDrawer && 'pr-12')}>
+      <div className={clsx('mb-2 flex flex-shrink-0 items-center', compact ? 'justify-center w-full' : 'justify-between px-0.5', isMobileDrawer && 'pr-12')}>
         {!compact && (
           <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-1 flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
               <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted">
                 {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
               </span>
             </div>
-            <p className="mb-1.5 font-mono text-[11px] font-medium tabular-nums text-soft">
+            <p className="mb-1 font-mono text-[11px] font-medium tabular-nums text-soft">
               {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
             </p>
-            <h2 className="font-display text-[22px] leading-tight text-white">
+            <h2 className="font-display text-[20px] leading-tight text-white">
               {getGreeting()}
             </h2>
           </div>
@@ -236,7 +236,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-shrink-0 flex flex-col gap-1">
+      <nav className="flex-shrink-0 flex flex-col gap-0.5">
         {navItems.map(({ icon: Icon, label, view }) => {
           const active = activeView === view;
           return (
@@ -246,8 +246,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               title={compact ? label : undefined}
               className={clsx(
                 'group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200 touch-manipulation',
-                compact ? 'justify-center px-0 py-2.5 w-full' : 'gap-3 px-3 py-2.5',
-                isMobileDrawer && 'min-h-[44px]',
+                compact ? 'justify-center px-0 py-2 w-full' : 'gap-3 px-3 py-2',
+                isMobileDrawer && 'min-h-[42px]',
                 active
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -255,11 +255,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <span
                 className={clsx(
-                  'absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-accent transition-all duration-200',
+                  'absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent transition-all duration-200',
                   active ? 'opacity-100 shadow-glow' : 'opacity-0'
                 )}
               />
-              <Icon size={18} className={clsx('transition-colors flex-shrink-0', active && 'text-accent')} />
+              <Icon size={17} className={clsx('transition-colors flex-shrink-0', active && 'text-accent')} />
               {!compact && <span>{label}</span>}
             </button>
           );
@@ -267,9 +267,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Playlists */}
-      <div className="flex-1 min-h-0 flex flex-col mt-4">
+      <div className="flex-1 min-h-0 flex flex-col mt-2.5">
         {!compact && (
-          <div className="relative mb-2 flex flex-shrink-0 items-center justify-between px-0.5" ref={menuRef}>
+          <div className="relative mb-1.5 flex flex-shrink-0 items-center justify-between px-0.5" ref={menuRef}>
             <span className="section-label">Playlists</span>
             <button
               type="button"
@@ -385,15 +385,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         )}
 
         {/* Playlists list */}
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 scrollbar-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 scrollbar-hidden">
           {likedPlaylist && (
             <button
               onClick={() => navigate('playlist', likedPlaylist.id)}
               title={compact ? likedPlaylist.name : undefined}
               className={clsx(
                 'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
-                compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
-                isMobileDrawer && 'min-h-[40px]',
+                compact ? 'justify-center py-2' : 'gap-2.5 px-3 py-1.5',
+                isMobileDrawer && 'min-h-[38px]',
                 activeView === 'playlist' && activePlaylistId === likedPlaylist.id
                   ? 'bg-white/[0.05] text-white'
                   : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -426,8 +426,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   title={compact ? label : undefined}
                   className={clsx(
                     'group relative flex w-full items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
-                    compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
-                    isMobileDrawer && 'min-h-[40px]',
+                    compact ? 'justify-center py-2' : 'gap-2.5 px-3 py-1.5',
+                    isMobileDrawer && 'min-h-[38px]',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'
@@ -468,8 +468,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   title={compact ? pl.name : undefined}
                   className={clsx(
                     'group relative flex cursor-pointer items-center rounded-xl text-sm transition-all duration-150 touch-manipulation',
-                    compact ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2',
-                    isMobileDrawer && 'min-h-[40px]',
+                    compact ? 'justify-center py-2' : 'gap-2.5 px-3 py-1.5',
+                    isMobileDrawer && 'min-h-[38px]',
                     active
                       ? 'bg-white/[0.05] text-white'
                       : 'text-muted hover:bg-white/[0.03] hover:text-white'

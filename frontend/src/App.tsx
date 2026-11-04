@@ -527,8 +527,8 @@ function AppInner() {
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close menu"
           />
-          <aside className="absolute bottom-0 left-0 top-0 w-[82vw] max-w-80 animate-slide-up border-r border-white/[0.08] bg-base-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl">
-            <div className="absolute right-2.5 top-2.5 z-20">
+          <aside className="absolute bottom-0 left-0 top-0 w-[82vw] max-w-80 animate-slide-up border-r border-white/[0.08] bg-base-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl pt-[max(env(safe-area-inset-top,0px),2.25rem)]">
+            <div className="absolute right-2.5 top-[max(env(safe-area-inset-top,0px),1.75rem)] z-20">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}

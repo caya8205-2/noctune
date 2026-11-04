@@ -44,10 +44,12 @@ class MainActivity : TauriActivity() {
    * through the viewport meta tag.
    */
   private fun applyAppWebSettings(webView: WebView) {
+    webView.setBackgroundColor(android.graphics.Color.parseColor("#0B0E14"))
     val settings = webView.settings
     settings.setSupportZoom(false)
     settings.builtInZoomControls = false
     settings.displayZoomControls = false
+    settings.mediaPlaybackRequiresUserGesture = false
   }
 
   private fun cacheWebView(attempt: Int) {
@@ -128,8 +130,12 @@ class MainActivity : TauriActivity() {
           put("playing", resultData?.getBoolean("playing") ?: false)
           put("positionMs", resultData?.getLong("positionMs") ?: 0L)
           put("durationMs", resultData?.getLong("durationMs") ?: 0L)
+          put("trackId", resultData?.getString("trackId") ?: "")
+          put("streamUrl", resultData?.getString("streamUrl") ?: "")
           put("title", resultData?.getString("title") ?: "")
           put("artist", resultData?.getString("artist") ?: "")
+          put("album", resultData?.getString("album") ?: "")
+          put("artwork", resultData?.getString("artwork") ?: "")
         }
         val js = "window.__noctune_native_state=$payload;" +
           "window.dispatchEvent(new CustomEvent('noctune:native-state',{detail:$payload}));"
@@ -162,9 +168,20 @@ class MainActivity : TauriActivity() {
   }
 
   override fun onPause() {
-    // Keep requestPoller running: the background handoff is queued the moment the
-    // page becomes hidden, which is exactly when the activity pauses.
     pollHandler.removeCallbacks(statePoller)
+    // Instantly process any queued background handoff request before the OS suspends WebView
+    currentWebView()?.evaluateJavascript(TAKE_REQUEST_JS) { raw ->
+      if (!raw.isNullOrBlank() && raw != "null") {
+        val json = runCatching { org.json.JSONObject(raw) }.getOrNull()
+        if (json != null) {
+          ensureMediaService()
+          val intent = Intent(this@MainActivity, MediaPlaybackService::class.java)
+            .setAction(MediaPlaybackService.ACTION_REQUEST)
+            .putExtra(MediaPlaybackService.EXTRA_PAYLOAD, json.toString())
+          runCatching { startService(intent) }
+        }
+      }
+    }
     super.onPause()
 
     // WryActivity.onPause() calls WebView.onPause(). Chromium keeps suspending
