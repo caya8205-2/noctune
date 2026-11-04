@@ -1169,7 +1169,9 @@ export function SettingsView() {
             Sound & app
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            How Noctune sounds and how it behaves when you leave it running: Rich Presence, tray behaviour, visualizer style, and equalizer.
+            {IS_TAURI_DESKTOP
+              ? 'How Noctune sounds and how it behaves when you leave it running: Rich Presence, tray behaviour, visualizer style, and equalizer.'
+              : 'How Noctune sounds: visualizer style and equalizer.'}
           </p>
         </div>
 
@@ -1273,7 +1275,6 @@ export function SettingsView() {
             </select>
           </div>
         </div>
-      </section>
 
         {/* Equalizer */}
         <div className="flex flex-col gap-2">
@@ -1283,6 +1284,7 @@ export function SettingsView() {
           </p>
           <EqualizerView />
         </div>
+      </section>
 
       {/* Cache */}
       <section className="surface-panel flex flex-col gap-4 p-5">
