@@ -109,9 +109,7 @@ export function SettingsView() {
   const [clientSecret, setClientSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
-  const [saved, setSaved] = useState(false);
   const [cacheBusy, setCacheBusy] = useState(false);
   const [audioCacheLimitMb, setAudioCacheLimitMb] = useState(1024);
   const [audioQualityPreference, setAudioQualityPreference] = useState<'auto' | 'high'>('auto');
@@ -225,6 +223,8 @@ export function SettingsView() {
         body: JSON.stringify({
           spotifyPlayback,
           recommendationEngine,
+          ...(clientId ? { spotifyClientId: clientId } : {}),
+          ...(clientSecret ? { spotifyClientSecret: clientSecret } : {}),
         }),
       });
       const updated = (await res.json()) as SettingsData;
@@ -241,6 +241,8 @@ export function SettingsView() {
         cache: updated.cache ?? prev?.cache,
         resolver: updated.resolver ?? prev?.resolver,
       }));
+      setClientSecret('');
+      setTestResult(null);
       setEngineSaved(true);
       setTimeout(() => setEngineSaved(false), 2500);
 
@@ -260,38 +262,6 @@ export function SettingsView() {
       api.checkForUpdates().then(setUpdateInfo).catch(console.error);
     }
   }, [isMobileClient]);
-
-  async function handleSave() {
-    setSaving(true);
-    setSaved(false);
-
-    try {
-      const body: Record<string, string> = {};
-      if (clientId) body.spotifyClientId = clientId;
-      if (clientSecret) body.spotifyClientSecret = clientSecret;
-
-      const res = await fetch(await apiUrl('/settings'), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const updated = (await res.json()) as SettingsData;
-      setData((prev) => ({
-        ...prev,
-        ...updated,
-        cache: updated.cache ?? prev?.cache,
-        resolver: updated.resolver ?? prev?.resolver,
-      }));
-      setClientSecret('');
-      setTestResult(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
-      console.error('Save failed:', err);
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function handleTest() {
     setTesting(true);
@@ -1110,25 +1080,6 @@ export function SettingsView() {
                 {testing ? <Loader2 size={14} className="animate-spin" /> : null}
                 Test Connection
               </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-accent flex min-h-[44px] w-full sm:flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> Saving...
-                  </>
-                ) : saved ? (
-                  <>
-                    <CheckCircle size={14} /> Saved!
-                  </>
-                ) : (
-                  'Save Credentials'
-                )}
-              </button>
             </div>
           </div>
         )}
@@ -1150,7 +1101,7 @@ export function SettingsView() {
                 <CheckCircle size={13} /> Saved!
               </>
             ) : (
-              'Save Engine Settings'
+              'Save changes'
             )}
           </button>
         </div>

@@ -41,6 +41,8 @@ interface TrackActionButtonsProps {
   showMenu?: boolean;
   queueLabel?: string;
   playlistLabel?: string;
+  /** Renders visible text next to the download icon (full player affordance). */
+  downloadLabel?: boolean;
   trailingActions?: ReactNode;
 }
 
@@ -58,6 +60,7 @@ export function TrackActionButtons({
   showMenu = true,
   queueLabel,
   playlistLabel,
+  downloadLabel = false,
   trailingActions,
 }: TrackActionButtonsProps) {
   const addToQueue = usePlayerStore((state) => state.addToQueue);
@@ -150,6 +153,11 @@ export function TrackActionButtons({
               <Check size={iconSize} className="text-emerald-400" />
             ) : (
               <Download size={iconSize} />
+            )}
+            {downloadLabel && (
+              <span className="text-xs font-medium">
+                {downloading ? 'Downloading' : downloaded ? 'Downloaded' : 'Download'}
+              </span>
             )}
           </button>
         )}

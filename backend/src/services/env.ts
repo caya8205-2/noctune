@@ -130,6 +130,17 @@ export function getEnvConfig(): EnvConfig {
     }
 }
 
+function readRawConfig(): Partial<EnvConfig> {
+    try {
+        if (fs.existsSync(CONFIG_FILE)) {
+            return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) as Partial<EnvConfig>;
+        }
+    } catch {
+        // A corrupt file must not block saving a fresh config.
+    }
+    return {};
+}
+
 export function saveEnvConfig(partial: Partial<EnvConfig>): EnvConfig {
     const current = getEnvConfig();
     const update = { ...partial };
@@ -138,7 +149,29 @@ export function saveEnvConfig(partial: Partial<EnvConfig>): EnvConfig {
     }
     _config = withProcessEnv({ ...current, ...update });
     ensureDataDir();
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...current, ...update }, null, 2), 'utf-8');
+
+    // Persist on top of what is actually on disk, not on top of `current`:
+    // `current` already carries process-level overrides (NOCTUNE_API_KEY,
+    // ALLOW_LOCALHOST_BYPASS, SPOTIFY_*). The mobile worker runs with
+    // ALLOW_LOCALHOST_BYPASS=false and its own API key against the shared data
+    // dir, so merging `current` wrote those overrides into the desktop config —
+    // silently disabling localhost bypass and replacing the desktop API key
+    // every time a setting was changed from the phone.
+    const raw = readRawConfig();
+    const persisted: Partial<EnvConfig> = { ...raw, ...update };
+    // Values forced through the environment belong to this process only. The
+    // mobile worker runs with ALLOW_LOCALHOST_BYPASS=false and its own API key,
+    // so writing those into the shared config disables localhost bypass and
+    // replaces the desktop API key. Keep whatever the file already had.
+    if (process.env.ALLOW_LOCALHOST_BYPASS) {
+        if (raw.allowLocalhostBypass === undefined) delete persisted.allowLocalhostBypass;
+        else persisted.allowLocalhostBypass = raw.allowLocalhostBypass;
+    }
+    if (process.env.NOCTUNE_API_KEY) {
+        if (raw.apiKey === undefined) delete persisted.apiKey;
+        else persisted.apiKey = raw.apiKey;
+    }
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(persisted, null, 2), 'utf-8');
     return _config;
 }
 

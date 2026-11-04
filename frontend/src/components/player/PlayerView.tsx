@@ -234,6 +234,85 @@ function LyricsPanel({ track }: { track: Track }) {
   );
 }
 
+function formatClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Seek bar for the mobile full player. The mobile layout hides PlayerBar, and
+ * with it the only scrubber in the app, so the "full" player ended up with less
+ * transport control than the mini player. Desktop keeps using PlayerBar's bar.
+ */
+function PlayerScrubber() {
+  const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const progress = usePlayerStore((state) => state.progress);
+  const audioDuration = usePlayerStore((state) => state.duration);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragSeconds, setDragSeconds] = useState<number | null>(null);
+
+  const total =
+    currentTrack?.duration && currentTrack.duration > 0
+      ? currentTrack.duration
+      : audioDuration > 0
+        ? audioDuration
+        : 0;
+  const shown = dragSeconds ?? progress;
+  const pct = total > 0 ? Math.min(100, Math.max(0, (shown / total) * 100)) : 0;
+
+  const secondsFromClientX = (clientX: number) => {
+    const el = trackRef.current;
+    if (!el || total <= 0) return 0;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * total;
+  };
+
+  return (
+    <div className="w-full max-w-md px-1">
+      <div
+        ref={trackRef}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(total)}
+        aria-valuenow={Math.round(shown)}
+        tabIndex={0}
+        className="group/seek relative flex h-8 w-full cursor-pointer touch-none items-center"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDragSeconds(secondsFromClientX(event.clientX));
+        }}
+        onPointerMove={(event) => {
+          if (dragSeconds === null) return;
+          setDragSeconds(secondsFromClientX(event.clientX));
+        }}
+        onPointerUp={(event) => {
+          const value = secondsFromClientX(event.clientX);
+          setDragSeconds(null);
+          seekAudio(value);
+        }}
+        onPointerCancel={() => setDragSeconds(null)}
+      >
+        <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/10" />
+        <div
+          className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-accent-dim to-accent"
+          style={{ width: `${pct}%` }}
+        />
+        <div
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow"
+          style={{ left: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[11px] font-mono tabular-nums text-muted">
+        <span>{formatClock(shown)}</span>
+        <span>{formatClock(total)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function PlayerView() {
   const {
     currentTrack,
@@ -396,6 +475,7 @@ export function PlayerView() {
                   iconSize={15}
                   showQueue={false}
                   showDownload={true}
+                  downloadLabel
                   showClearCache={false}
                   showMenu={false}
                 />
@@ -426,7 +506,9 @@ export function PlayerView() {
                 </div>
               )}
 
-              <div className="mt-6 flex items-center justify-center gap-3 md:hidden">
+              <div className="mt-6 flex w-full flex-col items-center gap-3 md:hidden">
+                <PlayerScrubber />
+                <div className="flex items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={toggleShuffle}
@@ -464,6 +546,7 @@ export function PlayerView() {
                 >
                   {repeat === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
                 </button>
+                </div>
               </div>
 
             <section className="w-full max-w-3xl mt-8">
