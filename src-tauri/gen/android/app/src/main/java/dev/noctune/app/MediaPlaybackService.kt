@@ -43,6 +43,7 @@ class MediaPlaybackService : Service() {
     const val ACTION_UPDATE = "dev.noctune.app.media.UPDATE"
     const val ACTION_START = "dev.noctune.app.media.START"
     const val ACTION_STOP = "dev.noctune.app.media.STOP"
+    const val ACTION_REQUEST = "dev.noctune.app.media.REQUEST"
     const val EXTRA_PAYLOAD = "payload"
 
     private const val NOW_PLAYING_JS =
@@ -53,6 +54,12 @@ class MediaPlaybackService : Service() {
 
     @Volatile
     var webView: WebView? = null
+
+    // Incremented whenever the WebView is detached. Async JS callbacks capture the
+    // value they started with and bail out if it changed: a callback that lands
+    // after teardown would otherwise touch a destroyed WebView and kill the process.
+    @Volatile
+    var webViewGeneration = 0
 
     @Volatile
     var isPlayingNow = false
@@ -75,7 +82,30 @@ class MediaPlaybackService : Service() {
     fun dispatch(action: String) {
       val wv = webView ?: return
       val js = "window.dispatchEvent(new CustomEvent('noctune:native-media-action',{detail:{action:'$action'}}));"
-      wv.post { runCatching { wv.evaluateJavascript(js, null) } }
+      wv.post {
+        if (webView !== wv) return@post
+        runCatching { wv.evaluateJavascript(js, null) }
+      }
+    }
+
+    /** A fresh activity's WebView replaced the old one: adopt it and resume polling. */
+    fun attachWebView(view: WebView) {
+      if (webView === view) return
+      webView = view
+      webViewGeneration += 1
+      instance?.startPolling()
+    }
+
+    /**
+     * The activity and its WebView are going away. Stop polling it: touching a
+     * destroyed WebView crashes the whole process natively
+     * ("FORTIFY: pthread_mutex_lock called on a destroyed mutex"), which is what
+     * killed playback when the task was removed from Recents.
+     */
+    fun detachWebView() {
+      webView = null
+      webViewGeneration += 1
+      instance?.stopPolling()
     }
   }
 
@@ -165,6 +195,9 @@ class MediaPlaybackService : Service() {
         if (nativeActive) player?.pause() else dispatch("pause")
         refreshNotification()
       }
+      ACTION_REQUEST -> {
+        intent?.getStringExtra(EXTRA_PAYLOAD)?.let { handleRequest(it) }
+      }
       "next" -> dispatch("next")
       "prev" -> dispatch("prev")
       else -> {
@@ -195,7 +228,10 @@ class MediaPlaybackService : Service() {
 
   private fun pollRequests() {
     val wv = webView ?: return
+    if (!wv.isAttachedToWindow) return
+    val generation = webViewGeneration
     wv.evaluateJavascript(TAKE_REQUEST_JS) { raw ->
+      if (generation != webViewGeneration) return@evaluateJavascript
       if (raw.isNullOrBlank() || raw == "null") return@evaluateJavascript
       handleRequest(raw)
     }
@@ -221,6 +257,9 @@ class MediaPlaybackService : Service() {
       }
       "stop" -> {
         stopNativePlayback()
+      }
+      "snapshot" -> {
+        applyPayload(raw)
       }
       "download" -> {
         NoctuneDownloads.enqueue(
@@ -296,13 +335,20 @@ class MediaPlaybackService : Service() {
     // Keep the web layer unpaused: WryActivity pauses the WebView whenever the
     // activity does, which suspends media. Re-asserting resume here (service
     // side, independent of the activity lifecycle) keeps playback alive.
+    // Every posted block re-checks that this WebView is still the attached one:
+    // a block queued before teardown otherwise runs against a destroyed WebView
+    // and crashes the process ("FORTIFY: pthread_mutex_lock ... destroyed mutex").
     wv.post {
+      if (webView !== wv) return@post
       runCatching {
         wv.onResume()
         wv.resumeTimers()
       }
     }
+    if (webView !== wv) return
+    val generation = webViewGeneration
     wv.evaluateJavascript(NOW_PLAYING_JS) { raw ->
+      if (generation != webViewGeneration) return@evaluateJavascript
       if (raw.isNullOrBlank() || raw == "null" || raw.length < 4) return@evaluateJavascript
       applyPayload(raw)
     }
@@ -320,6 +366,7 @@ class MediaPlaybackService : Service() {
         .put("err", nativeError ?: "")
         .toString()
     }.getOrNull() ?: return
+    if (webView !== wv) return
     wv.evaluateJavascript("window.__noctune_native_state=$payload", null)
   }
 
@@ -360,7 +407,9 @@ class MediaPlaybackService : Service() {
           playing = true
           isPlayingNow = true
           acquirePlaybackLocks()
-          dispatch("play")
+          // With the activity gone there is no JS to drive, so control ExoPlayer
+          // directly; otherwise keep the web player as the source of truth.
+          if (nativeActive) player?.play() else dispatch("play")
           refreshNotification()
         }
 
@@ -368,13 +417,16 @@ class MediaPlaybackService : Service() {
           playing = false
           isPlayingNow = false
           releasePlaybackLocks()
-          dispatch("pause")
+          if (nativeActive) player?.pause() else dispatch("pause")
           refreshNotification()
         }
 
         override fun onSkipToNext() = dispatch("next")
         override fun onSkipToPrevious() = dispatch("prev")
-        override fun onStop() = stopPlayback()
+        // No onStop override: the system invokes onStop when the task is removed
+        // from Recents, and tearing playback down there killed the service. It then
+        // could not re-enter foreground from the background (Android 12 denies
+        // "Background started FGS"), so the music died with the swipe.
       })
       isActive = true
       setFlags(
@@ -528,6 +580,16 @@ class MediaPlaybackService : Service() {
       stopForeground(true)
     }
     stopSelf()
+  }
+
+  /**
+   * The user swiped the app out of Recents. Keep the audio session and its
+   * notification alive: stopping here means Android later refuses to bring the
+   * service back to the foreground ("Background started FGS: Disallowed").
+   */
+  override fun onTaskRemoved(rootIntent: Intent?) {
+    runCatching { refreshNotification() }
+    super.onTaskRemoved(rootIntent)
   }
 
   override fun onDestroy() {

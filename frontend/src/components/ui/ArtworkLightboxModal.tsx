@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Download, Loader2, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
+import { Check, Download, Loader2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { clsx } from 'clsx';
-import { api } from '../../utils/api';
+import { api, isMobileClientMode } from '../../utils/api';
 import { usePlayerStore } from '../../store/player';
 
 interface ArtworkLightboxProps {
@@ -85,6 +85,23 @@ export function ArtworkLightboxModal({
     setDownloadSuccess(false);
 
     try {
+      if (isMobileClientMode()) {
+        // The Android client has no desktop download folder: hand the image to the
+        // native downloader so it lands in the phone's own Downloads.
+        const clean = (value: string, fallback: string) =>
+          value.replace(/[/\\?%*:|"<>]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 60) || fallback;
+        const filename = `${clean(artist, 'Artist')} - ${clean(title, 'Artwork')} (Artwork).jpg`;
+        (window as unknown as Record<string, unknown>).__noctune_native_request = {
+          type: 'download',
+          url: displayImageUrl,
+          filename,
+        };
+        setSavedPath('Downloads');
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3500);
+        return;
+      }
+
       try {
         const res = await api.downloadArtwork(displayImageUrl, title, artist);
         if (res.ok) {
@@ -181,12 +198,9 @@ export function ArtworkLightboxModal({
           if (event.target === event.currentTarget) onClose();
         }}
       >
-        {/* Header Controls */}
-        <div className="absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-3 sm:left-6 sm:right-6 sm:top-6">
-          <div className="rounded-xl border border-white/10 bg-base-950/75 px-3 py-2 text-xs font-semibold text-accent shadow-xl backdrop-blur-md">
-            <span className="flex items-center gap-2"><Maximize2 size={15} />Artwork Viewport</span>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-base-950/75 p-1.5 shadow-xl backdrop-blur-md">
+        {/* Header controls: clear of the desktop shell header and the mobile status bar */}
+        <div className="absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex flex-wrap items-center justify-end gap-2 md:inset-x-4 md:top-12">
+          <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-white/10 bg-base-950/75 p-1.5 shadow-xl backdrop-blur-md">
             {downloadSuccess && savedPath && (
               <span className="hidden max-w-xs truncate px-2 text-xs font-medium text-emerald-400/90 sm:block" title={`Saved to ${savedPath}`}>
                 Saved to {savedPath}

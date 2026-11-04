@@ -42,7 +42,9 @@
 
         <service
             android:name=".MediaPlaybackService"
+            android:process=":media"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

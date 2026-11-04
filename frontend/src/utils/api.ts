@@ -607,7 +607,7 @@ export const api = {
       request<StatsTopTrack[]>(`/stats/top-tracks?period=${period}&limit=${limit}`),
     topArtists: (period: '7d' | '30d' | 'all' = 'all', limit = 20) =>
       request<StatsTopArtist[]>(`/stats/top-artists?period=${period}&limit=${limit}`),
-    daily: (days = 30) =>
+    daily: (days: number | 'all' = 30) =>
       request<StatsDailyEntry[]>(`/stats/daily?days=${days}`),
   },
 

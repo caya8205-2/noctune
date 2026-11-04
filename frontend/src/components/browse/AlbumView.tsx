@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Disc3, ExternalLink, Maximize2, Music2 } from 'lucide-react';
+import { ArrowLeft, Disc3, ExternalLink, Maximize2, Music2, Play } from 'lucide-react';
 import { api, isTrackActive, type Track } from '../../utils/api';
 import { clsx } from 'clsx';
 import { formatDuration } from '../../utils/format';
@@ -66,6 +66,8 @@ function AlbumTrackText({
 
 export function AlbumView({ albumId }: { albumId: string }) {
   const [showLightbox, setShowLightbox] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const { playTrack, currentTrack, isPlaying, setView } = usePlayerStore();
 
   const { data, isLoading, isError } = useQuery({
@@ -117,8 +119,39 @@ export function AlbumView({ albumId }: { albumId: string }) {
           onClose={() => setShowLightbox(false)}
         />
       )}
-      {/* Header */}
-      <div className="relative flex-shrink-0 overflow-hidden">
+
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={(event) => setCollapsed(event.currentTarget.scrollTop > 120)}
+      >
+        {/* Compact bar that takes over once the hero scrolls away */}
+        <div
+          className={`sticky top-0 z-30 flex items-center gap-3 overflow-hidden border-b bg-base-950/92 backdrop-blur-xl transition-all duration-200 ${collapsed
+            ? 'h-14 border-white/[0.08] px-3 opacity-100'
+            : 'h-0 border-transparent px-3 opacity-0'}`}
+        >
+          <button onClick={() => history.back()} className="btn-ghost h-9 w-9 flex-shrink-0 rounded-full p-0" title="Go back">
+            <ArrowLeft size={15} />
+          </button>
+          {data.image && (
+            <img src={data.image} alt="" className="h-9 w-9 flex-shrink-0 rounded-md object-cover ring-1 ring-white/10" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{data.name}</p>
+            <p className="truncate text-[11px] text-muted">{data.artists.map(a => a.name).join(', ')}</p>
+          </div>
+          <button
+            onClick={handlePlayAll}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-base-950"
+            title="Play all"
+          >
+            <Play size={15} fill="currentColor" />
+          </button>
+        </div>
+
+        {/* Header */}
+        <div className="relative flex-shrink-0 overflow-hidden">
         {data.image && (
           <div
             className="absolute inset-0 scale-110 bg-cover bg-center opacity-20 blur-xl"
@@ -127,7 +160,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-base-900" />
 
-        <div className="relative flex items-end gap-5 px-6 pb-6 pt-10">
+        <div className="relative flex flex-col items-center gap-4 px-6 pb-6 pt-10 text-center sm:flex-row sm:items-end sm:gap-5 sm:text-left">
           <button
             onClick={() => history.back()}
             className="btn-ghost absolute left-4 top-4 p-1.5"
@@ -141,7 +174,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
             <button
               type="button"
               onClick={() => setShowLightbox(true)}
-              className="group relative h-28 w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 text-left focus:outline-none focus:ring-2 focus:ring-accent"
+              className="group relative h-40 w-40 flex-shrink-0 overflow-hidden rounded-lg text-left shadow-2xl ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-accent sm:h-28 sm:w-28"
               title="Click to view artwork"
             >
               <img
@@ -155,12 +188,12 @@ export function AlbumView({ albumId }: { albumId: string }) {
               </div>
             </button>
           ) : (
-            <div className="flex h-28 w-28 flex-shrink-0 items-center justify-center rounded-lg bg-base-800 ring-1 ring-white/10">
+            <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-lg bg-base-800 ring-1 ring-white/10 sm:h-28 sm:w-28">
               <Music2 size={36} className="text-muted" />
             </div>
           )}
 
-          <div className="min-w-0 flex-1 pb-1">
+          <div className="w-full min-w-0 pb-1 sm:w-auto sm:flex-1">
             <p className="section-label mb-1 capitalize">{data.type}</p>
             <h1 className="font-display text-2xl font-semibold text-white leading-tight">
               {data.name}
@@ -206,7 +239,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
       </div>
 
       {/* Track list */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="px-6 pb-6">
         <div className="space-y-0.5 pt-2">
           {data.tracks.map(track => {
             const isActive = isTrackActive(currentTrack, track);
@@ -249,6 +282,7 @@ export function AlbumView({ albumId }: { albumId: string }) {
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );

@@ -73,11 +73,15 @@ function withProcessEnv(config: EnvConfig): EnvConfig {
     }
 
     const allowLocalhostBypass =
-        envBypass === 'false'
-            ? false
-            : envBypass === 'true'
-            ? true
-            : (config.allowLocalhostBypass ?? true);
+        process.env.NOCTUNE_MOBILE_INSTANCE === '1'
+            ? envBypass === 'false'
+                ? false
+                : envBypass === 'true'
+                ? true
+                : (config.allowLocalhostBypass ?? true)
+            // The desktop server only listens on loopback; its client never sends a
+            // key. A stale `false` on disk must not be able to lock the app out.
+            : true;
 
     return {
         ...config,
@@ -170,6 +174,13 @@ export function saveEnvConfig(partial: Partial<EnvConfig>): EnvConfig {
     if (process.env.NOCTUNE_API_KEY) {
         if (raw.apiKey === undefined) delete persisted.apiKey;
         else persisted.apiKey = raw.apiKey;
+    }
+    // The desktop surface is loopback-only and carries no credential; drop the key
+    // older builds left behind so config.json stops holding a copy of it. The
+    // worker never touches allowLocalhostBypass — that value describes the desktop.
+    if (process.env.NOCTUNE_MOBILE_INSTANCE !== '1') {
+        delete persisted.apiKey;
+        persisted.allowLocalhostBypass = true;
     }
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(persisted, null, 2), 'utf-8');
     return _config;

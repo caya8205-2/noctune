@@ -149,10 +149,20 @@ async function bootstrap() {
     const apiKey = envConfig.apiKey?.trim();
     if (!apiKey) return;
 
+    const isLoopbackIp = (ip: string | undefined) =>
+      ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+
+    // The desktop backend only listens on loopback and its own client never sends
+    // a key, so local callers are trusted there. The mobile worker is reached
+    // through `cloudflared`, which also connects from loopback, so it must keep
+    // enforcing the key — that is why this exemption is scoped to the instance.
+    const isMobileWorker = process.env.NOCTUNE_MOBILE_INSTANCE === '1';
+    if (!isMobileWorker && isLoopbackIp(request.ip)) return;
+
     if (envConfig.allowLocalhostBypass) {
       const ip = request.ip;
       const hostHeader = (request.headers.host || '').toLowerCase();
-      const isLocalIp = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+      const isLocalIp = isLoopbackIp(ip);
       const isLocalHostHeader =
         hostHeader.startsWith('localhost:') ||
         hostHeader.startsWith('127.0.0.1:') ||

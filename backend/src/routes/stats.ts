@@ -144,7 +144,11 @@ export async function statsRoutes(app: FastifyInstance) {
   // Daily activity (calendar heatmap data)
   app.get('/stats/daily', async (req, reply) => {
     const query = req.query as { days?: string };
-    const days = Math.min(365, Math.max(7, Number(query.days) || 30));
+    // "All time" is the full year the desktop history can hold; the UI stopped
+    // asking for 90 days while labelling the tab "All time".
+    const days = query.days === 'all'
+      ? 365
+      : Math.min(365, Math.max(7, Number(query.days) || 30));
     
     const allTracks = getAllCachedTracks();
     

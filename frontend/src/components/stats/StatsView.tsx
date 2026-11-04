@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Clock, Headphones, Music2, User } from 'lucide-react';
 import { api, type StatsDailyEntry, type StatsTopArtist, type StatsTopTrack } from '../../utils/api';
@@ -174,8 +174,22 @@ function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?
     [data]
   );
 
+  // Desktop renders the whole range fitted to the card; mobile keeps a scrollable
+  // strip where each day stays wide enough to tap.
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 768px)');
+    const handler = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    query.addEventListener('change', handler);
+    return () => query.removeEventListener('change', handler);
+  }, []);
+
   // Show date labels at intervals
-  const labelInterval = data.length <= 14 ? 2 : data.length <= 31 ? 5 : 7;
+  const labelInterval = isDesktop && data.length > 60
+    ? Math.ceil(data.length / 12)
+    : data.length <= 14 ? 2 : data.length <= 31 ? 5 : 7;
 
   // Helper function to get color based on intensity (GitHub-style gradient)
   function getIntensityColor(intensity: number): string {
@@ -231,16 +245,19 @@ function DailyActivityChart({ data, period }: { data: StatsDailyEntry[]; period?
           setTooltip({ visible: true, x: clampedX, y: clampedY, content: `${dateLabel}: ${d.playCount} plays · ${formatMinutes(d.minutes)}` });
         }
 
-        const chartWidth = period === 'all' ? Math.max(320, data.length * 18) : undefined;
+        const chartWidth = period === 'all' && !isDesktop
+          ? Math.max(320, data.length * 18)
+          : undefined;
 
         return (
-          <div className="w-full overflow-x-auto scrollbar-hidden pb-4">
+          <div className={period === 'all' && !isDesktop
+            ? 'w-full overflow-x-auto scrollbar-hidden pb-4'
+            : 'w-full pb-4'}>
             <div
               ref={containerRef}
-              className="relative flex h-40 items-end gap-1 border-b border-l border-white/[0.06] px-2 pb-2 min-w-[320px]"
+              className={`relative flex h-40 items-end border-b border-l border-white/[0.06] px-2 pb-2 min-w-[320px] ${isDesktop && data.length > 120 ? 'gap-px' : 'gap-1'}`}
               style={{
                 width: chartWidth ? `${chartWidth}px` : '100%',
-                minWidth: chartWidth ? `${chartWidth}px` : undefined,
               }}
               onMouseMove={handleMove}
               onMouseLeave={() => setTooltip({ visible: false, x: 0, y: 0, content: '' })}
@@ -342,7 +359,7 @@ export function StatsView() {
     staleTime: 1000 * 60 * 2,
   });
 
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const days: number | 'all' = period === '7d' ? 7 : period === '30d' ? 30 : 'all';
   const { data: daily = [], isLoading: dailyLoading } = useQuery({
     queryKey: ['stats-daily', days],
     queryFn: () => api.stats.daily(days),
