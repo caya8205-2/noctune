@@ -31,6 +31,11 @@
     padding: 0;
     overflow: hidden;
     color-scheme: dark;
+    /* Noctune is an app shell, not a document: pinch zoom on the Android client
+       leaves the fixed header and player bar misaligned. Vertical/horizontal
+       panning stays available, pinch-zoom is disabled. */
+    touch-action: pan-x pan-y;
+    -webkit-text-size-adjust: 100%;
   }
 
   select,

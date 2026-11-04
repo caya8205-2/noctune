@@ -1,7 +1,7 @@
 import { useState, useCallback, createContext, useContext, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
-import { api, type Track } from '../utils/api';
+import { api, apiUrl, isMobileClientMode, type Track } from '../utils/api';
 import { usePlayerStore } from '../store/player';
 
 interface DownloadToastState {
@@ -40,6 +40,37 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     });
 
     try {
+      // Mobile clients talk to a desktop host: the backend would save the file on
+      // the PC. Hand the resolved stream to Android's DownloadManager instead so
+      // the track lands in the phone's own Downloads folder.
+      if (isMobileClientMode()) {
+        const url = await apiUrl(`/player/stream/${encodeURIComponent(track.id)}`);
+        const filename = `${track.title} - ${track.artist}.m4a`;
+        const bridge = window as unknown as Record<string, unknown>;
+        bridge.__noctune_native_request = { type: 'download', url, filename };
+
+        setDownloadedIds((prev) => new Set(prev).add(trackId));
+        setTimeout(() => {
+          setDownloadedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(trackId);
+            return next;
+          });
+        }, 3000);
+
+        setToast({
+          id: trackId,
+          title: track.title,
+          artist: track.artist,
+          status: 'completed',
+          message: `Saving "${track.title}" to this device's Downloads folder`,
+        });
+        setTimeout(() => {
+          setToast((current) => (current?.id === trackId ? null : current));
+        }, 3500);
+        return;
+      }
+
       const res = await api.downloadTracks([track]);
       if (res.failed && res.failed.length > 0) {
         throw new Error(res.failed[0]?.reason || 'Download failed');

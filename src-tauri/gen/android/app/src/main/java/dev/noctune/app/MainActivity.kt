@@ -30,8 +30,23 @@ class MainActivity : TauriActivity() {
   private fun currentWebView(): WebView? {
     MediaPlaybackService.webView?.let { return it }
     val found = findWebView(window.decorView)
-    if (found != null) MediaPlaybackService.webView = found
+    if (found != null) {
+      applyAppWebSettings(found)
+      MediaPlaybackService.webView = found
+    }
     return found
+  }
+
+  /**
+   * Noctune renders a fixed app shell (header, player bar). Pinch zoom leaves
+   * those layers misaligned, so zoom is disabled at the WebView level as well as
+   * through the viewport meta tag.
+   */
+  private fun applyAppWebSettings(webView: WebView) {
+    val settings = webView.settings
+    settings.setSupportZoom(false)
+    settings.builtInZoomControls = false
+    settings.displayZoomControls = false
   }
 
   private fun cacheWebView(attempt: Int) {
@@ -58,6 +73,29 @@ class MainActivity : TauriActivity() {
     }
   }
 
+  /**
+   * Picks up web-layer requests that do not need the media service (currently
+   * device downloads). The service polls the same channel while it is alive and
+   * whichever poller takes the request first handles it.
+   */
+  private val requestPoller = object : Runnable {
+    override fun run() {
+      currentWebView()?.evaluateJavascript(TAKE_REQUEST_JS) { raw ->
+        if (!raw.isNullOrBlank() && raw != "null") {
+          val json = runCatching { org.json.JSONObject(raw) }.getOrNull()
+          if (json?.optString("type") == "download") {
+            NoctuneDownloads.enqueue(
+              this@MainActivity,
+              json.optString("url"),
+              json.optString("filename")
+            )
+          }
+        }
+      }
+      pollHandler.postDelayed(this, 700)
+    }
+  }
+
   override fun onResume() {
     super.onResume()
     val runnable = object : Runnable {
@@ -67,6 +105,7 @@ class MainActivity : TauriActivity() {
       }
     }
     pollHandler.post(runnable)
+    pollHandler.post(requestPoller)
   }
 
   override fun onPause() {
@@ -112,5 +151,8 @@ class MainActivity : TauriActivity() {
   companion object {
     private const val IS_PLAYING_JS =
       "(function(){try{return window.__noctuneIsPlaying?window.__noctuneIsPlaying():false}catch(e){return false}})()"
+
+    private const val TAKE_REQUEST_JS =
+      "(function(){try{var r=window.__noctune_native_request;if(r){window.__noctune_native_request=null;return r;}return null;}catch(e){return null;}})()"
   }
 }

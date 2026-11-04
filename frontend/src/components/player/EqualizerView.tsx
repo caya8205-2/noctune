@@ -146,9 +146,6 @@ export function EqualizerView({ onClose }: EqualizerViewProps) {
         <div className="flex items-center gap-2">
           <SlidersHorizontal size={16} className="text-accent" />
           <h3 className="text-sm font-semibold text-white">Equalizer</h3>
-          <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[10px] font-mono text-soft">
-            {isMobile ? '5-band (Mobile)' : '10-band (Studio)'}
-          </span>
         </div>
         <div className="flex items-center gap-2">
           {/* Bypass toggle */}

@@ -793,189 +793,16 @@ export function SettingsView() {
       </section>
       )}
 
-      {/* Spotify API Credentials */}
-      {IS_TAURI && (
-        <section className="surface-panel flex flex-col gap-4 p-5">
-          <div>
-            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Spotify API Credentials
-            </h2>
-            {data?.spotify?.configured && (
-              <span className="text-xs text-accent flex items-center gap-1 mt-2">
-                <CheckCircle size={11} /> Configured
-              </span>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => openExternalUrl('https://developer.spotify.com/dashboard').catch(console.error)}
-            className="inline-flex self-start items-center gap-2 text-xs text-muted transition-colors hover:text-white"
-          >
-            <ExternalLink size={12} className="flex-shrink-0" />
-            Get credentials at developer.spotify.com/dashboard
-          </button>
-
-          <p className="text-xs text-muted leading-relaxed">
-            Spotify credentials are used for metadata search, playlist import, and release discovery.
-            Playback still uses Noctune's local YouTube resolver.
-          </p>
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
-            <Info size={13} className="mr-1 inline-block align-text-bottom" />
-            These fields are optional — Spotify metadata works without entering credentials here.
-            The Spotify Web API requires a <span className="font-medium text-amber-200">Premium</span> account, so any custom credentials you enter must belong to a Premium account.
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-xs text-muted mb-1.5 block">Client ID</label>
-              <input
-                type="text"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder={data?.spotify.clientId || 'Paste your Client ID'}
-                className="input-base font-mono text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-muted mb-1.5 block">Client Secret</label>
-              <div className="relative">
-                <input
-                  type={showSecret ? 'text' : 'password'}
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="Paste new secret to update"
-                  className="input-base font-mono text-xs pr-10"
-                />
-                <button
-                  onClick={() => setShowSecret((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
-                >
-                  {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {testResult && (
-            <div
-              className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${testResult.ok
-                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                }`}
-            >
-              {testResult.ok ? (
-                <>
-                  <CheckCircle size={14} /> Connected successfully!
-                </>
-              ) : (
-                <>
-                  <XCircle size={14} /> {testResult.error ?? 'Connection failed'}
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-2.5">
-            <button
-              type="button"
-              onClick={handleTest}
-              disabled={testing || (!data?.spotify?.configured && !clientId)}
-              className="flex min-h-[44px] w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-base-600 px-4 py-2.5 text-xs font-semibold text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {testing ? <Loader2 size={14} className="animate-spin" /> : null}
-              Test Connection
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="btn-accent flex min-h-[44px] w-full sm:flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold"
-            >
-              {saving ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" /> Saving...
-                </>
-              ) : saved ? (
-                <>
-                  <CheckCircle size={14} /> Saved!
-                </>
-              ) : (
-                'Save Credentials'
-              )}
-            </button>
-          </div>
-        </section>
-      )}
-
       {/* Playback & Engines */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Playback & engines
+            Playback engine configuration
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Configure audio stream quality, playback adapters, and recommendation algorithms.
+            Stream quality, playback adapter, recommendation algorithm, and the Spotify credentials that power them.
           </p>
         </div>
-
-        {/* 1. Discord Rich Presence (Above Stream Quality) */}
-        {IS_TAURI && (
-          <button
-            type="button"
-            onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
-            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
-          >
-            <span>
-              <span className="block text-sm font-medium text-white">Discord Rich Presence</span>
-              <span className="block text-xs text-muted mt-1">Show what you're listening to on your Discord profile.</span>
-            </span>
-            <span
-              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
-                ? 'border-accent/50 bg-accent/25'
-                : 'border-base-600 bg-base-800'
-                }`}
-              aria-hidden="true"
-            >
-              <span
-                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
-                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
-                  : 'translate-x-1 bg-muted'
-                  }`}
-              />
-            </span>
-          </button>
-        )}
-
-        {/* Close to System Tray */}
-        {IS_TAURI_DESKTOP && (
-          <button
-            type="button"
-            onClick={() => handleCloseToTrayToggle(!closeToTray)}
-            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
-          >
-            <span>
-              <span className="block text-sm font-medium text-white">Close to System Tray</span>
-              <span className="block text-xs text-muted mt-1">Keep music playing in background when closing the window. Access or exit via tray icon.</span>
-            </span>
-            <span
-              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${closeToTray
-                ? 'border-accent/50 bg-accent/25'
-                : 'border-base-600 bg-base-800'
-                }`}
-              aria-hidden="true"
-            >
-              <span
-                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${closeToTray
-                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
-                  : 'translate-x-1 bg-muted'
-                  }`}
-              />
-            </span>
-          </button>
-        )}
 
         {/* 2. Preferred Stream Quality */}
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
@@ -1191,6 +1018,121 @@ export function SettingsView() {
           </div>
         )}
 
+        {/* Spotify Web API credentials */}
+        {IS_TAURI && (
+          <div className="rounded-lg border border-base-600/70 bg-base-900 p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">Spotify Web API credentials</p>
+              {data?.spotify?.configured && (
+                <span className="text-xs text-accent flex items-center gap-1 mt-2">
+                  <CheckCircle size={11} /> Configured
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openExternalUrl('https://developer.spotify.com/dashboard').catch(console.error)}
+              className="inline-flex self-start items-center gap-2 text-xs text-muted transition-colors hover:text-white"
+            >
+              <ExternalLink size={12} className="flex-shrink-0" />
+              Get credentials at developer.spotify.com/dashboard
+            </button>
+
+            <p className="text-xs text-muted leading-relaxed">
+              Spotify credentials are used for metadata search, playlist import, and release discovery.
+              Playback still uses Noctune's local YouTube resolver.
+            </p>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
+              <Info size={13} className="mr-1 inline-block align-text-bottom" />
+              These fields are optional — Spotify metadata works without entering credentials here.
+              The Spotify Web API requires a <span className="font-medium text-amber-200">Premium</span> account, so any custom credentials you enter must belong to a Premium account.
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-muted mb-1.5 block">Client ID</label>
+                <input
+                  type="text"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  placeholder={data?.spotify.clientId || 'Paste your Client ID'}
+                  className="input-base font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted mb-1.5 block">Client Secret</label>
+                <div className="relative">
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder="Paste new secret to update"
+                    className="input-base font-mono text-xs pr-10"
+                  />
+                  <button
+                    onClick={() => setShowSecret((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
+                  >
+                    {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {testResult && (
+              <div
+                className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${testResult.ok
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}
+              >
+                {testResult.ok ? (
+                  <>
+                    <CheckCircle size={14} /> Connected successfully!
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={14} /> {testResult.error ?? 'Connection failed'}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="button"
+                onClick={handleTest}
+                disabled={testing || (!data?.spotify?.configured && !clientId)}
+                className="flex min-h-[44px] w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-base-600 px-4 py-2.5 text-xs font-semibold text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {testing ? <Loader2 size={14} className="animate-spin" /> : null}
+                Test Connection
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="btn-accent flex min-h-[44px] w-full sm:flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Saving...
+                  </>
+                ) : saved ? (
+                  <>
+                    <CheckCircle size={14} /> Saved!
+                  </>
+                ) : (
+                  'Save Credentials'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 6. Save button for engines */}
         <div className="flex justify-end">
           <button
@@ -1220,16 +1162,72 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Audio Visualizer */}
+      {/* Sound & app: Rich Presence, tray behaviour, visualizer, equalizer */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Audio Visualizer Presets
+            Sound & app
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Select the visualizer animation style displayed around the album art CD disc in Player View.
+            How Noctune sounds and how it behaves when you leave it running: Rich Presence, tray behaviour, visualizer style, and equalizer.
           </p>
         </div>
+
+        {/* Discord Rich Presence (desktop only: it needs the Discord client) */}
+        {IS_TAURI_DESKTOP && (
+          <button
+            type="button"
+            onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
+            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+          >
+            <span>
+              <span className="block text-sm font-medium text-white">Discord Rich Presence</span>
+              <span className="block text-xs text-muted mt-1">Show what you're listening to on your Discord profile.</span>
+            </span>
+            <span
+              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
+                ? 'border-accent/50 bg-accent/25'
+                : 'border-base-600 bg-base-800'
+                }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
+                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                  : 'translate-x-1 bg-muted'
+                  }`}
+              />
+            </span>
+          </button>
+        )}
+
+        {/* Close to System Tray (desktop) */}
+        {IS_TAURI_DESKTOP && (
+          <button
+            type="button"
+            onClick={() => handleCloseToTrayToggle(!closeToTray)}
+            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+          >
+            <span>
+              <span className="block text-sm font-medium text-white">Close to System Tray</span>
+              <span className="block text-xs text-muted mt-1">Keep music playing in background when closing the window. Access or exit via tray icon.</span>
+            </span>
+            <span
+              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${closeToTray
+                ? 'border-accent/50 bg-accent/25'
+                : 'border-base-600 bg-base-800'
+                }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${closeToTray
+                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                  : 'translate-x-1 bg-muted'
+                  }`}
+              />
+            </span>
+          </button>
+        )}
 
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-5 flex flex-col items-center sm:flex-row sm:items-start gap-6">
           {/* Live Visualizer Preview Box (Vinyl disc with live visualizer preview) */}
@@ -1277,21 +1275,26 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Audio Equalizer */}
+        {/* Equalizer */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-white">Equalizer</p>
+          <p className="text-xs text-muted leading-relaxed">
+            Fine-tune frequency bands to match your headphones or speakers.
+          </p>
+          <EqualizerView />
+        </div>
+
+      {/* Cache */}
       <section className="surface-panel flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Audio Equalizer
+            Cache
           </h2>
           <p className="text-xs text-muted leading-relaxed mt-2">
-            Fine-tune frequency bands and audio color profile to match your headphones or speakers.
+            Export learned metadata, manage lyrics cache, and keep local audio storage under control.
           </p>
         </div>
-        <EqualizerView />
-      </section>
 
-      {/* Debug & Diagnostics */}
-      <section className="surface-panel flex flex-col gap-4 p-5">
         <div className="rounded-lg border border-base-600/70 bg-base-900 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1320,18 +1323,6 @@ export function SettingsView() {
               </button>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Cache */}
-      <section className="surface-panel flex flex-col gap-4 p-5">
-        <div>
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Cache
-          </h2>
-          <p className="text-xs text-muted leading-relaxed mt-2">
-            Export learned metadata, manage lyrics cache, and keep local audio storage under control.
-          </p>
         </div>
 
         {cacheMessage && (

@@ -222,6 +222,13 @@ class MediaPlaybackService : Service() {
       "stop" -> {
         stopNativePlayback()
       }
+      "download" -> {
+        NoctuneDownloads.enqueue(
+          this,
+          json.optString("url"),
+          json.optString("filename")
+        )
+      }
     }
   }
 
