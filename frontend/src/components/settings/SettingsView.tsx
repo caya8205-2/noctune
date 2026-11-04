@@ -163,10 +163,15 @@ export function SettingsView() {
   const setView = usePlayerStore((state) => state.setView);
 
   async function loadSettings() {
-    const res = await fetch(await apiUrl('/settings'));
+    const res = await fetch(await apiUrl('/settings'), { cache: 'no-store' });
+    if (!res.ok) {
+      // A failed settings call (auth, backend restart) must never be treated as
+      // a settings payload: partial objects here crash the whole view.
+      throw new Error(`Settings request failed with HTTP ${res.status}`);
+    }
     const d = (await res.json()) as SettingsData;
     setData(d);
-    setClientId(d.spotify.clientId);
+    setClientId(d.spotify?.clientId ?? '');
     setAudioCacheLimitMb(d.audioCacheLimitMb ?? 1024);
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
     setSpotifyPlayback(d.spotifyPlayback ?? 'youtube-match');
@@ -795,7 +800,7 @@ export function SettingsView() {
             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
               Spotify API Credentials
             </h2>
-            {data?.spotify.configured && (
+            {data?.spotify?.configured && (
               <span className="text-xs text-accent flex items-center gap-1 mt-2">
                 <CheckCircle size={11} /> Configured
               </span>
@@ -876,7 +881,7 @@ export function SettingsView() {
             <button
               type="button"
               onClick={handleTest}
-              disabled={testing || (!data?.spotify.configured && !clientId)}
+              disabled={testing || (!data?.spotify?.configured && !clientId)}
               className="flex min-h-[44px] w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-base-600 px-4 py-2.5 text-xs font-semibold text-soft hover:text-white hover:border-base-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {testing ? <Loader2 size={14} className="animate-spin" /> : null}
