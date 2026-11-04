@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.ResultReceiver
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -114,6 +115,33 @@ class MainActivity : TauriActivity() {
     }
   }
 
+  /**
+   * Asks the :media process where playback actually is and mirrors the answer into
+   * the page. The service cannot write to the WebView itself (different process).
+   */
+  private fun queryNativeState() {
+    val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+      override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+        val webView = currentWebView() ?: return
+        val payload = org.json.JSONObject().apply {
+          put("active", resultData?.getBoolean("active") ?: false)
+          put("playing", resultData?.getBoolean("playing") ?: false)
+          put("positionMs", resultData?.getLong("positionMs") ?: 0L)
+          put("durationMs", resultData?.getLong("durationMs") ?: 0L)
+          put("title", resultData?.getString("title") ?: "")
+          put("artist", resultData?.getString("artist") ?: "")
+        }
+        val js = "window.__noctune_native_state=$payload;" +
+          "window.dispatchEvent(new CustomEvent('noctune:native-state',{detail:$payload}));"
+        runCatching { webView.evaluateJavascript(js, null) }
+      }
+    }
+    val intent = Intent(this, MediaPlaybackService::class.java)
+      .setAction(MediaPlaybackService.ACTION_QUERY_STATE)
+      .putExtra(MediaPlaybackService.EXTRA_RECEIVER, receiver)
+    runCatching { startService(intent) }
+  }
+
   private val statePoller = object : Runnable {
     override fun run() {
       evaluatePlaybackState { playing -> if (playing) ensureMediaService() }
@@ -123,6 +151,11 @@ class MainActivity : TauriActivity() {
 
   override fun onResume() {
     super.onResume()
+    // The page needs a moment to boot before it can receive the native state, so
+    // ask again shortly after the first attempt.
+    queryNativeState()
+    pollHandler.postDelayed({ queryNativeState() }, 1500)
+    pollHandler.postDelayed({ queryNativeState() }, 4000)
     pollHandler.post(statePoller)
     pollHandler.removeCallbacks(requestPoller)
     pollHandler.post(requestPoller)

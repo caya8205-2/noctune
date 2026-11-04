@@ -44,6 +44,8 @@ class MediaPlaybackService : Service() {
     const val ACTION_START = "dev.noctune.app.media.START"
     const val ACTION_STOP = "dev.noctune.app.media.STOP"
     const val ACTION_REQUEST = "dev.noctune.app.media.REQUEST"
+    const val ACTION_QUERY_STATE = "dev.noctune.app.media.QUERY_STATE"
+    const val EXTRA_RECEIVER = "receiver"
     const val EXTRA_PAYLOAD = "payload"
 
     private const val NOW_PLAYING_JS =
@@ -123,6 +125,9 @@ class MediaPlaybackService : Service() {
   private var pollTicks = 0
   private var player: ExoPlayer? = null
   private var nativeUrl: String? = null
+  // Tracks the web player already queued, so the service can keep advancing after
+  // the UI process (and its JS queue) is gone.
+  private val upNext = ArrayDeque<org.json.JSONObject>()
 
   @Volatile
   var nativeActive = false
@@ -198,6 +203,7 @@ class MediaPlaybackService : Service() {
       ACTION_REQUEST -> {
         intent?.getStringExtra(EXTRA_PAYLOAD)?.let { handleRequest(it) }
       }
+      ACTION_QUERY_STATE -> replyWithState(intent)
       "next" -> dispatch("next")
       "prev" -> dispatch("prev")
       else -> {
@@ -284,7 +290,20 @@ class MediaPlaybackService : Service() {
       }
 
       override fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState == Player.STATE_ENDED) dispatch("next")
+        if (playbackState != Player.STATE_ENDED) return
+        val next = upNext.removeFirstOrNull()
+        if (next != null) {
+          val url = next.optString("url")
+          title = next.optString("title", title)
+          artist = next.optString("artist", artist)
+          val art = next.optString("artwork")
+          if (art.isNotBlank()) artworkUrl = art
+          nativeUrl = null
+          startNativePlayback(url, 0L)
+          refreshNotification()
+        } else {
+          dispatch("next")
+        }
       }
     })
     player = created
@@ -463,6 +482,15 @@ class MediaPlaybackService : Service() {
       artwork = null
       if (nextArtwork != null) loadArtwork(nextArtwork)
     }
+
+    // Refresh the queue horizon the service can walk on its own.
+    json.optJSONArray("upNext")?.let { array ->
+      upNext.clear()
+      for (i in 0 until array.length()) {
+        val entry = array.optJSONObject(i) ?: continue
+        if (entry.optString("url").isNotBlank()) upNext.addLast(entry)
+      }
+    }
     publishState()
     refreshNotification()
   }
@@ -580,6 +608,25 @@ class MediaPlaybackService : Service() {
       stopForeground(true)
     }
     stopSelf()
+  }
+
+  /**
+   * Answers MainActivity with the native playback state. The service lives in its
+   * own process, so the page cannot read these fields directly.
+   */
+  private fun replyWithState(intent: Intent) {
+    @Suppress("DEPRECATION")
+    val receiver = intent.getParcelableExtra<android.os.ResultReceiver>(EXTRA_RECEIVER) ?: return
+    val bundle = android.os.Bundle().apply {
+      putBoolean("active", nativeActive)
+      putBoolean("playing", player?.isPlaying ?: false)
+      putLong("positionMs", runCatching { player?.currentPosition ?: 0L }.getOrDefault(0L))
+      putLong("durationMs", runCatching { player?.duration ?: 0L }.getOrDefault(0L))
+      putString("title", title)
+      putString("artist", artist)
+      putString("artwork", artworkUrl ?: "")
+    }
+    receiver.send(0, bundle)
   }
 
   /**

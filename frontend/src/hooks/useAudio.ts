@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../store/player';
-import { api, apiUrl, IS_TAURI, IS_TAURI_MOBILE, getSpotifyPlaybackSettingSync } from '../utils/api';
+import { api, apiUrl, IS_TAURI, IS_TAURI_MOBILE, getMobileServerConfig, getSpotifyPlaybackSettingSync } from '../utils/api';
 import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
@@ -881,6 +881,25 @@ export function useAudio() {
           artwork = new URL(artwork, window.location.href).href;
         } catch {}
       }
+      // The service runs in its own process, so hand it the tracks that are coming
+      // up: once the UI process dies, this is the only thing that can keep the
+      // queue moving.
+      const server = getMobileServerConfig();
+      const buildStreamUrl = (id: string) => {
+        if (!server) return '';
+        const key = server.apiKey ? `?apiKey=${encodeURIComponent(server.apiKey)}` : '';
+        return `${server.baseUrl}/player/stream/${encodeURIComponent(id)}${key}`;
+      };
+      const upcoming = state.queue
+        .slice(state.queueIndex + 1, state.queueIndex + 4)
+        .map((queued) => ({
+          url: buildStreamUrl(queued.id),
+          title: queued.title,
+          artist: queued.artist,
+          artwork: queued.thumbnail ?? '',
+        }))
+        .filter((entry) => Boolean(entry.url));
+
       return {
         playing: state.isPlaying,
         trackId: track.id,
@@ -891,6 +910,7 @@ export function useAudio() {
         artwork,
         positionMs: Math.round((state.progress || 0) * 1000),
         durationMs: Math.round((state.duration || track.duration || 0) * 1000),
+        upNext: upcoming,
       };
     };
 
@@ -964,9 +984,10 @@ export function useAudio() {
       if (resumeTimer) clearTimeout(resumeTimer);
       resumeTimer = setTimeout(() => {
         resumeTimer = null;
-        const nativePosition = host.__noctune_native_position as number | undefined;
+        // MainActivity queries the :media process and writes the answer here.
+        const nativeState = host.__noctune_native_state as { positionMs?: number } | undefined;
+        const nativePosition = nativeState?.positionMs;
         if (typeof nativePosition === 'number' && nativePosition > 0) {
-          delete host.__noctune_native_position;
           if (element) element.currentTime = nativePosition / 1000;
         }
         if (usePlayerStore.getState().isPlaying && element) {
