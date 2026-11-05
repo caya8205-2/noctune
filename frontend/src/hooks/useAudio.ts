@@ -990,15 +990,24 @@ export function useAudio() {
         ? nativeState.positionMs / 1000
         : 0;
 
-      // Determine if we need to switch or rehydrate currentTrack
-      const needsTrackUpdate = !current || (trackId && current.id !== trackId);
+      // Normalize track IDs by stripping protocol prefixes for reliable matching
+      const cleanTrackId = (id?: string) => (id || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
+      const currentCleanId = cleanTrackId(current?.id);
+      const nativeCleanId = cleanTrackId(trackId);
+
+      // Determine if we actually need to switch or rehydrate currentTrack
+      const isSameTrack = Boolean(
+        (currentCleanId && nativeCleanId && currentCleanId === nativeCleanId) ||
+        (current && nativeState.title && current.title.toLowerCase() === nativeState.title.toLowerCase())
+      );
+      const needsTrackUpdate = !current || (!isSameTrack && Boolean(nativeCleanId || nativeState.title));
 
       if (needsTrackUpdate) {
         let matchedTrack: any = undefined;
         let matchedIndex = -1;
 
-        if (trackId) {
-          matchedIndex = state.queue.findIndex((t) => t.id === trackId);
+        if (nativeCleanId) {
+          matchedIndex = state.queue.findIndex((t) => cleanTrackId(t.id) === nativeCleanId);
           if (matchedIndex >= 0) matchedTrack = state.queue[matchedIndex];
         }
         if (!matchedTrack && nativeState.title) {
@@ -1034,9 +1043,15 @@ export function useAudio() {
           });
         }
       } else {
-        // Same track is already loaded; sync position if element is paused or behind
-        if (element && positionSec > 0 && Math.abs(element.currentTime - positionSec) > 1.5) {
-          element.currentTime = positionSec;
+        // Same track is already loaded; sync position smoothly without re-resolving stream
+        if (element && positionSec > 0) {
+          const delta = Math.abs(element.currentTime - positionSec);
+          if (delta > 0.8) {
+            element.currentTime = positionSec;
+          }
+        }
+        if (positionSec > 0) {
+          usePlayerStore.setState({ progress: positionSec });
         }
       }
     };
@@ -1076,21 +1091,32 @@ export function useAudio() {
       }
 
       host.__noctune_native_request = { type: 'resume' };
+      const nativeState = host.__noctune_native_state;
+      const nativePosition = nativeState?.positionMs;
+      if (typeof nativePosition === 'number' && nativePosition > 0 && element) {
+        if (Math.abs(element.currentTime - (nativePosition / 1000)) > 1.0) {
+          element.currentTime = nativePosition / 1000;
+        }
+      }
+      if (usePlayerStore.getState().isPlaying && element && element.paused) {
+        element.play().catch(() => {});
+      }
+
       if (resumeTimer) clearTimeout(resumeTimer);
       resumeTimer = setTimeout(() => {
         resumeTimer = null;
-        const nativeState = host.__noctune_native_state;
-        applyNativePlaybackState(nativeState);
-        const nativePosition = nativeState?.positionMs;
-        if (typeof nativePosition === 'number' && nativePosition > 0) {
-          if (element && Math.abs(element.currentTime - (nativePosition / 1000)) > 1.2) {
-            element.currentTime = nativePosition / 1000;
+        const freshState = host.__noctune_native_state;
+        applyNativePlaybackState(freshState);
+        const freshPos = freshState?.positionMs;
+        if (typeof freshPos === 'number' && freshPos > 0 && element) {
+          if (Math.abs(element.currentTime - (freshPos / 1000)) > 1.2) {
+            element.currentTime = freshPos / 1000;
           }
         }
         if (usePlayerStore.getState().isPlaying && element && element.paused) {
           element.play().catch(() => {});
         }
-      }, 150);
+      }, 120);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);

@@ -260,7 +260,9 @@ async function fetchAudioStream(
   _refreshIfWebm = false,
   boundedRange = false
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
-  const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
+  const isGoogleVideo = audioUrl.includes('googlevideo.com') || audioUrl.includes('c=IOS') || audioUrl.includes('c=ANDROID');
+  const enforceBounded = boundedRange || isGoogleVideo;
+  const upstreamRange = enforceBounded ? normalizeUpstreamRange(range) : range;
   const headers: Record<string, string> = {};
   if (upstreamRange) {
     headers.Range = upstreamRange;

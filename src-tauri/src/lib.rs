@@ -35,7 +35,7 @@ use tauri::{
 use tauri::Manager;
 #[cfg(all(not(debug_assertions), desktop))]
 use tauri_plugin_shell::process::CommandChild;
-#[cfg(all(not(debug_assertions), desktop))]
+#[cfg(desktop)]
 use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
@@ -162,7 +162,10 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+        builder = builder
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_shell::init());
+
         #[cfg(not(debug_assertions))]
         {
             builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -175,9 +178,7 @@ pub fn run() {
         }
     }
 
-    builder = builder
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init());
+    builder = builder.plugin(tauri_plugin_dialog::init());
 
     #[cfg(desktop)]
     {

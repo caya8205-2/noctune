@@ -1,5 +1,6 @@
 package dev.noctune.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -14,6 +15,17 @@ class MainActivity : TauriActivity() {
   private val pollHandler = Handler(Looper.getMainLooper())
 
 
+  private val dispatchReceiver = object : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      val action = intent?.getStringExtra(MediaPlaybackService.EXTRA_ACTION) ?: return
+      val wv = currentWebView() ?: return
+      val js = "window.dispatchEvent(new CustomEvent('noctune:native-media-action',{detail:{action:'$action'}}));"
+      wv.post {
+        runCatching { wv.evaluateJavascript(js, null) }
+      }
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     WebView.setWebContentsDebuggingEnabled(true)
     enableEdgeToEdge()
@@ -21,6 +33,12 @@ class MainActivity : TauriActivity() {
 
     requestNotificationPermission()
     cacheWebView(0)
+    val filter = android.content.IntentFilter(MediaPlaybackService.ACTION_DISPATCH)
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(dispatchReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      registerReceiver(dispatchReceiver, filter)
+    }
   }
 
   /**
@@ -203,6 +221,7 @@ class MainActivity : TauriActivity() {
 
   override fun onDestroy() {
     pollHandler.removeCallbacksAndMessages(null)
+    runCatching { unregisterReceiver(dispatchReceiver) }
     super.onDestroy()
   }
 

@@ -17,8 +17,6 @@
         "core:window:allow-unmaximize",
         "core:window:allow-is-maximized",
         "core:window:allow-start-dragging",
-        "shell:allow-spawn",
-        "shell:allow-execute",
         "dialog:default",
         "core:window:allow-hide",
         "core:window:allow-show",

@@ -45,6 +45,8 @@ class MediaPlaybackService : Service() {
     const val ACTION_STOP = "dev.noctune.app.media.STOP"
     const val ACTION_REQUEST = "dev.noctune.app.media.REQUEST"
     const val ACTION_QUERY_STATE = "dev.noctune.app.media.QUERY_STATE"
+    const val ACTION_DISPATCH = "dev.noctune.app.media.DISPATCH"
+    const val EXTRA_ACTION = "action"
     const val EXTRA_RECEIVER = "receiver"
     const val EXTRA_PAYLOAD = "payload"
 
@@ -82,6 +84,14 @@ class MediaPlaybackService : Service() {
     private var instance: MediaPlaybackService? = null
 
     fun dispatch(action: String) {
+      val inst = instance
+      if (inst != null) {
+        val intent = Intent(ACTION_DISPATCH).apply {
+          setPackage(inst.packageName)
+          putExtra(EXTRA_ACTION, action)
+        }
+        inst.sendBroadcast(intent)
+      }
       val wv = webView ?: return
       val js = "window.dispatchEvent(new CustomEvent('noctune:native-media-action',{detail:{action:'$action'}}));"
       wv.post {
@@ -334,10 +344,7 @@ class MediaPlaybackService : Service() {
         nativeUrl = url
         exo.stop()
         exo.clearMediaItems()
-        exo.setMediaItem(MediaItem.fromUri(url))
-        if (positionMs > 0L) {
-          exo.seekTo(positionMs)
-        }
+        exo.setMediaItem(MediaItem.fromUri(url), positionMs)
         exo.prepare()
       } else if (positionMs > 0L && Math.abs(exo.currentPosition - positionMs) > 1500) {
         exo.seekTo(positionMs)
@@ -355,7 +362,9 @@ class MediaPlaybackService : Service() {
   private fun stopNativePlayback(): Long {
     val exo = player ?: return 0L
     val position = runCatching { exo.currentPosition }.getOrDefault(0L)
-    lastNativePositionMs = position
+    if (position > 0L) {
+      lastNativePositionMs = position
+    }
     runCatching {
       exo.pause()
       exo.stop()

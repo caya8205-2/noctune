@@ -20,6 +20,19 @@ function ensureDevSidecarStubs() {
   }
 }
 
+// If invoked with Tauri subcommands (like Android Gradle's `npm run -- tauri android ...`),
+// pass through directly to real @tauri-apps/cli without spawning the desktop dev orchestrator!
+const rawArgs = process.argv.slice(2);
+if (rawArgs.length > 0) {
+  const tauriBin = process.platform === 'win32'
+    ? join(process.cwd(), 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
+    : join(process.cwd(), 'node_modules', '.bin', 'tauri');
+  const child = process.platform === 'win32'
+    ? spawn(process.execPath, [tauriBin, ...rawArgs], { stdio: 'inherit', env: process.env })
+    : spawn(tauriBin, rawArgs, { stdio: 'inherit', env: process.env });
+  child.on('exit', (code) => process.exit(code ?? 0));
+} else {
+
 ensureDevSidecarStubs();
 
 const env = createDevEnv({ defaultPort: '3132', preferDotEnvPort: false });
@@ -117,3 +130,4 @@ printDevEnv(env, 'tauri');
 await runOnce(['run', 'build', '--workspace=backend']);
 watch(spawnChild('backend', ['run', 'dev:backend']));
 watch(spawnChild('tauri', ['exec', 'tauri', '--', 'dev']));
+}
