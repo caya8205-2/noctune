@@ -267,7 +267,7 @@ async function fetchAudioStream(
     const isGoogleVideo = url.includes('googlevideo.com') || url.includes('c=IOS') || url.includes('c=ANDROID');
     if (isGoogleVideo && !boundedRange) return fetchPlayerStream(url, range, signal);
     const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
-    return fetch(url, { headers: upstreamRange ? { Range: upstreamRange } : {}, signal });
+    return fetch(url, { headers: upstreamRange ? { Range: upstreamRange, Connection: 'close' } : { Connection: 'close' }, signal });
   };
   let res = await requestStream(audioUrl);
 

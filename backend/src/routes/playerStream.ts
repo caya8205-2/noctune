@@ -52,7 +52,11 @@ export async function fetchPlayerStream(url: string, range?: string, signal?: Ab
   const fetchChunk = async (start: number, end: number) => {
     abort.signal.throwIfAborted();
     response = await fetch(url, {
-      headers: { Range: `bytes=${start}-${end}`, 'Accept-Encoding': 'identity' },
+      // Fresh socket per chunk: a keep-alive socket left half-closed by an
+      // aborted client (native handback stopping mid-chunk) poisons the pool
+      // and stalls the next chunk fetch for seconds, surfacing as a
+      // "Resolving audio..." underrun right after handback.
+      headers: { Range: `bytes=${start}-${end}`, 'Accept-Encoding': 'identity', Connection: 'close' },
       signal: abort.signal,
     });
     abort.signal.throwIfAborted();
