@@ -12,6 +12,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Bundle
+import android.os.ResultReceiver
+import android.util.Log
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -24,20 +27,17 @@ import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Keeps the WebView process alive during playback (foreground service) and
- * publishes a system media notification. Android WebView does not promote
- * `navigator.mediaSession` to a notification on its own, so the native side
- * owns the MediaSession and forwards user actions back to the web layer.
- */
+/** Owns background audio in :media; the foreground WebView exchanges commands by Intent. */
 class MediaPlaybackService : Service() {
 
   companion object {
+    private const val TAG = "NoctunePlayback"
     const val CHANNEL_ID = "noctune_playback"
     const val NOTIFICATION_ID = 4242
     const val ACTION_UPDATE = "dev.noctune.app.media.UPDATE"
@@ -52,9 +52,6 @@ class MediaPlaybackService : Service() {
 
     private const val NOW_PLAYING_JS =
       "(function(){try{return window.__noctuneNowPlaying?window.__noctuneNowPlaying():null}catch(e){return null}})()"
-
-    private const val TAKE_REQUEST_JS =
-      "(function(){try{var r=window.__noctune_native_request;if(r){window.__noctune_native_request=null;return r;}return null;}catch(e){return null;}})()"
 
     @Volatile
     var webView: WebView? = null
@@ -136,10 +133,18 @@ class MediaPlaybackService : Service() {
   private var pollTicks = 0
   private var player: ExoPlayer? = null
   private var nativeUrl: String? = null
+  // Joined live muxes (Spotify Direct) start their own timeline at the join
+  // point; the handoff position is the absolute offset to add back on top.
+  private var joinedOffsetMs = 0L
   private var lastNativePositionMs: Long = 0L
   // Tracks the web player already queued, so the service can keep advancing after
   // the UI process (and its JS queue) is gone.
-  private val upNext = ArrayDeque<org.json.JSONObject>()
+  private val upNext = ArrayDeque<JSONObject>()
+  private val playedHistory = ArrayDeque<JSONObject>()
+  private var durationMs = 0L
+  private var playbackRate = 1f
+  private var playbackVolume = 1f
+  private var repeatMode = "off"
 
   @Volatile
   var nativeActive = false
@@ -198,26 +203,14 @@ class MediaPlaybackService : Service() {
         stopPlayback()
         return START_NOT_STICKY
       }
-      "play" -> {
-        playing = true
-        isPlayingNow = true
-        acquirePlaybackLocks()
-        if (nativeActive) player?.play() else dispatch("play")
-        refreshNotification()
-      }
-      "pause" -> {
-        playing = false
-        isPlayingNow = false
-        releasePlaybackLocks()
-        if (nativeActive) player?.pause() else dispatch("pause")
-        refreshNotification()
-      }
+      "play" -> setPlaying(true)
+      "pause" -> setPlaying(false)
       ACTION_REQUEST -> {
-        intent?.getStringExtra(EXTRA_PAYLOAD)?.let { handleRequest(it) }
+        intent.getStringExtra(EXTRA_PAYLOAD)?.let { handleRequest(it, intent) }
       }
-      ACTION_QUERY_STATE -> replyWithState(intent)
-      "next" -> dispatch("next")
-      "prev" -> dispatch("prev")
+      ACTION_QUERY_STATE -> replyWithState(intent, intent.getStringExtra("requestId"))
+      "next" -> nextTrack()
+      "prev" -> previousTrack()
       else -> {
         intent?.getStringExtra(EXTRA_PAYLOAD)?.let { applyPayload(it) }
       }
@@ -235,7 +228,6 @@ class MediaPlaybackService : Service() {
     if (pollRunnable != null) return
     val runnable = object : Runnable {
       override fun run() {
-        pollRequests()
         if (pollTicks++ % 4 == 0) pollNowPlaying()
         pollHandler.postDelayed(this, 500)
       }
@@ -244,136 +236,226 @@ class MediaPlaybackService : Service() {
     pollHandler.post(runnable)
   }
 
-  private fun pollRequests() {
-    val wv = webView ?: return
-    if (!wv.isAttachedToWindow) return
-    val generation = webViewGeneration
-    wv.evaluateJavascript(TAKE_REQUEST_JS) { raw ->
-      if (generation != webViewGeneration) return@evaluateJavascript
-      if (raw.isNullOrBlank() || raw == "null") return@evaluateJavascript
-      handleRequest(raw)
+  private fun handleRequest(raw: String, intent: Intent) {
+    val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
+    val requestId = json.opt("requestId") as? String
+    try {
+      when (json.optString("type")) {
+        "handoff" -> {
+          val incomingId = json.optString("trackId")
+          val duplicate = nativeActive
+          Log.d(TAG, "handoff track=$incomingId duplicate=$duplicate")
+          if (!duplicate) {
+            val url = json.optString("url")
+            require(url.isNotBlank()) { "Missing handoff URL" }
+            readTrack(json)
+            playbackRate = json.optDouble("playbackRate", 1.0).toFloat()
+              .takeIf { it.isFinite() && it > 0f } ?: 1f
+            playbackVolume = json.optDouble("volume", 1.0).toFloat()
+              .takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+            repeatMode = json.optString("repeat", "off")
+            upNext.clear()
+            playedHistory.clear()
+            json.optJSONArray("upNext")?.let { array ->
+              for (index in 0 until array.length()) {
+                val entry = array.optJSONObject(index) ?: continue
+                if (entry.optString("url").isNotBlank()) upNext.addLast(entry)
+              }
+            }
+            startNativePlayback(
+              url,
+              json.optLong("positionMs", 0L).coerceAtLeast(0L),
+              !json.optBoolean("paused", false) && json.optBoolean("playing", true)
+            )
+          }
+        }
+        "query" -> Unit
+        "resume" -> {
+          val matches = json.opt("trackId") is String && json.optString("trackId") == trackId
+          Log.d(TAG, "resume track=$trackId matches=$matches active=$nativeActive")
+          if (nativeActive && matches) stopNativePlayback(transferToWeb = true)
+        }
+        "stop" -> stopNativePlayback()
+        "set-playing" -> if (json.has("playing")) setPlaying(json.optBoolean("playing"))
+        "snapshot" -> applyPayload(raw)
+        "download" -> NoctuneDownloads.enqueue(this, json.optString("url"), json.optString("filename"))
+      }
+    } catch (err: Exception) {
+      nativeError = err.javaClass.simpleName
+    }
+    // Acknowledge only after mutation. Queries and mismatched resumes never stop audio.
+    replyWithState(intent, requestId)
+  }
+
+  private fun readTrack(json: JSONObject) {
+    val metadata = json.optJSONObject("metadata") ?: json
+    trackId = json.optString("trackId", json.optString("id", ""))
+    title = metadata.optString("title").ifBlank { "Noctune" }
+    artist = metadata.optString("artist")
+    album = metadata.optString("album")
+    durationMs = json.optLong("durationMs", metadata.optLong("durationMs", 0L)).coerceAtLeast(0L)
+    val nextArtwork = metadata.optString("artwork").ifBlank { null }
+    if (nextArtwork != artworkUrl) {
+      artworkUrl = nextArtwork
+      artwork = null
+      if (nextArtwork != null) loadArtwork(nextArtwork)
     }
   }
 
-  /**
-   * The web layer queues native playback commands on a plain global, so no
-   * JavaScript interface (which never reliably reaches the loaded document) is
-   * required. Used to hand playback over to ExoPlayer when the app is
-   * backgrounded, where Chromium suspends the HTML audio element.
-   */
-  private fun handleRequest(raw: String) {
-    val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
-    when (json.optString("type")) {
-      "handoff" -> {
-        val url = json.optString("url")
-        val position = json.optLong("positionMs", 0L)
-        trackId = json.optString("trackId", trackId)
-        title = json.optString("title", title).ifBlank { "Noctune" }
-        artist = json.optString("artist", artist)
-        album = json.optString("album", album)
-        val art = json.optString("artwork")
-        if (art.isNotBlank()) {
-          artworkUrl = art
-          loadArtwork(art)
-        }
-        if (url.isNotBlank()) startNativePlayback(url, position)
-      }
-      "resume" -> {
-        stopNativePlayback()
-      }
-      "stop" -> {
-        stopNativePlayback()
-      }
-      "snapshot" -> {
-        applyPayload(raw)
-      }
-      "download" -> {
-        NoctuneDownloads.enqueue(
-          this,
-          json.optString("url"),
-          json.optString("filename")
-        )
-      }
+  private fun currentTrack(): JSONObject = JSONObject()
+    .put("trackId", trackId)
+    .put("url", nativeUrl ?: "")
+    .put("title", title)
+    .put("artist", artist)
+    .put("album", album)
+    .put("artwork", artworkUrl ?: "")
+    .put("durationMs", currentDurationMs())
+
+  private fun nextTrack(naturalEnd: Boolean = false) {
+    if (!nativeActive) {
+      if (!naturalEnd) dispatch("next")
+      return
     }
+    val shouldPlay = player?.playWhenReady == true
+    if (naturalEnd && repeatMode == "one") {
+      player?.seekTo(0L)
+      syncNativePlaybackState()
+      return
+    }
+    val next = upNext.removeFirstOrNull()
+    if (next == null) {
+      Log.d(TAG, "queue exhausted track=$trackId")
+      player?.pause()
+      syncNativePlaybackState()
+      return
+    }
+    playedHistory.addLast(currentTrack())
+    while (playedHistory.size > 20) playedHistory.removeFirst()
+    readTrack(next)
+    Log.d(TAG, "queue advance track=$trackId remaining=${upNext.size}")
+    startNativePlayback(next.optString("url"), 0L, shouldPlay)
+  }
+
+  private fun previousTrack() {
+    if (!nativeActive) {
+      dispatch("prev")
+      return
+    }
+    if (currentPositionMs() > 3000L || playedHistory.isEmpty()) {
+      player?.seekTo(0L)
+      syncNativePlaybackState()
+      return
+    }
+    val previous = playedHistory.removeLast()
+    val shouldPlay = player?.playWhenReady == true
+    upNext.addFirst(currentTrack())
+    readTrack(previous)
+    Log.d(TAG, "queue previous track=$trackId remaining=${upNext.size}")
+    startNativePlayback(previous.optString("url"), 0L, shouldPlay)
+  }
+
+  private fun setPlaying(value: Boolean) {
+    if (nativeActive) {
+      player?.let { exo ->
+        if (value && exo.playerError != null) {
+          nativeError = null
+          exo.prepare()
+        }
+        exo.playWhenReady = value
+      }
+      syncNativePlaybackState()
+    } else {
+      // Wait for a web snapshot instead of claiming a sleeping WebView is playing.
+      dispatch(if (value) "play" else "pause")
+    }
+  }
+
+  private fun syncNativePlaybackState() {
+    if (!nativeActive) return
+    playing = player?.playWhenReady == true
+    isPlayingNow = playing
+    if (playing) acquirePlaybackLocks() else releasePlaybackLocks()
+    refreshNotification()
   }
 
   private fun ensurePlayer(): ExoPlayer {
     player?.let { return it }
     val created = ExoPlayer.Builder(this).build()
     created.addListener(object : Player.Listener {
-      override fun onIsPlayingChanged(isPlaying: Boolean) {
-        if (nativeActive) {
-          playing = isPlaying
-          isPlayingNow = isPlaying
-          refreshNotification()
-        }
+      override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        syncNativePlaybackState()
       }
 
       override fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState != Player.STATE_ENDED) return
-        val next = upNext.removeFirstOrNull()
-        if (next != null) {
-          val url = next.optString("url")
-          trackId = next.optString("trackId", next.optString("id", ""))
-          title = next.optString("title", title)
-          artist = next.optString("artist", artist)
-          album = next.optString("album", album)
-          val art = next.optString("artwork")
-          if (art.isNotBlank()) {
-            artworkUrl = art
-            loadArtwork(art)
-          }
-          nativeUrl = null
-          startNativePlayback(url, 0L)
-          refreshNotification()
+        if (!nativeActive) return
+        if (playbackState == Player.STATE_ENDED && player?.playbackState == Player.STATE_ENDED) {
+          nextTrack(naturalEnd = true)
         } else {
-          dispatch("next")
+          syncNativePlaybackState()
         }
+      }
+
+      override fun onPlayerError(error: PlaybackException) {
+        if (!nativeActive) return
+        nativeError = error.errorCodeName
+        player?.pause()
+        syncNativePlaybackState()
       }
     })
     player = created
     return created
   }
 
-  private fun startNativePlayback(url: String, positionMs: Long) {
+  private fun startNativePlayback(url: String, positionMs: Long, shouldPlay: Boolean) {
+    nativeError = null
+    nativeUrl = url
+    lastNativePositionMs = positionMs
     try {
       val exo = ensurePlayer()
       nativeActive = true
-      lastNativePositionMs = positionMs
-      if (nativeUrl != url) {
-        nativeUrl = url
-        exo.stop()
-        exo.clearMediaItems()
-        exo.setMediaItem(MediaItem.fromUri(url), positionMs)
-        exo.prepare()
-      } else if (positionMs > 0L && Math.abs(exo.currentPosition - positionMs) > 1500) {
-        exo.seekTo(positionMs)
-      }
-      exo.playWhenReady = true
-      acquirePlaybackLocks()
-      refreshNotification()
-      nativeError = null
+      // Only a new handoff or local queue transition reaches here, including seek to zero.
+      val liveJoin = url.contains("join=1")
+      joinedOffsetMs = if (liveJoin) positionMs else 0L
+      exo.setMediaItem(MediaItem.fromUri(url), if (liveJoin) 0L else positionMs)
+      exo.setPlaybackSpeed(playbackRate)
+      exo.volume = playbackVolume
+      exo.playWhenReady = shouldPlay
+      exo.prepare()
+      syncNativePlaybackState()
     } catch (err: Exception) {
-      nativeError = "${err.javaClass.simpleName}: ${err.message}"
+      nativeError = err.javaClass.simpleName
       nativeActive = false
+      stopNativePlayback()
     }
   }
 
-  private fun stopNativePlayback(): Long {
-    val exo = player ?: return 0L
-    val position = runCatching { exo.currentPosition }.getOrDefault(0L)
-    if (position > 0L) {
-      lastNativePositionMs = position
+  private fun currentPositionMs(): Long =
+    if (nativeActive && player != null) {
+      player!!.currentPosition.coerceAtLeast(0L) + joinedOffsetMs
+    } else {
+      lastNativePositionMs
     }
-    runCatching {
-      exo.pause()
-      exo.stop()
-      exo.clearMediaItems()
-    }
-    nativeUrl = null
+
+  private fun currentDurationMs(): Long =
+    if (nativeActive) player?.duration?.takeIf { it >= 0L } ?: durationMs else durationMs
+
+  private fun stopNativePlayback(transferToWeb: Boolean = false): Long {
+    val transferredPlaying = transferToWeb && player?.playWhenReady == true
+    lastNativePositionMs = currentPositionMs()
+    durationMs = currentDurationMs()
+    // Disable callbacks before stopping; an old STATE_ENDED must not consume the queue.
     nativeActive = false
+    runCatching {
+      player?.pause()
+      player?.stop()
+      player?.clearMediaItems()
+    }
+    // Return the transferred intent, including a pause that arrived during preparation.
+    playing = transferredPlaying
+    isPlayingNow = playing
+    releasePlaybackLocks()
     refreshNotification()
-    return if (position > 0) position else 0L
+    return lastNativePositionMs
   }
 
   private fun stopPolling() {
@@ -403,22 +485,6 @@ class MediaPlaybackService : Service() {
       if (raw.isNullOrBlank() || raw == "null" || raw.length < 4) return@evaluateJavascript
       applyPayload(raw)
     }
-    publishNativeState(wv)
-  }
-
-  private fun publishNativeState(wv: WebView) {
-    val exo = player
-    val payload = runCatching {
-      JSONObject()
-        .put("active", nativeActive)
-        .put("playing", exo?.isPlaying ?: false)
-        .put("state", exo?.playbackState ?: -1)
-        .put("pos", exo?.currentPosition ?: 0L)
-        .put("err", nativeError ?: "")
-        .toString()
-    }.getOrNull() ?: return
-    if (webView !== wv) return
-    wv.evaluateJavascript("window.__noctune_native_state=$payload", null)
   }
 
   private fun startForegroundSafely() {
@@ -454,26 +520,10 @@ class MediaPlaybackService : Service() {
   private fun setupSession() {
     val mediaSession = MediaSessionCompat(this, "NoctuneMediaSession").apply {
       setCallback(object : MediaSessionCompat.Callback() {
-        override fun onPlay() {
-          playing = true
-          isPlayingNow = true
-          acquirePlaybackLocks()
-          // With the activity gone there is no JS to drive, so control ExoPlayer
-          // directly; otherwise keep the web player as the source of truth.
-          if (nativeActive) player?.play() else dispatch("play")
-          refreshNotification()
-        }
-
-        override fun onPause() {
-          playing = false
-          isPlayingNow = false
-          releasePlaybackLocks()
-          if (nativeActive) player?.pause() else dispatch("pause")
-          refreshNotification()
-        }
-
-        override fun onSkipToNext() = dispatch("next")
-        override fun onSkipToPrevious() = dispatch("prev")
+        override fun onPlay() = setPlaying(true)
+        override fun onPause() = setPlaying(false)
+        override fun onSkipToNext() = nextTrack()
+        override fun onSkipToPrevious() = previousTrack()
         // No onStop override: the system invokes onStop when the task is removed
         // from Recents, and tearing playback down there killed the service. It then
         // could not re-enter foreground from the background (Android 12 denies
@@ -489,42 +539,15 @@ class MediaPlaybackService : Service() {
   }
 
   private fun applyPayload(raw: String) {
+    // Snapshots describe the web owner only, never the active native track or horizon.
+    if (nativeActive) return
     val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
-    trackId = json.optString("trackId", trackId)
-    playing = json.optBoolean("playing", playing)
+    readTrack(json)
+    nativeUrl = json.optString("streamUrl").ifBlank { null }
+    lastNativePositionMs = json.optLong("positionMs", 0L).coerceAtLeast(0L)
+    playing = json.optBoolean("playing", false)
     isPlayingNow = playing
     if (playing) acquirePlaybackLocks() else releasePlaybackLocks()
-
-    // Track changed while the app is in the background: the web player keeps
-    // advancing the queue with a paused element, so native has to follow the new
-    // stream URL, otherwise ExoPlayer stays parked on the finished track.
-    if (nativeActive) {
-      val nextUrl = json.optString("streamUrl").trim()
-      if (nextUrl.isNotEmpty() && nextUrl != nativeUrl) {
-        startNativePlayback(nextUrl, 0L)
-      }
-    }
-
-    title = json.optString("title", title).ifBlank { "Noctune" }
-    artist = json.optString("artist", artist)
-    album = json.optString("album", album)
-    val nextArtwork = json.optString("artwork", "").ifBlank { null }
-
-    if (nextArtwork != artworkUrl) {
-      artworkUrl = nextArtwork
-      artwork = null
-      if (nextArtwork != null) loadArtwork(nextArtwork)
-    }
-
-    // Refresh the queue horizon the service can walk on its own.
-    json.optJSONArray("upNext")?.let { array ->
-      upNext.clear()
-      for (i in 0 until array.length()) {
-        val entry = array.optJSONObject(i) ?: continue
-        if (entry.optString("url").isNotBlank()) upNext.addLast(entry)
-      }
-    }
-    publishState()
     refreshNotification()
   }
 
@@ -537,15 +560,18 @@ class MediaPlaybackService : Service() {
         connection.inputStream.use { BitmapFactory.decodeStream(it) }
       }.getOrNull()
       if (bitmap != null) {
-        artwork = bitmap
-        refreshNotification()
+        pollHandler.post {
+          if (instance !== this || artworkUrl != url) return@post
+          artwork = bitmap
+          refreshNotification()
+        }
       }
     }.start()
   }
 
   private fun publishState() {
     val mediaSession = session ?: return
-    val durationMs = 0L
+    val durationMs = currentDurationMs()
     mediaSession.setMetadata(
       MediaMetadataCompat.Builder()
         .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -566,9 +592,14 @@ class MediaPlaybackService : Service() {
             PlaybackStateCompat.ACTION_STOP
         )
         .setState(
-          if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-          PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
-          if (playing) 1f else 0f
+          when {
+            nativeActive && nativeError != null -> PlaybackStateCompat.STATE_ERROR
+            nativeActive && player?.playbackState == Player.STATE_BUFFERING -> PlaybackStateCompat.STATE_BUFFERING
+            playing -> PlaybackStateCompat.STATE_PLAYING
+            else -> PlaybackStateCompat.STATE_PAUSED
+          },
+          currentPositionMs(),
+          if (playing) playbackRate else 0f
         )
         .build()
     )
@@ -621,6 +652,7 @@ class MediaPlaybackService : Service() {
   }
 
   private fun refreshNotification() {
+    publishState()
     runCatching {
       val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
       manager.notify(NOTIFICATION_ID, buildNotification())
@@ -628,6 +660,7 @@ class MediaPlaybackService : Service() {
   }
 
   private fun stopPlayback() {
+    stopNativePlayback()
     playing = false
     isPlayingNow = false
     serviceRunning = false
@@ -647,25 +680,25 @@ class MediaPlaybackService : Service() {
    * Answers MainActivity with the native playback state. The service lives in its
    * own process, so the page cannot read these fields directly.
    */
-  private fun replyWithState(intent: Intent) {
+  private fun replyWithState(intent: Intent, requestId: String?) {
     @Suppress("DEPRECATION")
-    val receiver = intent.getParcelableExtra<android.os.ResultReceiver>(EXTRA_RECEIVER) ?: return
-    val currentPos = runCatching { player?.currentPosition ?: 0L }.getOrDefault(0L)
-    val effectivePos = if (currentPos > 0L) currentPos else lastNativePositionMs
-    val currentDur = runCatching { player?.duration ?: 0L }.getOrDefault(0L)
-    val bundle = android.os.Bundle().apply {
+    val receiver = intent.getParcelableExtra<ResultReceiver>(EXTRA_RECEIVER) ?: return
+    val bundle = Bundle().apply {
+      putString("requestId", requestId)
       putBoolean("active", nativeActive)
-      putBoolean("playing", player?.isPlaying ?: false)
-      putLong("positionMs", effectivePos)
-      putLong("durationMs", if (currentDur > 0L) currentDur else 0L)
+      putBoolean("playing", if (nativeActive) player?.playWhenReady == true else playing)
+      putBoolean("buffering", nativeActive && player?.playbackState == Player.STATE_BUFFERING)
+      putLong("positionMs", currentPositionMs())
+      putLong("durationMs", currentDurationMs())
       putString("trackId", trackId)
       putString("streamUrl", nativeUrl ?: "")
       putString("title", title)
       putString("artist", artist)
       putString("album", album)
       putString("artwork", artworkUrl ?: "")
+      putString("error", nativeError ?: "")
     }
-    receiver.send(0, bundle)
+    runCatching { receiver.send(0, bundle) }
   }
 
   /**
@@ -682,9 +715,13 @@ class MediaPlaybackService : Service() {
     instance = null
     serviceRunning = false
     stopPolling()
+    pollHandler.removeCallbacksAndMessages(null)
+    nativeActive = false
+    playing = false
+    isPlayingNow = false
     runCatching { player?.release() }
     player = null
-    nativeActive = false
+    releasePlaybackLocks()
     runCatching { session?.release() }
     session = null
     super.onDestroy()

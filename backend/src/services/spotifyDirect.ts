@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import net from 'net';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import { getEnvConfig } from './env.js';
 import { getCachedBySpotifyId } from './cache.js';
 
@@ -22,6 +22,49 @@ interface MemoryAudioBuffer {
 const memoryAudioCache = new Map<string, MemoryAudioBuffer>();
 const MAX_MEMORY_TRACKS = 3;
 let activeSpotifyStreamKill: (() => void) | null = null;
+
+interface LiveSpotSession {
+  id: string;
+  clients: Set<PassThrough>;
+  header: Buffer | null;
+  ended: boolean;
+  graceTimer: NodeJS.Timeout | null;
+  kill: () => void;
+}
+
+// The spotstream daemon serves one track at a time. Extra clients (the Android
+// media process during a handoff, or the web player rejoining on handback)
+// attach to the running ffmpeg mux at the live edge instead of killing the
+// active stream and restarting playback from zero.
+const liveSpotSessions = new Map<string, LiveSpotSession>();
+const WEBM_CLUSTER_ID = Buffer.from([0x1f, 0x43, 0xb6, 0x75]);
+
+function attachToLiveSession(session: LiveSpotSession): SpotifyAudioStreamResult {
+  if (session.graceTimer) {
+    clearTimeout(session.graceTimer);
+    session.graceTimer = null;
+  }
+  const client = new PassThrough();
+  session.clients.add(client);
+  if (session.header) client.write(session.header);
+  const destroy = () => {
+    if (!session.clients.delete(client)) return;
+    client.destroy();
+    if (session.clients.size === 0) {
+      if (session.ended) {
+        session.kill();
+      } else if (!session.graceTimer) {
+        // Keep the mux alive briefly: a handback reconnects within a second or
+        // two and must not pay a cold restart.
+        session.graceTimer = setTimeout(() => {
+          session.graceTimer = null;
+          if (session.clients.size === 0) session.kill();
+        }, 15000);
+      }
+    }
+  };
+  return { stream: client, contentType: 'audio/webm', destroy };
+}
 
 export function clearSpotifyMemoryCache(): void {
   memoryAudioCache.clear();
@@ -270,17 +313,25 @@ function restartSpotifyDaemon(reason: string) {
   }, 700);
 }
 
-export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?: number): SpotifyAudioStreamResult {
+export function streamSpotifyDirectTrack(
+  rawId: string,
+  expectedDurationSeconds?: number,
+  joinLive = false
+): SpotifyAudioStreamResult {
   const cleanId = cleanSpotifyId(rawId);
 
-  // Abort any currently active Spotify Direct stream before launching a new one,
-  // preventing concurrent TCP connections from colliding on the spotstream daemon.
-  if (activeSpotifyStreamKill) {
-    try {
-      activeSpotifyStreamKill();
-    } catch {}
-    activeSpotifyStreamKill = null;
+  // The daemon serves one track at a time: starting a different track tears
+  // down every live session. Same-track requests join the running mux only
+  // when explicitly asked (handoff/handback); ordinary playback must start a
+  // fresh session instead of landing on a stale live edge.
+  for (const [id, session] of [...liveSpotSessions]) {
+    if (id !== cleanId) session.kill();
   }
+  const existingSession = liveSpotSessions.get(cleanId);
+  if (joinLive && existingSession && !existingSession.ended) {
+    return attachToLiveSession(existingSession);
+  }
+  if (existingSession) existingSession.kill();
 
   const durationSec = expectedDurationSeconds ?? (getCachedBySpotifyId(cleanId)?.duration || 0);
 
@@ -380,8 +431,46 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     });
 
     const chunks: Buffer[] = [];
+    const session: LiveSpotSession = {
+      id: cleanId,
+      clients: new Set(),
+      header: null,
+      ended: false,
+      graceTimer: null,
+      kill: () => {},
+    };
+    liveSpotSessions.set(cleanId, session);
+    if (activeSpotifyStreamKill) {
+      try {
+        activeSpotifyStreamKill();
+      } catch {}
+      activeSpotifyStreamKill = null;
+    }
+    let headerAcc = Buffer.alloc(0);
     ffmpegProc.stdout.on('data', (chunk: Buffer) => {
       chunks.push(chunk);
+      let payload: Buffer | null = chunk;
+      if (!session.header) {
+        headerAcc = Buffer.concat([headerAcc, chunk]);
+        const idx = headerAcc.indexOf(WEBM_CLUSTER_ID, 4);
+        if (idx === -1) {
+          payload = null;
+        } else {
+          session.header = Buffer.from(headerAcc.subarray(0, idx));
+          payload = Buffer.from(headerAcc.subarray(idx));
+          headerAcc = Buffer.alloc(0);
+          for (const client of [...session.clients]) client.write(session.header);
+        }
+      }
+      if (!payload || payload.length === 0) return;
+      for (const client of [...session.clients]) {
+        if (client.writableLength > 4 * 1024 * 1024) {
+          session.clients.delete(client);
+          client.destroy();
+          continue;
+        }
+        client.write(payload);
+      }
     });
 
     const saveToMemoryCache = () => {
@@ -435,9 +524,16 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     const killStream = () => {
       if (isDestroyed) return;
       isDestroyed = true;
-      if (activeSpotifyStreamKill === killStream) {
-        activeSpotifyStreamKill = null;
+      session.ended = true;
+      if (session.graceTimer) {
+        clearTimeout(session.graceTimer);
+        session.graceTimer = null;
       }
+      for (const client of [...session.clients]) {
+        session.clients.delete(client);
+        client.destroy();
+      }
+      liveSpotSessions.delete(cleanId);
       if (silenceTimer) clearTimeout(silenceTimer);
       if (firstByteTimer) clearTimeout(firstByteTimer);
       if (drainTimer) clearTimeout(drainTimer);
@@ -452,7 +548,7 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
       saveToMemoryCache();
     };
 
-    activeSpotifyStreamKill = killStream;
+    session.kill = killStream;
 
     socket.pipe(ffmpegProc.stdin, { end: false });
 
@@ -462,15 +558,17 @@ export function streamSpotifyDirectTrack(rawId: string, expectedDurationSeconds?
     });
 
     ffmpegProc.stdout.on('close', () => {
+      session.ended = true;
+      for (const client of [...session.clients]) {
+        session.clients.delete(client);
+        client.end();
+      }
+      if (session.clients.size === 0) killStream();
       saveToMemoryCache();
     });
     ffmpegProc.stdout.on('error', killStream);
 
-    return {
-      stream: ffmpegProc.stdout,
-      contentType: 'audio/webm',
-      destroy: killStream,
-    };
+    return attachToLiveSession(session);
   }
 
   // Fallback: spawn one-shot spotstream process if daemon is not active, and kick off daemon warm-up

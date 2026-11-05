@@ -428,10 +428,6 @@ export async function resolveAudioUrl(
 }
 
 /** Get Track metadata + audio URL in one call (used on first play). */
-export async function resolveTrack(videoId: string, originalQuery: string): Promise<{
-  track: Track;
-  audio: AudioStreamInfo;
-}>;
 export async function resolveTrack(
   videoId: string,
   originalQuery: string,

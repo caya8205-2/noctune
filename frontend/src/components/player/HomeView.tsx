@@ -372,12 +372,12 @@ function CleanCoverCard({
 }
 
 // ── GPU-Accelerated Horizontal Carousel ──────────────────────────────────────
-function AutoScrollCarousel({
-  tracks,
-  onPlay,
+function DragCarousel({
+  children,
+  autoScroll = false,
 }: {
-  tracks: Track[];
-  onPlay: (track: Track) => void;
+  children: React.ReactNode;
+  autoScroll?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -448,7 +448,7 @@ function AutoScrollCarousel({
     container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
     const step = () => {
-      if (!isHoveredRef.current && !isHolding && !isTouching) {
+      if (autoScroll && !isHoveredRef.current && !isHolding && !isTouching) {
         const maxScroll = track.scrollWidth - container.clientWidth;
         if (maxScroll > 0) {
           if (offsetXRef.current >= maxScroll - 1) {
@@ -479,13 +479,19 @@ function AutoScrollCarousel({
       container.removeEventListener('touchend', handleTouchEnd);
       container.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [tracks]);
+  }, [autoScroll]);
 
   return (
     <div
       ref={containerRef}
       onMouseEnter={() => (isHoveredRef.current = true)}
       onMouseLeave={() => (isHoveredRef.current = false)}
+      onClickCapture={(e) => {
+        if (hasDraggedRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
       className="w-full overflow-hidden pb-2 select-none touch-pan-y"
     >
       <div
@@ -493,53 +499,39 @@ function AutoScrollCarousel({
         className="flex gap-4 will-change-transform"
         style={{ transform: 'translate3d(0px, 0, 0)' }}
       >
-        {tracks.map((track, idx) => (
-          <div key={`${track.spotifyId ?? track.id}-${idx}`} className="w-36 flex-shrink-0 sm:w-44">
-            <CleanCoverCard
-              title={track.title}
-              subtitle={track.artist}
-              cover={track.thumbnail}
-              track={track}
-              onClick={() => {
-                if (!hasDraggedRef.current) {
-                  onPlay(track);
-                }
-              }}
-            />
-          </div>
-        ))}
+        {children}
       </div>
     </div>
   );
 }
 
+function AutoScrollCarousel({
+  tracks,
+  onPlay,
+}: {
+  tracks: Track[];
+  onPlay: (track: Track) => void;
+}) {
+  return (
+    <DragCarousel autoScroll>
+      {tracks.map((track, idx) => (
+        <div key={`${track.spotifyId ?? track.id}-${idx}`} className="w-36 flex-shrink-0 sm:w-44">
+          <CleanCoverCard
+            title={track.title}
+            subtitle={track.artist}
+            cover={track.thumbnail}
+            track={track}
+            onClick={() => onPlay(track)}
+          />
+        </div>
+      ))}
+    </DragCarousel>
+  );
+}
+
 // ── Manual Horizontal Carousel (No Autoscroll) ─────────────────────────────
 function ManualHorizontalCarousel({ children }: { children: React.ReactNode }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > 0) {
-        e.preventDefault();
-        el.scrollLeft += e.deltaY;
-      }
-    };
-
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  return (
-    <div
-      ref={containerRef}
-      className="scrollbar-hidden touch-pan-x flex gap-4 overflow-x-auto pb-2 scroll-smooth"
-    >
-      {children}
-    </div>
-  );
+  return <DragCarousel>{children}</DragCarousel>;
 }
 
 // ── Main HomeView Component ─────────────────────────────────────────────────

@@ -140,8 +140,8 @@ function LyricsPanel({ track }: { track: Track }) {
   }
 
   return (
-    <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden">
-      <div className="flex items-center justify-between border-b border-base-600/50 px-4 py-2">
+    <div className="h-[280px] rounded-xl border border-base-600/70 bg-base-800/70 overflow-hidden flex flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-base-600/50 px-4 py-2 flex-shrink-0">
         <div className="flex items-center gap-1.5 text-xs text-muted">
           <span>Sync Offset:</span>
           <button
@@ -199,7 +199,7 @@ function LyricsPanel({ track }: { track: Track }) {
           </button>
         </div>
       </div>
-      <div ref={lyricsScrollRef} className="h-[calc(100%-41px)] overflow-y-auto px-6 py-5">
+      <div ref={lyricsScrollRef} className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         <div className="min-h-full flex flex-col justify-center gap-3">
           {displayLines.map((line, index) => {
             const isActive = index === activeIndex;

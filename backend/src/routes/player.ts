@@ -19,6 +19,7 @@ import { resolveAudioUrl, resolveTrack, searchTracks } from '../services/audioRe
 import { resolveTrack as resolveTrackWithYtdlp, resolveAudioUrl as resolveAudioUrlWithYtdlp } from '../services/ytdlp.js';
 import { getSpotifyTrackById } from '../services/spotify.js';
 import { Readable } from 'stream';
+import { fetchPlayerStream } from './playerStream.js';
 import { clearMatchCacheForSpotifyId, getMatchCacheEntry, matchSpotifyTrackToYoutube } from '../services/youtubeMatcher.js';
 import type { AudioStreamInfo, CachedTrack, Track } from '../types/index.js';
 import {
@@ -258,31 +259,39 @@ async function fetchAudioStream(
   audioUrl: string,
   range: string | undefined,
   _refreshIfWebm = false,
-  boundedRange = false
+  boundedRange = false,
+  signal?: AbortSignal
 ): Promise<{ res: Response; refreshed: boolean; audioUrl: string }> {
-  const isGoogleVideo = audioUrl.includes('googlevideo.com') || audioUrl.includes('c=IOS') || audioUrl.includes('c=ANDROID');
-  const enforceBounded = boundedRange || isGoogleVideo;
-  const upstreamRange = enforceBounded ? normalizeUpstreamRange(range) : range;
-  const headers: Record<string, string> = {};
-  if (upstreamRange) {
-    headers.Range = upstreamRange;
-  }
-  let res = await fetch(audioUrl, { headers });
+  const requestStream = (url: string) => {
+    signal?.throwIfAborted();
+    const isGoogleVideo = url.includes('googlevideo.com') || url.includes('c=IOS') || url.includes('c=ANDROID');
+    if (isGoogleVideo && !boundedRange) return fetchPlayerStream(url, range, signal);
+    const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
+    return fetch(url, { headers: upstreamRange ? { Range: upstreamRange } : {}, signal });
+  };
+  let res = await requestStream(audioUrl);
 
-  const shouldRefresh = !res.ok;
+  const shouldRefresh = !res.ok && res.status !== 416;
 
   if (!shouldRefresh) {
     return { res, refreshed: false, audioUrl };
   }
 
   res.body?.cancel().catch(() => {});
+  signal?.throwIfAborted();
   try {
+    // Recovery must resolve with the configured preference: storing a demoted
+    // 'auto' entry while the gate demands 'high' re-triggers a full resolve on
+    // every subsequent request (multi-second TTFB forever).
+    const preference = getEnvConfig().audioQualityPreference;
     let refreshedAudio: AudioStreamInfo;
     try {
-      refreshedAudio = await resolveAudioUrlWithYtdlp(videoId);
+      refreshedAudio = await resolveAudioUrlWithYtdlp(videoId, preference);
     } catch {
-      refreshedAudio = await resolveAudioUrl(videoId);
+      signal?.throwIfAborted();
+      refreshedAudio = await resolveAudioUrl(videoId, preference);
     }
+    signal?.throwIfAborted();
     refreshTrackUrl(
       videoId,
       refreshedAudio.url,
@@ -291,13 +300,14 @@ async function fetchAudioStream(
       refreshedAudio.quality,
       refreshedAudio.resolverSource
     );
-    const refreshedRes = await fetch(refreshedAudio.url, { headers });
-    if (refreshedRes.ok) {
+    const refreshedRes = await requestStream(refreshedAudio.url);
+    if (refreshedRes.ok || refreshedRes.status === 416) {
       return { res: refreshedRes, refreshed: true, audioUrl: refreshedAudio.url };
     }
     refreshedRes.body?.cancel().catch(() => {});
     res = refreshedRes;
   } catch (err) {
+    signal?.throwIfAborted();
     console.warn(`[player] fetchAudioStream URL refresh failed for ${videoId}: ${(err as Error).message}`);
   }
 
@@ -355,7 +365,7 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
   const preference = getEnvConfig().audioQualityPreference;
   if (getExistingAudioCachePath(videoId, preference)) return true;
 
-  const { res, audioUrl: resolvedAudioUrl } = await fetchAudioStream(videoId, audioUrl, undefined, true);
+  const { res, audioUrl: resolvedAudioUrl } = await fetchAudioStream(videoId, audioUrl, undefined, true, true);
   if (!res.ok || !res.body) return false;
 
   const rangeInfo = parseContentRange(res.headers.get('content-range'));
@@ -380,7 +390,7 @@ async function cacheAudioFile(videoId: string, audioUrl: string): Promise<boolea
         });
         if (!chunkRes.ok || !chunkRes.body) {
           chunkRes.body?.cancel().catch(() => {});
-          const refreshedAudio = await resolveAudioUrl(videoId);
+          const refreshedAudio = await resolveAudioUrl(videoId, preference);
           currentAudioUrl = refreshedAudio.url;
           refreshTrackUrl(
             videoId,
@@ -429,7 +439,7 @@ async function scheduleAudioCache(videoIds: string[], app: FastifyInstance) {
         const cached = getCachedById(videoId);
         const audioUrl = cached && isUrlFresh(cached) && cacheMatchesAudioQuality(cached, preference)
           ? cached.audioUrl
-          : (await resolveAudioUrl(videoId)).url;
+          : (await resolveAudioUrl(videoId, preference)).url;
         const ok = await cacheAudioFile(videoId, audioUrl);
         app.log.info({ videoId, ok }, '[player] audio cache job done');
       } catch (err) {
@@ -713,7 +723,7 @@ export async function playerRoutes(app: FastifyInstance) {
             },
             '[player] cache hit stale, refreshing URL'
           );
-          const audio = await resolveAudioUrl(playableVideoId);
+          const audio = await resolveAudioUrl(playableVideoId, preference);
           refreshTrackUrl(
             playableVideoId,
             audio.url,
@@ -741,14 +751,14 @@ export async function playerRoutes(app: FastifyInstance) {
 
       try {
         app.log.info({ videoId: playableVideoId }, '[player] cold resolve start');
-        const { track, audio } = await resolveTrack(playableVideoId, query);
+        const { track, audio } = await resolveTrack(playableVideoId, query, preference);
         const replacementId = await avoidUnwantedLiveVersion(playableVideoId, query, track.title);
         if (replacementId !== playableVideoId) {
           app.log.info(
             { videoId: playableVideoId, replacementId, query, title: track.title },
             '[player] replacing unwanted live/tour cold match'
           );
-          const replacement = await resolveTrack(replacementId, query);
+          const replacement = await resolveTrack(replacementId, query, preference);
           const saved = upsertTrack(
             query,
             replacement.track,
@@ -911,7 +921,12 @@ export async function playerRoutes(app: FastifyInstance) {
         app.log.info({ videoId, spotifyId }, '[player] streaming live via Spotify Direct (spotstream)');
         try {
           const cachedSpotify = getCachedBySpotifyId(spotifyId);
-          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(spotifyId, cachedSpotify?.duration);
+          const joinLive = (req.query as Record<string, string> | undefined)?.join === '1';
+          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(
+            spotifyId,
+            cachedSpotify?.duration,
+            joinLive
+          );
 
           req.raw.on('close', () => {
             destroy();
@@ -964,7 +979,7 @@ export async function playerRoutes(app: FastifyInstance) {
     if (!cached) {
       try {
         app.log.info({ videoId, cleanStreamId }, '[player] stream cache miss, resolving on demand');
-        const audio = await resolveAudioUrl(cleanStreamId);
+        const audio = await resolveAudioUrl(cleanStreamId, preference);
         const { track } = await resolveTrack(cleanStreamId, cleanStreamId);
         cached = upsertTrack(
           cleanStreamId,
@@ -985,7 +1000,7 @@ export async function playerRoutes(app: FastifyInstance) {
     } else if (!isUrlFresh(cached) || !cacheMatchesAudioQuality(cached, preference)) {
       try {
         app.log.info({ videoId, cleanStreamId }, '[player] stream cache stale, refreshing URL');
-        const audio = await resolveAudioUrl(cleanStreamId);
+        const audio = await resolveAudioUrl(cleanStreamId, preference);
         refreshTrackUrl(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality, audio.resolverSource);
         cached = getPrefetched(cleanStreamId) || getCachedById(cleanStreamId) || getCachedById(videoId);
       } catch (err) {
@@ -999,6 +1014,38 @@ export async function playerRoutes(app: FastifyInstance) {
     if (!cached) {
       return reply.status(404).send({ error: 'No fresh stream, resolve first' });
     }
+
+    const streamAbort = new AbortController();
+    const disconnect = () => streamAbort.abort();
+    reply.raw.once('close', disconnect);
+    reply.raw.once('finish', () => reply.raw.removeListener('close', disconnect));
+    if (reply.raw.destroyed) disconnect();
+
+    const sendUpstream = (res: Response, fallbackType: string) => {
+      reply
+        .status(res.status === 416 ? 416 : res.status === 206 ? 206 : 200)
+        .header('Content-Type', res.headers.get('content-type') || fallbackType)
+        .header('Access-Control-Allow-Origin', '*')
+        .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+        .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
+        .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+        .header('Cross-Origin-Resource-Policy', 'cross-origin')
+        .header('Accept-Ranges', res.headers.get('accept-ranges') ?? 'bytes')
+        .header('Cache-Control', 'public, max-age=3600');
+      const contentRange = res.headers.get('content-range');
+      if (contentRange) reply.header('Content-Range', contentRange);
+      if (res.status === 416) {
+        res.body?.cancel().catch(() => {});
+        return reply.header('Content-Length', '0').send();
+      }
+      const contentLength = res.headers.get('content-length');
+      if (contentLength) reply.header('Content-Length', contentLength);
+      const nodeStream = Readable.fromWeb(res.body as any, { signal: streamAbort.signal });
+      nodeStream.on('error', (err) => {
+        app.log.warn({ videoId, err }, '[player] upstream stream closed');
+      });
+      return reply.send(nodeStream);
+    };
 
     try {
       const range = req.headers.range;
@@ -1022,8 +1069,12 @@ export async function playerRoutes(app: FastifyInstance) {
         videoId,
         cached.audioUrl,
         range,
-        true
+        true,
+        false,
+        streamAbort.signal
       );
+      streamAbort.signal.throwIfAborted();
+      if (ytRes.status === 416) return sendUpstream(ytRes, 'audio/mp4');
       if (!ytRes.ok || !ytRes.body) {
         ytRes.body?.cancel().catch(() => {});
         try {
@@ -1032,12 +1083,14 @@ export async function playerRoutes(app: FastifyInstance) {
           try {
             recovered = await resolveTrack(videoId, cached.query || videoId);
           } catch {
+            streamAbort.signal.throwIfAborted();
             try {
               recovered = await resolveTrackWithYtdlp(videoId, cached.query || videoId);
             } catch {
               recovered = null;
             }
           }
+          streamAbort.signal.throwIfAborted();
           if (recovered) {
             const { track, audio } = recovered;
             const saved = upsertTrack(
@@ -1064,34 +1117,20 @@ export async function playerRoutes(app: FastifyInstance) {
               audio.quality,
               audio.resolverSource || 'ytdlp'
             );
-            const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true);
+            const retry = await fetchAudioStream(videoId, saved.audioUrl, range, true, false, streamAbort.signal);
+            streamAbort.signal.throwIfAborted();
+            if (retry.res.status === 416) return sendUpstream(retry.res, 'audio/mp4');
             if (retry.res.ok && retry.res.body) {
               cached = saved;
               if (retry.refreshed) {
                 app.log.info({ videoId }, '[player] refreshed stream URL before proxying');
               }
-              const retryNodeStream = Readable.fromWeb(retry.res.body as any);
-              retryNodeStream.on('error', (err) => {
-                app.log.warn({ videoId, err }, '[player] upstream stream closed on retry');
-              });
-              reply
-                .status(retry.res.status === 206 ? 206 : 200)
-                .header('Content-Type', retry.res.headers.get('content-type') || (saved.audioFormat === 'webm' ? 'audio/webm' : 'audio/mp4'))
-                .header('Access-Control-Allow-Origin', '*')
-                .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-                .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
-                .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
-                .header('Cross-Origin-Resource-Policy', 'cross-origin')
-                .header('Accept-Ranges', retry.res.headers.get('accept-ranges') ?? 'bytes')
-                .header('Cache-Control', 'public, max-age=3600');
-              const retryLength = retry.res.headers.get('content-length');
-              const retryRange = retry.res.headers.get('content-range');
-              if (retryLength) reply.header('Content-Length', retryLength);
-              if (retryRange) reply.header('Content-Range', retryRange);
-              return reply.send(retryNodeStream);
+              return sendUpstream(retry.res, saved.audioFormat === 'webm' ? 'audio/webm' : 'audio/mp4');
             }
+            retry.res.body?.cancel().catch(() => {});
           }
         } catch (err) {
+          streamAbort.signal.throwIfAborted();
           app.log.warn({ videoId, err }, '[player] full stream recovery failed');
         }
 
@@ -1127,29 +1166,9 @@ export async function playerRoutes(app: FastifyInstance) {
         );
       }
 
-      const contentLength = ytRes.headers.get('content-length');
-      const contentRange = ytRes.headers.get('content-range');
-      const acceptRanges = ytRes.headers.get('accept-ranges') ?? 'bytes';
-
-      if (ytRes.status === 206) reply.status(206);
-      reply
-        .header('Content-Type', ytRes.headers.get('content-type') || 'audio/webm')
-        .header('Access-Control-Allow-Origin', '*')
-        .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-        .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
-        .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
-        .header('Cross-Origin-Resource-Policy', 'cross-origin')
-        .header('Accept-Ranges', acceptRanges)
-        .header('Cache-Control', 'public, max-age=3600');
-      if (contentLength) reply.header('Content-Length', contentLength);
-      if (contentRange) reply.header('Content-Range', contentRange);
-
-      const nodeStream = Readable.fromWeb(ytRes.body as any);
-      nodeStream.on('error', (err) => {
-        app.log.warn({ videoId, err }, '[player] upstream stream closed');
-      });
-      return reply.send(nodeStream);
+      return sendUpstream(ytRes, 'audio/webm');
     } catch (err) {
+      if (streamAbort.signal.aborted) return reply;
       app.log.warn({ videoId, err }, '[player] stream proxy failed');
       return reply
         .status(502)

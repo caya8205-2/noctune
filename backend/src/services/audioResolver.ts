@@ -170,7 +170,7 @@ export async function resolveTrack(
       logResolvedStream('innertube', 'resolveTrack', result.audio, Date.now() - startedAt);
       return result;
     }
-    const result = await ytdlpResolveTrack(videoId, originalQuery);
+    const result = await ytdlpResolveTrack(videoId, originalQuery, preference);
     logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
     return result;
   } catch (err) {
@@ -179,7 +179,7 @@ export async function resolveTrack(
       throw err;
     }
     console.warn(`[audio-resolver] innertube resolveTrack failed, falling back to yt-dlp: ${(err as Error).message}`);
-    const result = await ytdlpResolveTrack(videoId, originalQuery);
+    const result = await ytdlpResolveTrack(videoId, originalQuery, preference);
     logResolvedStream('ytdlp', 'resolveTrack', result.audio, Date.now() - startedAt);
     return result;
   }

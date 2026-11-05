@@ -1,9 +1,18 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { usePlayerStore } from '../store/player';
 import { api, apiUrl, IS_TAURI, IS_TAURI_MOBILE, getMobileServerConfig, getSpotifyPlaybackSettingSync } from '../utils/api';
 import { createEqualizerNodes } from './useEqualizer';
 
 let activeAudio: HTMLAudioElement | null = null;
+
+function nativeOwnsAudio(): boolean {
+  return IS_TAURI_MOBILE && Boolean((window as any).__noctune_native_owned);
+}
+
+function enqueueNativeRequest(request: Record<string, unknown>) {
+  const host = window as any;
+  (host.__noctune_native_requests ??= []).push(request);
+}
 
 function outputVolume(value: number): number {
   return Math.min(1, Math.max(0, Math.pow(value, 1.65)));
@@ -27,13 +36,14 @@ if (typeof window !== 'undefined') {
 }
 
 async function playAudio(audio: HTMLAudioElement) {
+  if (nativeOwnsAudio()) return;
   const visCtx = getAudioContext();
   if (visCtx && visCtx.state !== 'running') {
     try {
       await visCtx.resume();
     } catch {}
   }
-  await audio.play();
+  if (!nativeOwnsAudio()) await audio.play();
 }
 
 function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
@@ -57,6 +67,50 @@ function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
     audio.addEventListener('loadedmetadata', handleReady, { once: true });
     audio.addEventListener('canplay', handleReady, { once: true });
     audio.addEventListener('error', handleError, { once: true });
+  });
+}
+
+function bufferedAhead(audio: HTMLAudioElement, target: number): boolean {
+  const ranges = audio.buffered;
+  if (!ranges || typeof ranges.length !== 'number') return true;
+  const position = audio.currentTime;
+  for (let i = 0; i < ranges.length; i++) {
+    if (ranges.start(i) <= position + 0.3 && ranges.end(i) >= position + target) return true;
+  }
+  return false;
+}
+
+// Handback releases native ownership only once the web element can actually
+// sustain playback; releasing on HAVE_FUTURE_DATA alone underruns seconds
+// later and flashes a bogus "Resolving audio..." spinner after re-entry.
+function waitForBufferLead(
+  audio: HTMLAudioElement,
+  signal: AbortSignal,
+  leadSeconds = 4,
+  timeoutMs = 5000
+): Promise<void> {
+  return new Promise((resolve) => {
+    const remaining = Number.isFinite(audio.duration) ? audio.duration - audio.currentTime : Infinity;
+    const target = Math.min(leadSeconds, remaining);
+    if (!(target > 0) || bufferedAhead(audio, target)) {
+      resolve();
+      return;
+    }
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      audio.removeEventListener('progress', onProgress);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const onProgress = () => {
+      if (bufferedAhead(audio, target)) finish();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    audio.addEventListener('progress', onProgress);
+    signal.addEventListener('abort', finish, { once: true });
   });
 }
 
@@ -107,7 +161,7 @@ export function useAudio() {
   const recoveryAttemptsRef = useRef<Record<string, number>>({});
   const trackEndedTriggeredRef = useRef(false);
   const handleTrackEndedRef = useRef<() => void>(() => {});
-  const pendingInitialSeekRef = useRef<number | null>(null);
+  const [webPlaybackEpoch, setWebPlaybackEpoch] = useState(0);
 
   const cancelCrossfade = useCallback(() => {
     if (fadeIntervalRef.current) {
@@ -193,14 +247,14 @@ export function useAudio() {
       audio.crossOrigin = 'anonymous';
 
       audio.addEventListener('timeupdate', () => {
-        if (activeAudio === audio) {
+        if (activeAudio === audio && !nativeOwnsAudio()) {
           setProgress(audio.currentTime);
           checkCrossfadeRef.current(audio);
         }
       });
 
       audio.addEventListener('durationchange', () => {
-        if (activeAudio === audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+        if (activeAudio === audio && !nativeOwnsAudio() && Number.isFinite(audio.duration) && audio.duration > 0) {
           const currentMetaDuration = usePlayerStore.getState().currentTrack?.duration;
           if (!currentMetaDuration || currentMetaDuration <= 0) {
             setDuration(audio.duration);
@@ -211,14 +265,14 @@ export function useAudio() {
       });
 
       audio.addEventListener('ended', () => {
-        if (activeAudio === audio) {
+        if (activeAudio === audio && !nativeOwnsAudio()) {
           if (crossfadeActiveRef.current) return;
           handleTrackEndedRef.current();
         }
       });
 
       audio.addEventListener('playing', () => {
-        if (activeAudio === audio) {
+        if (activeAudio === audio && !nativeOwnsAudio()) {
           if (audio.currentTime < 2) {
             trackEndedTriggeredRef.current = false;
           }
@@ -228,7 +282,7 @@ export function useAudio() {
       });
 
       audio.addEventListener('waiting', () => {
-        if (activeAudio !== audio) return;
+        if (activeAudio !== audio || nativeOwnsAudio()) return;
         const state = usePlayerStore.getState();
         const trackDuration = state.currentTrack?.duration || state.duration || audio.duration;
         if (
@@ -245,17 +299,17 @@ export function useAudio() {
       });
 
       audio.addEventListener('seeked', () => {
-        if (activeAudio === audio) {
+        if (activeAudio === audio && !nativeOwnsAudio()) {
           trackEndedTriggeredRef.current = false;
         }
       });
 
       audio.addEventListener('canplay', () => {
-        if (activeAudio === audio) setLoading(false);
+        if (activeAudio === audio && !nativeOwnsAudio()) setLoading(false);
       });
 
       audio.addEventListener('error', (e) => {
-        if (activeAudio !== audio) return;
+        if (activeAudio !== audio || nativeOwnsAudio()) return;
         const target = e.target as HTMLAudioElement;
         const error = target.error;
         if (
@@ -292,7 +346,7 @@ export function useAudio() {
         api.resolve(track.id, track.query)
           .then((resolved) => {
             const latestTrack = usePlayerStore.getState().currentTrack;
-            if (!latestTrack || latestTrack.id !== track.id) return;
+            if (!latestTrack || latestTrack.id !== track.id || nativeOwnsAudio()) return;
             const newYtId = resolved.youtubeId || resolved.id;
             usePlayerStore.setState({
               currentTrack: {
@@ -312,12 +366,21 @@ export function useAudio() {
             const streamPath = `/player/stream/${newYtId}?retry=${Date.now()}`;
             return apiUrl(streamPath)
               .then((src) => {
+                if (nativeOwnsAudio()) return;
                 target.crossOrigin = 'anonymous';
                 target.src = src;
                 target.load();
-                return waitForAudioReady(target);
+                // A wedged upstream returns headers but no bytes and fires no
+                // error event; bound the wait so recovery fails deterministically.
+                return Promise.race([
+                  waitForAudioReady(target),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Recovery stream stalled: no metadata in 12s')), 12000)
+                  ),
+                ]);
               })
               .then(() => {
+                if (nativeOwnsAudio()) return;
                 if (resumeAt > 1) {
                   target.currentTime = Math.min(resumeAt, target.duration || resumeAt);
                   usePlayerStore.getState().setProgress(resumeAt);
@@ -340,6 +403,7 @@ export function useAudio() {
     audioRef.current = audioA;
     secondaryAudioRef.current = audioB;
     activeAudio = audioA;
+    (window as any).__noctune_audio = audioA;
 
     return () => {
       cancelCrossfade();
@@ -358,7 +422,7 @@ export function useAudio() {
   // Swap src when track changes
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
+    if (!audio || !currentTrack || nativeOwnsAudio()) return;
     trackEndedTriggeredRef.current = false;
 
     // If crossfade already pre-loaded and transitioned this track, skip reloading
@@ -396,17 +460,7 @@ export function useAudio() {
         audio.src = prebufferedAudio.src;
       }
       setLoading(false);
-      if (pendingInitialSeekRef.current != null) {
-        const seekSec = pendingInitialSeekRef.current;
-        pendingInitialSeekRef.current = null;
-        if (Number.isFinite(seekSec) && seekSec > 0) {
-          audio.currentTime = seekSec;
-        }
-      }
       if (usePlayerStore.getState().isPlaying) {
-        if (IS_TAURI_MOBILE) {
-          (window as any).__noctune_native_request = { type: 'resume' };
-        }
         playAudio(audio).catch(() => {});
       }
       preloadedAudiosRef.current.delete(targetId);
@@ -429,7 +483,7 @@ export function useAudio() {
 
     apiUrl('/player/stream/' + targetId)
       .then((src) => {
-        if (cancelled || !audioRef.current) return;
+        if (cancelled || !audioRef.current || nativeOwnsAudio()) return;
         delete recoveryAttemptsRef.current[currentTrack.id];
         if (audio.src !== src) {
           suppressNextErrorRef.current = true;
@@ -452,19 +506,9 @@ export function useAudio() {
         }, 12000);
         waitForAudioReady(audio)
           .then(() => {
-            if (cancelled) return;
+            if (cancelled || nativeOwnsAudio()) return;
             setLoading(false);
-            if (pendingInitialSeekRef.current != null) {
-              const seekSec = pendingInitialSeekRef.current;
-              pendingInitialSeekRef.current = null;
-              if (Number.isFinite(seekSec) && seekSec > 0) {
-                audio.currentTime = seekSec;
-              }
-            }
             if (usePlayerStore.getState().isPlaying) {
-              if (IS_TAURI_MOBILE) {
-                (window as any).__noctune_native_request = { type: 'resume' };
-              }
               return playAudio(audio);
             }
           })
@@ -481,6 +525,7 @@ export function useAudio() {
       clearStallTimer();
     };
   }, [
+    webPlaybackEpoch,
     currentTrack?.id,
     currentTrack?.youtubeId,
     (currentTrack as any)?.resolverSource,
@@ -535,7 +580,7 @@ export function useAudio() {
   // Sync play/pause
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || nativeOwnsAudio()) return;
     if (isPlaying) {
       if (!currentTrack || !audio.currentSrc) return;
       playAudio(audio).catch(() => {});
@@ -573,10 +618,9 @@ export function useAudio() {
       if (remaining <= 0) {
         window.clearInterval(timer);
         const audio = audioRef.current;
-        if (audio && !audio.paused) {
-          audio.pause();
-          setIsPlaying(false);
-        }
+        if (nativeOwnsAudio()) enqueueNativeRequest({ type: 'set-playing', playing: false });
+        audio?.pause();
+        setIsPlaying(false);
         usePlayerStore.setState({ sleepTimerEnd: null });
       }
     }, TICK);
@@ -696,6 +740,7 @@ export function useAudio() {
               // Swap pointers: secondary becomes primary
               activeAudio = nextAudio;
               audioRef.current = nextAudio;
+              (window as any).__noctune_audio = nextAudio;
               secondaryAudioRef.current = audio;
               crossfadeActiveRef.current = false;
               lastCrossfadedTrackIdRef.current = null;
@@ -972,160 +1017,233 @@ export function useAudio() {
     return () => window.removeEventListener('noctune:native-media-action', handler as EventListener);
   }, []);
 
-  // Android background handoff & cold-start state rehydration.
   useEffect(() => {
     if (!IS_TAURI_MOBILE || typeof document === 'undefined') return;
 
     const host = window as any;
-    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+    let phase: 'web' | 'native' | 'querying' | 'preparing' | 'releasing' = 'web';
+    let requestId = '';
+    let sequence = 0;
+    let preparation: AbortController | null = null;
+    let foreground = document.visibilityState === 'visible';
+    const sessionId = Date.now().toString(36);
+    const send = (type: string, payload: Record<string, unknown> = {}) => {
+      requestId = `${sessionId}-${++sequence}`;
+      enqueueNativeRequest({ ...payload, type, requestId });
+    };
+    const cleanId = (id?: string) => (id || '').replace(/^(?:youtube:|ytdlp:|spotify:(?:track:)?)/, '').trim();
+
+    // Silence through the post-analyser master gain when available: muting the
+    // element itself would starve the analyser and flatline the visualizer
+    // while native audio is still what the user hears.
+    const silenceWebOutput = (element: HTMLAudioElement | null) => {
+      const gain = host.__noctune_masterGain as GainNode | undefined;
+      if (gain) gain.gain.value = 0;
+      else if (element) element.muted = true;
+    };
+    const unsilenceWebOutput = (element: HTMLAudioElement | null) => {
+      const gain = host.__noctune_masterGain as GainNode | undefined;
+      if (gain) gain.gain.value = 1;
+      if (element) element.muted = false;
+    };
 
     const applyNativePlaybackState = (nativeState: any) => {
-      if (!nativeState || (!nativeState.active && !nativeState.playing)) return;
-
       const state = usePlayerStore.getState();
-      const current = state.currentTrack;
-      const element = host.__noctune_audio as HTMLAudioElement | undefined;
-      const trackId = nativeState.trackId as string | undefined;
-      const positionSec = typeof nativeState.positionMs === 'number' && nativeState.positionMs > 0
-        ? nativeState.positionMs / 1000
-        : 0;
-
-      // Normalize track IDs by stripping protocol prefixes for reliable matching
-      const cleanTrackId = (id?: string) => (id || '').replace(/^(youtube|ytdlp|spotify):/, '').trim();
-      const currentCleanId = cleanTrackId(current?.id);
-      const nativeCleanId = cleanTrackId(trackId);
-
-      // Determine if we actually need to switch or rehydrate currentTrack
-      const isSameTrack = Boolean(
-        (currentCleanId && nativeCleanId && currentCleanId === nativeCleanId) ||
-        (current && nativeState.title && current.title.toLowerCase() === nativeState.title.toLowerCase())
-      );
-      const needsTrackUpdate = !current || (!isSameTrack && Boolean(nativeCleanId || nativeState.title));
-
-      if (needsTrackUpdate) {
-        let matchedTrack: any = undefined;
-        let matchedIndex = -1;
-
-        if (nativeCleanId) {
-          matchedIndex = state.queue.findIndex((t) => cleanTrackId(t.id) === nativeCleanId);
-          if (matchedIndex >= 0) matchedTrack = state.queue[matchedIndex];
-        }
-        if (!matchedTrack && nativeState.title) {
-          matchedIndex = state.queue.findIndex(
-            (t) =>
-              t.title.toLowerCase() === nativeState.title?.toLowerCase() &&
-              (!nativeState.artist || t.artist.toLowerCase() === nativeState.artist?.toLowerCase())
-          );
-          if (matchedIndex >= 0) matchedTrack = state.queue[matchedIndex];
-        }
-        if (!matchedTrack && (trackId || nativeState.title)) {
-          matchedTrack = {
-            id: trackId || 'native-track',
+      const id = cleanId(nativeState.trackId);
+      const matches = (track: { id: string; youtubeId?: string }) =>
+        Boolean(id && (cleanId(track.id) === id || cleanId(track.youtubeId) === id));
+      const index = state.queue.findIndex(matches);
+      const track = state.currentTrack && matches(state.currentTrack)
+        ? state.currentTrack
+        : {
+          ...(state.queue[index] || {
+            id: nativeState.trackId,
             title: nativeState.title || 'Unknown Title',
             artist: nativeState.artist || 'Unknown Artist',
             album: nativeState.album || '',
-            duration: nativeState.durationMs ? nativeState.durationMs / 1000 : 0,
+            duration: nativeState.durationMs / 1000 || 0,
             thumbnail: nativeState.artwork || '',
-            audioUrl: nativeState.streamUrl || undefined,
-          };
-        }
+            query: '',
+          }),
+          audioUrl: nativeState.streamUrl,
+          audioUrlExpiry: 0,
+          cachedAt: 0,
+          playCount: 0,
+        };
+      usePlayerStore.setState({
+        currentTrack: track,
+        queueIndex: index >= 0 ? index : state.queueIndex,
+        isPlaying: Boolean(nativeState.playing),
+        progress: Math.max(0, nativeState.positionMs / 1000 || 0),
+        duration: nativeState.durationMs / 1000 || track.duration || 0,
+        // Native buffering must not surface as the web "Resolving audio..."
+        // spinner: native keeps sounding from its own buffer while it refills.
+        isLoading: false,
+      });
+    };
 
-        if (matchedTrack) {
-          if (positionSec > 0) {
-            pendingInitialSeekRef.current = positionSec;
+    const waitFor = (element: HTMLAudioElement, ready: () => boolean, signal: AbortSignal) =>
+      new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          for (const name of ['loadedmetadata', 'canplay', 'seeked']) element.removeEventListener(name, check);
+          element.removeEventListener('error', fail);
+          signal.removeEventListener('abort', fail);
+        };
+        const check = () => { if (ready()) { cleanup(); resolve(); } };
+        const fail = () => { cleanup(); reject(new Error('Audio handback interrupted')); };
+        const timer = setTimeout(fail, 12000);
+        for (const name of ['loadedmetadata', 'canplay', 'seeked']) element.addEventListener(name, check);
+        element.addEventListener('error', fail);
+        signal.addEventListener('abort', fail, { once: true });
+        if (signal.aborted) fail(); else check();
+      });
+
+    const prepareWebPlayback = async (nativeState: any) => {
+      const element = audioRef.current;
+      if (!element || !nativeState.streamUrl) return;
+      preparation?.abort();
+      const controller = new AbortController();
+      preparation = controller;
+      const receivedAt = performance.now();
+      phase = 'preparing';
+      host.__noctune_native_owned = true;
+      applyNativePlaybackState(nativeState);
+      element.pause();
+      silenceWebOutput(element);
+      host.__noctune_audio = element;
+      try {
+        if (element.src !== nativeState.streamUrl) {
+          element.src = nativeState.streamUrl;
+          element.load();
+        }
+        await waitFor(element, () => element.readyState >= HTMLMediaElement.HAVE_METADATA, controller.signal);
+        if (controller.signal.aborted || !foreground) return;
+        const elapsed = nativeState.playing && !nativeState.buffering ? (performance.now() - receivedAt) / 1000 : 0;
+        const position = Math.max(0, nativeState.positionMs / 1000 || 0) + elapsed * element.playbackRate;
+        element.currentTime = Number.isFinite(element.duration) ? Math.min(position, element.duration) : position;
+        await waitFor(element, () => !element.seeking && element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA, controller.signal);
+        if (controller.signal.aborted || !foreground) return;
+        if (nativeState.playing) {
+          await resumeAudioContext();
+          if (controller.signal.aborted || !foreground) return;
+          await element.play();
+          // Live streams (Spotify Direct webm mux) sit at the live edge: a
+          // buffer lead ahead of it can never exist, so waiting would stall
+          // every handback for the full timeout.
+          const isLive = !Number.isFinite(element.duration);
+          if (!isLive) {
+            // Native keeps covering audio until release, so waiting for a real
+            // buffer lead here costs no silence and prevents a post-release
+            // underrun ("Resolving audio..." flash) on slow links.
+            await waitForBufferLead(element, controller.signal, 4, 20000);
           }
-          usePlayerStore.setState({
-            currentTrack: matchedTrack,
-            queueIndex: matchedIndex >= 0 ? matchedIndex : (state.queueIndex >= 0 ? state.queueIndex : 0),
-            isPlaying: nativeState.playing ?? true,
-            progress: positionSec,
-            duration: (nativeState.durationMs ? nativeState.durationMs / 1000 : matchedTrack.duration) || 0,
-          });
         }
-      } else {
-        // Same track is already loaded; sync position smoothly without re-resolving stream
-        if (element && positionSec > 0) {
-          const delta = Math.abs(element.currentTime - positionSec);
-          if (delta > 0.8) {
-            element.currentTime = positionSec;
-          }
-        }
-        if (positionSec > 0) {
-          usePlayerStore.setState({ progress: positionSec });
-        }
+        if (controller.signal.aborted || !foreground) return;
+        phase = 'releasing';
+        send('resume', { trackId: nativeState.trackId });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        element.pause();
+        unsilenceWebOutput(element);
+        phase = 'native';
+        usePlayerStore.getState().setLoading(false);
+        console.warn('[audio] Native playback retained: web audio is not ready', error);
       }
+    };
+
+    const beginForeground = () => {
+      foreground = true;
+      if (phase === 'querying' || phase === 'preparing' || phase === 'releasing') return;
+      host.__noctune_native_owned = true;
+      phase = 'querying';
+      send('query');
+    };
+
+    const beginBackground = () => {
+      foreground = false;
+      const wasReleasing = phase === 'releasing';
+      preparation?.abort();
+      const element = audioRef.current;
+      if (phase !== 'web' && !wasReleasing) {
+        phase = 'native';
+        requestId = '';
+        element?.pause();
+        unsilenceWebOutput(element ?? null);
+        return;
+      }
+      const state = usePlayerStore.getState();
+      if (!state.isPlaying || !element?.src) return;
+      cancelCrossfade();
+      phase = 'native';
+      host.__noctune_native_owned = true;
+      send('handoff', {
+        ...host.__noctuneNowPlaying?.(),
+        // join=1 tells the backend to attach to the running live mux instead
+        // of restarting the track; ordinary loads must stay fresh.
+        url: element.src + (element.src.includes('?') ? '&join=1' : '?join=1'),
+        // A source swap right before backgrounding leaves the element at 0
+        // while the store still knows the real position; never hand off zero.
+        positionMs: Math.round((element.currentTime || state.progress || 0) * 1000),
+        playing: state.isPlaying,
+        playbackRate: state.playbackRate,
+        volume: outputVolume(state.volume),
+        repeat: state.repeat,
+      });
+      element.pause();
+      unsilenceWebOutput(element);
     };
 
     const handleNativeStateEvent = (event: Event) => {
-      const detail = (event as CustomEvent)?.detail || host.__noctune_native_state;
-      applyNativePlaybackState(detail);
-    };
-
-    window.addEventListener('noctune:native-state', handleNativeStateEvent);
-    if (host.__noctune_native_state) {
-      applyNativePlaybackState(host.__noctune_native_state);
-    }
-
-    const handleVisibility = () => {
-      const state = usePlayerStore.getState();
-      const element = host.__noctune_audio as HTMLAudioElement | undefined;
-
-      if (document.visibilityState === 'hidden') {
-        if (resumeTimer) {
-          clearTimeout(resumeTimer);
-          resumeTimer = null;
+      const detail = (event as CustomEvent).detail;
+      if (!detail || !foreground || detail.requestId !== requestId) return;
+      if (phase === 'releasing' && !detail.active) {
+        phase = 'web';
+        requestId = '';
+        host.__noctune_native_owned = false;
+        const element = audioRef.current;
+        if (element) {
+          const position = detail.positionMs / 1000;
+          if (Number.isFinite(position) && position >= 0 && Math.abs(element.currentTime - position) > 0.5) {
+            element.currentTime = position;
+          }
+          if (!detail.playing) element.pause();
+          unsilenceWebOutput(element);
+          if (detail.playing && element.paused) playAudio(element).catch(() => {});
         }
-        if (!state.isPlaying || !element || !element.src) return;
-        host.__noctune_native_request = {
-          type: 'handoff',
-          url: element.src,
-          positionMs: Math.round(element.currentTime * 1000),
-          trackId: state.currentTrack?.id,
-          title: state.currentTrack?.title,
-          artist: state.currentTrack?.artist,
-          album: state.currentTrack?.album ?? state.currentTrack?.youtubeTitle ?? 'Noctune',
-          artwork: state.currentTrack?.thumbnail,
-        };
-        element.pause();
+        usePlayerStore.setState({ isPlaying: Boolean(detail.playing), isLoading: false });
         return;
       }
-
-      host.__noctune_native_request = { type: 'resume' };
-      const nativeState = host.__noctune_native_state;
-      const nativePosition = nativeState?.positionMs;
-      if (typeof nativePosition === 'number' && nativePosition > 0 && element) {
-        if (Math.abs(element.currentTime - (nativePosition / 1000)) > 1.0) {
-          element.currentTime = nativePosition / 1000;
-        }
+      if (phase !== 'querying' && phase !== 'releasing') return;
+      if (detail.active) {
+        void prepareWebPlayback(detail);
+      } else {
+        phase = 'web';
+        requestId = '';
+        host.__noctune_native_owned = false;
+        const element = audioRef.current;
+        unsilenceWebOutput(element ?? null);
+        setWebPlaybackEpoch((value) => value + 1);
       }
-      if (usePlayerStore.getState().isPlaying && element && element.paused) {
-        element.play().catch(() => {});
-      }
-
-      if (resumeTimer) clearTimeout(resumeTimer);
-      resumeTimer = setTimeout(() => {
-        resumeTimer = null;
-        const freshState = host.__noctune_native_state;
-        applyNativePlaybackState(freshState);
-        const freshPos = freshState?.positionMs;
-        if (typeof freshPos === 'number' && freshPos > 0 && element) {
-          if (Math.abs(element.currentTime - (freshPos / 1000)) > 1.2) {
-            element.currentTime = freshPos / 1000;
-          }
-        }
-        if (usePlayerStore.getState().isPlaying && element && element.paused) {
-          element.play().catch(() => {});
-        }
-      }, 120);
     };
-
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') beginBackground();
+      else beginForeground();
+    };
+    host.__noctuneBackground = beginBackground;
+    host.__noctuneForeground = beginForeground;
+    window.addEventListener('noctune:native-state', handleNativeStateEvent);
     document.addEventListener('visibilitychange', handleVisibility);
+    if (foreground) beginForeground();
     return () => {
+      preparation?.abort();
+      delete host.__noctuneBackground;
+      delete host.__noctuneForeground;
+      delete host.__noctune_native_owned;
       window.removeEventListener('noctune:native-state', handleNativeStateEvent);
       document.removeEventListener('visibilitychange', handleVisibility);
-      if (resumeTimer) clearTimeout(resumeTimer);
     };
-  }, []);
+  }, [cancelCrossfade]);
 
   // Sync Discord Rich Presence through the local desktop backend.
   useEffect(() => {

@@ -235,16 +235,23 @@ export function createEqualizerNodes(ctx: AudioContext, analyser: AnalyserNode) 
   dryGain.gain.value = 1;   // Direct path active (EQ bypassed)
   wetGain.gain.value = 0;   // Filter path muted
 
-  // Path 1: analyser -> filters -> wetGain -> destination
-  analyser.connect(filters[0]);
+  // Master gate after the analyser: silencing it keeps the analyser (and thus
+  // the visualizer) live while the speakers stay quiet during native handback.
+  const masterGain = ctx.createGain();
+  masterGain.gain.value = 1;
+  (window as any).__noctune_masterGain = masterGain;
+
+  // Path 1: analyser -> masterGain -> filters -> wetGain -> destination
+  analyser.connect(masterGain);
+  masterGain.connect(filters[0]);
   for (let i = 0; i < filters.length - 1; i++) {
     filters[i].connect(filters[i + 1]);
   }
   filters[filters.length - 1].connect(wetGain);
   wetGain.connect(ctx.destination);
 
-  // Path 2: analyser -> dryGain -> destination (bypass)
-  analyser.connect(dryGain);
+  // Path 2: analyser -> masterGain -> dryGain -> destination (bypass)
+  masterGain.connect(dryGain);
   dryGain.connect(ctx.destination);
 
   // Store references on window
