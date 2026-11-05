@@ -414,7 +414,9 @@ class MediaPlaybackService : Service() {
       val exo = ensurePlayer()
       nativeActive = true
       // Only a new handoff or local queue transition reaches here, including seek to zero.
-      val liveJoin = url.contains("join=1")
+      // join=1 is meaningful only for Spotify Direct live muxes; seekable
+      // YouTube proxy streams must start at the requested position.
+      val liveJoin = url.contains("join=1") && url.contains("/player/stream/spotify:")
       joinedOffsetMs = if (liveJoin) positionMs else 0L
       exo.setMediaItem(MediaItem.fromUri(url), if (liveJoin) 0L else positionMs)
       exo.setPlaybackSpeed(playbackRate)
