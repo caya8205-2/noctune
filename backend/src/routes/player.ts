@@ -922,10 +922,12 @@ export async function playerRoutes(app: FastifyInstance) {
         try {
           const cachedSpotify = getCachedBySpotifyId(spotifyId);
           const joinLive = (req.query as Record<string, string> | undefined)?.join === '1';
-          const { stream, contentType, contentLength, destroy } = streamSpotifyDirectTrack(
+          const rangeHeader = req.headers.range;
+          const { stream, contentType, contentLength, status, contentRange, destroy } = streamSpotifyDirectTrack(
             spotifyId,
             cachedSpotify?.duration,
-            joinLive
+            joinLive,
+            typeof rangeHeader === 'string' ? rangeHeader : undefined
           );
 
           req.raw.on('close', () => {
@@ -933,6 +935,7 @@ export async function playerRoutes(app: FastifyInstance) {
           });
 
           reply
+            .status(status ?? 200)
             .header('Content-Type', contentType)
             .header('Access-Control-Allow-Origin', '*')
             .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
@@ -940,6 +943,8 @@ export async function playerRoutes(app: FastifyInstance) {
             .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
             .header('Cross-Origin-Resource-Policy', 'cross-origin')
             .header('Accept-Ranges', 'none');
+
+          if (contentRange) reply.header('Content-Range', contentRange);
 
           if (contentLength) {
             reply.header('Content-Length', contentLength);

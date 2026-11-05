@@ -292,6 +292,8 @@ export interface SpotifyAudioStreamResult {
   stream: Readable;
   contentType: string;
   contentLength?: number;
+  status?: number;
+  contentRange?: string;
   destroy: () => void;
 }
 
@@ -316,7 +318,8 @@ function restartSpotifyDaemon(reason: string) {
 export function streamSpotifyDirectTrack(
   rawId: string,
   expectedDurationSeconds?: number,
-  joinLive = false
+  joinLive = false,
+  rangeHeader?: string
 ): SpotifyAudioStreamResult {
   const cleanId = cleanSpotifyId(rawId);
 
@@ -342,6 +345,35 @@ export function streamSpotifyDirectTrack(
     // (at 160kbps WebM Opus, a track averages ~18-20 KB/sec, so minimum acceptable is duration * 10KB).
     const minAcceptableBytes = durationSec > 10 ? durationSec * 10000 : 64000;
     if (cached.buffer.length >= minAcceptableBytes) {
+      const total = cached.buffer.length;
+      const rangeMatch = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader ?? '');
+      if (rangeMatch) {
+        const start = rangeMatch[1] === '' ? 0 : Math.min(Number(rangeMatch[1]), total - 1);
+        const end = rangeMatch[2] === '' ? total - 1 : Math.min(Number(rangeMatch[2]), total - 1);
+        if (start > end) {
+          const empty = Readable.from([]);
+          return {
+            stream: empty,
+            contentType: cached.contentType,
+            contentLength: 0,
+            status: 416,
+            contentRange: `bytes */${total}`,
+            destroy: () => empty.destroy(),
+          };
+        }
+        // Honor ranges so resumed handoffs can seek instead of restarting.
+        const slice = cached.buffer.subarray(start, end + 1);
+        const stream = Readable.from(slice);
+        console.info(`[spotifyDirect:${cleanId}] Serving range ${start}-${end}/${total} from RAM cache`);
+        return {
+          stream,
+          contentType: cached.contentType,
+          contentLength: slice.length,
+          status: 206,
+          contentRange: `bytes ${start}-${end}/${total}`,
+          destroy: () => stream.destroy(),
+        };
+      }
       console.info(`[spotifyDirect:${cleanId}] Serving INSTANTLY from in-memory RAM cache (${cached.buffer.length} bytes)`);
       const stream = Readable.from(cached.buffer);
       return {

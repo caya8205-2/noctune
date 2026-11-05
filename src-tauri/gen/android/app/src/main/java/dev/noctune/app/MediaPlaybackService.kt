@@ -398,8 +398,19 @@ class MediaPlaybackService : Service() {
       override fun onPlayerError(error: PlaybackException) {
         if (!nativeActive) return
         nativeError = error.errorCodeName
-        player?.pause()
-        syncNativePlaybackState()
+        if (!watchdogRetried) {
+          watchdogRetried = true
+          Log.w(TAG, "player error ${error.errorCodeName}, retrying without live join")
+          val resumeAt = currentPositionMs()
+          runCatching {
+            player?.stop()
+            player?.clearMediaItems()
+          }
+          startNativePlayback(withoutJoin(nativeUrl ?: ""), resumeAt, true)
+          return
+        }
+        Log.w(TAG, "player error ${error.errorCodeName} after retry, releasing native ownership")
+        giveUpNative()
       }
     })
     player = created
@@ -413,22 +424,98 @@ class MediaPlaybackService : Service() {
     try {
       val exo = ensurePlayer()
       nativeActive = true
-      // Only a new handoff or local queue transition reaches here, including seek to zero.
       // join=1 is meaningful only for Spotify Direct live muxes; seekable
-      // YouTube proxy streams must start at the requested position.
+      // streams (YouTube proxy, RAM-cached Spotify) honor the position directly.
       val liveJoin = url.contains("join=1") && url.contains("/player/stream/spotify:")
       joinedOffsetMs = if (liveJoin) positionMs else 0L
-      exo.setMediaItem(MediaItem.fromUri(url), if (liveJoin) 0L else positionMs)
+      calibratePending = liveJoin
+      calibrateExpectedMs = positionMs
+      watchdogRetried = false
+      stallCount = 0
+      lastWatchdogPos = -1L
+      exo.setMediaItem(MediaItem.fromUri(url), positionMs)
       exo.setPlaybackSpeed(playbackRate)
       exo.volume = playbackVolume
       exo.playWhenReady = shouldPlay
       exo.prepare()
       syncNativePlaybackState()
+      pollHandler.postDelayed(calibrateRunnable, 2500)
+      pollHandler.postDelayed(watchdogRunnable, 4000)
     } catch (err: Exception) {
       nativeError = err.javaClass.simpleName
       nativeActive = false
       stopNativePlayback()
     }
+  }
+
+  // A joined live mux rebases its timeline to zero; a seekable stream reports
+  // absolute positions. Decide which one we got once the player has started.
+  private val calibrateRunnable = Runnable {
+    if (!nativeActive || !calibratePending) return@Runnable
+    calibratePending = false
+    val pos = player?.currentPosition ?: 0L
+    if (pos > calibrateExpectedMs / 2) joinedOffsetMs = 0L
+  }
+
+  // Dead-stream watchdog: a playing player whose position never advances is a
+  // wedged upstream. Retry once without the join marker, then release native
+  // ownership so handoff and foreground queries stop trusting a corpse.
+  private var watchdogRetried = false
+  private var stallCount = 0
+  private var lastWatchdogPos = -1L
+  private var calibratePending = false
+  private var calibrateExpectedMs = 0L
+
+  private val watchdogRunnable = object : Runnable {
+    override fun run() {
+      if (!nativeActive) return
+      val exo = player
+      if (exo != null && exo.playWhenReady) {
+        val pos = exo.currentPosition
+        stallCount = if (pos == lastWatchdogPos) stallCount + 1 else 0
+        lastWatchdogPos = pos
+        if (stallCount >= 2) {
+          stallCount = 0
+          if (!watchdogRetried) {
+            watchdogRetried = true
+            Log.w(TAG, "stream stalled, retrying without live join")
+            val resumeAt = currentPositionMs()
+            runCatching {
+              exo.stop()
+              exo.clearMediaItems()
+            }
+            startNativePlayback(withoutJoin(nativeUrl ?: ""), resumeAt, true)
+            return
+          }
+          Log.w(TAG, "stream stalled again, releasing native ownership")
+          nativeError = "StreamStalled"
+          giveUpNative()
+          return
+        }
+      }
+      pollHandler.postDelayed(this, 4000)
+    }
+  }
+
+  private fun withoutJoin(url: String): String =
+    url.replace("&join=1", "").replace("?join=1", "")
+
+  private fun giveUpNative() {
+    lastNativePositionMs = currentPositionMs()
+    durationMs = currentDurationMs()
+    nativeActive = false
+    joinedOffsetMs = 0L
+    pollHandler.removeCallbacks(watchdogRunnable)
+    pollHandler.removeCallbacks(calibrateRunnable)
+    runCatching {
+      player?.pause()
+      player?.stop()
+      player?.clearMediaItems()
+    }
+    playing = false
+    isPlayingNow = false
+    releasePlaybackLocks()
+    refreshNotification()
   }
 
   private fun currentPositionMs(): Long =
@@ -447,6 +534,8 @@ class MediaPlaybackService : Service() {
     durationMs = currentDurationMs()
     // Disable callbacks before stopping; an old STATE_ENDED must not consume the queue.
     nativeActive = false
+    pollHandler.removeCallbacks(watchdogRunnable)
+    pollHandler.removeCallbacks(calibrateRunnable)
     runCatching {
       player?.pause()
       player?.stop()
