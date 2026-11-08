@@ -29,7 +29,7 @@ import { DownloadProvider } from './hooks/useDownloadTrack';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ChangelogModal } from './components/ui/ChangelogModal';
 import { StartupGate } from './components/ui/StartupGate';
-import { IS_TAURI_DESKTOP } from './utils/api';
+import { IS_TAURI_DESKTOP, IS_TAURI_MOBILE } from './utils/api';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -260,6 +260,90 @@ function AppInner() {
     window.addEventListener('noctune:open-sidebar', handleOpenSidebar);
     return () => window.removeEventListener('noctune:open-sidebar', handleOpenSidebar);
   }, []);
+
+  // Mobile-only: swipe from left to right to open navigation menu (and swipe left to close drawer)
+  useEffect(() => {
+    // Strictly mobile only: never attach on desktop
+    if (!IS_TAURI_MOBILE && window.innerWidth >= 768) return;
+
+    let startX = 0;
+    let startY = 0;
+    let isTracking = false;
+    let isSwipeRightCandidate = false;
+    let isDrawerSwipe = false;
+
+    function handleTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const target = touch.target as HTMLElement | null;
+
+      // Do not intercept volume or seek sliders
+      if (target?.closest('input[type="range"]')) return;
+
+      startX = touch.clientX;
+      startY = touch.clientY;
+      isTracking = true;
+
+      if (!mobileMenuOpen) {
+        // Generous zone (left 60% of screen) so users with Android gesture
+        // navigation don't have to touch the 0-25px bezel that triggers OS "Back".
+        const maxStartZone = Math.max(160, window.innerWidth * 0.6);
+        isSwipeRightCandidate = startX <= maxStartZone;
+        isDrawerSwipe = false;
+      } else {
+        // Drawer is open: allow swiping left from inside drawer to close it
+        isSwipeRightCandidate = false;
+        isDrawerSwipe = true;
+      }
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      if (!isTracking || e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      // Cancel only if movement is predominantly vertical (user is scrolling content)
+      if (Math.abs(deltaY) > 45 && Math.abs(deltaY) > deltaX * 1.5) {
+        isTracking = false;
+        return;
+      }
+
+      if (isSwipeRightCandidate && !mobileMenuOpen) {
+        // Swiping right: trigger when moving right with predominantly horizontal motion
+        if (deltaX > 32 && deltaX > Math.abs(deltaY)) {
+          isTracking = false;
+          isSwipeRightCandidate = false;
+          setMobileMenuOpen(true);
+        }
+      } else if (isDrawerSwipe && mobileMenuOpen) {
+        // Swiping left to close drawer
+        if (deltaX < -32 && Math.abs(deltaX) > Math.abs(deltaY)) {
+          isTracking = false;
+          isDrawerSwipe = false;
+          setMobileMenuOpen(false);
+        }
+      }
+    }
+
+    function handleTouchEnd() {
+      isTracking = false;
+      isSwipeRightCandidate = false;
+      isDrawerSwipe = false;
+    }
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [mobileMenuOpen]);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());

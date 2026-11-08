@@ -947,6 +947,15 @@ export function useAudio() {
           artwork = new URL(artwork, window.location.href).href;
         } catch {}
       }
+      const resolveThumb = (thumb?: string) => {
+        if (!thumb) return '';
+        if (/^(https?:|data:)/.test(thumb)) return thumb;
+        try {
+          return new URL(thumb, window.location.href).href;
+        } catch {
+          return '';
+        }
+      };
       // The service runs in its own process, so hand it the tracks that are coming
       // up: once the UI process dies, this is the only thing that can keep the
       // queue moving.
@@ -964,7 +973,7 @@ export function useAudio() {
           title: queued.title,
           artist: queued.artist,
           album: queued.album ?? queued.youtubeTitle ?? 'Noctune',
-          artwork: queued.thumbnail ?? '',
+          artwork: resolveThumb(queued.thumbnail),
         }))
         .filter((entry) => Boolean(entry.url));
 
@@ -1177,11 +1186,18 @@ export function useAudio() {
       cancelCrossfade();
       phase = 'native';
       host.__noctune_native_owned = true;
+      const baseSrc = element.src
+        .replace(/([?&])join=1(&|$)/g, (_, p1, p2) => (p2 ? p1 : ''))
+        .replace(/[?&]$/, '');
+      const handoffUrl = baseSrc.includes('/player/stream/spotify:')
+        ? `${baseSrc}${baseSrc.includes('?') ? '&' : '?'}join=1`
+        : baseSrc;
       send('handoff', {
         ...host.__noctuneNowPlaying?.(),
         // join=1 tells the backend to attach to the running live mux instead
-        // of restarting the track; ordinary loads must stay fresh.
-        url: element.src + (element.src.includes('?') ? '&join=1' : '?join=1'),
+        // of restarting the track; seekable streams keep their canonical URL
+        // so handback reuses the element's buffered media without a cold reload.
+        url: handoffUrl,
         // A source swap right before backgrounding leaves the element at 0
         // while the store still knows the real position; never hand off zero.
         positionMs: Math.round((element.currentTime || state.progress || 0) * 1000),
@@ -1204,7 +1220,8 @@ export function useAudio() {
         const element = audioRef.current;
         if (element) {
           const position = detail.positionMs / 1000;
-          if (Number.isFinite(position) && position >= 0 && Math.abs(element.currentTime - position) > 0.5) {
+          const driftThreshold = detail.playing ? 2.5 : 0.5;
+          if (Number.isFinite(position) && position >= 0 && Math.abs(element.currentTime - position) > driftThreshold) {
             element.currentTime = position;
           }
           if (!detail.playing) element.pause();

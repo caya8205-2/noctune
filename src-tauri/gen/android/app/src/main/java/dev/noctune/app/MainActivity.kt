@@ -13,6 +13,24 @@ import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
   private val pollHandler = Handler(Looper.getMainLooper())
+  private val uiProcessToken = android.os.Binder()
+
+  private val serviceConnection = object : android.content.ServiceConnection {
+    override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
+      sendUiToken()
+    }
+    override fun onServiceDisconnected(name: android.content.ComponentName?) {}
+  }
+
+  private fun sendUiToken() {
+    val tokenIntent = Intent(this, MediaPlaybackService::class.java).apply {
+      action = "ui_token"
+      putExtra("extra_token_bundle", Bundle().apply { putBinder("token", uiProcessToken) })
+    }
+    runCatching {
+      startService(tokenIntent)
+    }
+  }
 
 
   private val dispatchReceiver = object : android.content.BroadcastReceiver() {
@@ -34,6 +52,14 @@ class MainActivity : TauriActivity() {
     requestNotificationPermission()
     cacheWebView(0)
     pollHandler.post(requestPoller)
+    sendUiToken()
+    runCatching {
+      bindService(
+        Intent(this, MediaPlaybackService::class.java),
+        serviceConnection,
+        Context.BIND_AUTO_CREATE
+      )
+    }
     val filter = android.content.IntentFilter(MediaPlaybackService.ACTION_DISPATCH)
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
       registerReceiver(dispatchReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -112,7 +138,7 @@ class MainActivity : TauriActivity() {
       intent.putExtra(MediaPlaybackService.EXTRA_RECEIVER, stateReceiver)
     }
     runCatching {
-      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      if (request.optString("type") == "handoff" && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
         startForegroundService(intent)
       } else {
         startService(intent)
@@ -201,6 +227,7 @@ class MainActivity : TauriActivity() {
 
   override fun onDestroy() {
     pollHandler.removeCallbacksAndMessages(null)
+    runCatching { unbindService(serviceConnection) }
     runCatching { unregisterReceiver(dispatchReceiver) }
     super.onDestroy()
   }

@@ -218,10 +218,32 @@ export function clearPrefetchCache(): { prefetched: number; inFlight: number; qu
 }
 
 export function clearPrefetchForId(videoId: string): { prefetched: number; inFlight: boolean } {
-  const hadPrefetched = prefetched.delete(videoId) ? 1 : 0;
-  const wasInFlight = inFlight.delete(videoId);
+  const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  const hadPrefetched = (prefetched.delete(videoId) ? 1 : 0) + (cleanId !== videoId && prefetched.delete(cleanId) ? 1 : 0);
+  const wasInFlight = inFlight.delete(videoId) || (cleanId !== videoId && inFlight.delete(cleanId));
   logPrefetch('cleared track memory cache', { videoId, prefetched: hadPrefetched, inFlight: wasInFlight });
   return { prefetched: hadPrefetched, inFlight: wasInFlight };
+}
+
+export function refreshPrefetchedUrl(
+  videoId: string,
+  audioUrl: string,
+  audioQualityPreference?: CachedTrack['audioQualityPreference'],
+  audioFormat?: string,
+  audioQuality?: string,
+  resolverSource?: CachedTrack['resolverSource']
+): void {
+  const cleanId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  for (const key of [videoId, cleanId, `youtube:${cleanId}`, `ytdlp:${cleanId}`]) {
+    const entry = prefetched.get(key);
+    if (!entry) continue;
+    entry.audioUrl = audioUrl;
+    entry.audioUrlExpiry = Date.now() + 6 * 60 * 60 * 1000;
+    if (audioQualityPreference) entry.audioQualityPreference = audioQualityPreference;
+    if (audioFormat) entry.audioFormat = audioFormat;
+    if (audioQuality) entry.audioQuality = audioQuality;
+    if (resolverSource) entry.resolverSource = resolverSource;
+  }
 }
 
 export function getPrefetchStatus() {

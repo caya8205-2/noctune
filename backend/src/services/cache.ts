@@ -181,19 +181,26 @@ export function refreshTrackUrl(
   resolverSource?: 'youtubei' | 'ytdlp' | 'innertube' | 'local' | 'spotstream'
 ): void {
   const store = getStore();
-  const track = store.tracks[videoId];
-  if (!track) return;
-  const previousPreference = track.audioQualityPreference ?? 'auto';
-  track.audioUrl = audioUrl;
-  track.audioUrlExpiry = Date.now() + URL_TTL_MS;
-  track.audioQualityPreference = audioQualityPreference;
-  track.audioFormat = audioFormat ?? track.audioFormat;
-  track.audioQuality = audioQuality ?? track.audioQuality;
-  if (resolverSource) {
-    track.resolverSource = resolverSource;
-  }
-  if (previousPreference !== audioQualityPreference) {
-    track.localAudioPath = undefined;
+  const rawId = videoId.replace(/^(youtube|ytdlp):/, '').trim();
+  const targets = new Set(
+    [store.tracks[videoId], store.tracks[rawId], store.tracks[`youtube:${rawId}`], store.tracks[`ytdlp:${rawId}`]].filter(
+      (t): t is CachedTrack => Boolean(t)
+    )
+  );
+  if (targets.size === 0) return;
+  for (const track of targets) {
+    const previousPreference = track.audioQualityPreference ?? 'auto';
+    track.audioUrl = audioUrl;
+    track.audioUrlExpiry = Date.now() + URL_TTL_MS;
+    track.audioQualityPreference = audioQualityPreference;
+    track.audioFormat = audioFormat ?? track.audioFormat;
+    track.audioQuality = audioQuality ?? track.audioQuality;
+    if (resolverSource) {
+      track.resolverSource = resolverSource;
+    }
+    if (previousPreference !== audioQualityPreference) {
+      track.localAudioPath = undefined;
+    }
   }
   saveStore(store);
 }

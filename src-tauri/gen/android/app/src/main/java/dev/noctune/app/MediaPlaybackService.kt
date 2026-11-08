@@ -25,10 +25,22 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.webkit.WebView
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media3.common.DataReader
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.util.ParsableByteArray
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.Extractor
+import androidx.media3.extractor.ExtractorInput
+import androidx.media3.extractor.ExtractorOutput
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.PositionHolder
+import androidx.media3.extractor.SeekMap
+import androidx.media3.extractor.TrackOutput
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -126,6 +138,9 @@ class MediaPlaybackService : Service() {
   private var album = ""
   private var artworkUrl: String? = null
   private var artwork: Bitmap? = null
+  private val logoIcon: Bitmap? by lazy {
+    runCatching { BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher) }.getOrNull()
+  }
   private var wakeLock: PowerManager.WakeLock? = null
   private var wifiLock: WifiManager.WifiLock? = null
   private val pollHandler = Handler(Looper.getMainLooper())
@@ -182,7 +197,11 @@ class MediaPlaybackService : Service() {
     wifiLock = null
   }
 
-  override fun onBind(intent: Intent?): IBinder? = null
+  private val serviceBinder = android.os.Binder()
+  override fun onBind(intent: Intent?): IBinder = serviceBinder
+
+  private var uiDeathRecipient: IBinder.DeathRecipient? = null
+  private var currentUiToken: IBinder? = null
 
   override fun onCreate() {
     super.onCreate()
@@ -190,18 +209,42 @@ class MediaPlaybackService : Service() {
     serviceRunning = true
     createChannel()
     setupSession()
-    // Post the foreground notification immediately: startForegroundService gives
-    // the service a few seconds before the system kills it, and metadata from
-    // the web layer arrives asynchronously via the poll below.
-    startForegroundSafely()
+    // Do not post empty notification or enter foreground on launch before any track plays
     startPolling()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
-      ACTION_STOP -> {
+      ACTION_STOP, "dismiss" -> {
         stopPlayback()
         return START_NOT_STICKY
+      }
+      "ui_token" -> {
+        val bundle = intent?.getBundleExtra("extra_token_bundle")
+        val token = bundle?.getBinder("token")
+        if (token != null && token !== currentUiToken) {
+          runCatching {
+            uiDeathRecipient?.let { currentUiToken?.unlinkToDeath(it, 0) }
+          }
+          currentUiToken = token
+          val recipient = IBinder.DeathRecipient {
+            Log.d(TAG, "UI process died (app swiped from recents) -> pausing audio")
+            pollHandler.post {
+              setPlaying(false)
+              runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                  stopForeground(STOP_FOREGROUND_DETACH)
+                } else {
+                  @Suppress("DEPRECATION")
+                  stopForeground(false)
+                }
+                refreshNotification()
+              }
+            }
+          }
+          uiDeathRecipient = recipient
+          runCatching { token.linkToDeath(recipient, 0) }
+        }
       }
       "play" -> setPlaying(true)
       "pause" -> setPlaying(false)
@@ -215,7 +258,9 @@ class MediaPlaybackService : Service() {
         intent?.getStringExtra(EXTRA_PAYLOAD)?.let { applyPayload(it) }
       }
     }
-    if (intent?.action != ACTION_STOP) startForegroundSafely()
+    if (intent?.action != ACTION_STOP && intent?.action != "dismiss" && playing) {
+      startForegroundSafely()
+    }
     return START_STICKY
   }
 
@@ -318,8 +363,12 @@ class MediaPlaybackService : Service() {
     }
     val shouldPlay = player?.playWhenReady == true
     if (naturalEnd && repeatMode == "one") {
-      player?.seekTo(0L)
-      syncNativePlaybackState()
+      if (joinedOffsetMs > 0L && !nativeUrl.isNullOrBlank()) {
+        startNativePlayback(nativeUrl ?: "", 0L, shouldPlay)
+      } else {
+        player?.seekTo(0L)
+        syncNativePlaybackState()
+      }
       return
     }
     val next = upNext.removeFirstOrNull()
@@ -342,8 +391,13 @@ class MediaPlaybackService : Service() {
       return
     }
     if (currentPositionMs() > 3000L || playedHistory.isEmpty()) {
-      player?.seekTo(0L)
-      syncNativePlaybackState()
+      val shouldPlay = player?.playWhenReady == true
+      if (joinedOffsetMs > 0L && !nativeUrl.isNullOrBlank()) {
+        startNativePlayback(nativeUrl ?: "", 0L, shouldPlay)
+      } else {
+        player?.seekTo(0L)
+        syncNativePlaybackState()
+      }
       return
     }
     val previous = playedHistory.removeLast()
@@ -378,9 +432,158 @@ class MediaPlaybackService : Service() {
     refreshNotification()
   }
 
+  @Volatile
+  private var spotifySkipToUs = 0L
+
+  private fun createExtractorsFactory(): ExtractorsFactory {
+    val delegateFactory = DefaultExtractorsFactory()
+    return ExtractorsFactory {
+      delegateFactory.createExtractors().map { raw -> wrapExtractor(raw) }.toTypedArray()
+    }
+  }
+
+  private fun wrapExtractor(delegate: Extractor): Extractor = object : Extractor {
+    override fun sniff(input: ExtractorInput): Boolean = delegate.sniff(input)
+
+    override fun init(output: ExtractorOutput) {
+      val skipTargetUs = spotifySkipToUs
+      if (skipTargetUs <= 0L) {
+        delegate.init(output)
+        return
+      }
+      var streamSeekable = false
+      delegate.init(object : ExtractorOutput {
+        override fun track(id: Int, type: Int): TrackOutput {
+          val rawTrack = output.track(id, type)
+          return object : TrackOutput {
+            private var started = false
+            private var firstKeptTimeUs = 0L
+            private var mainBuf = ByteArray(16384)
+            private var mainLen = 0
+            private var suppBuf = ByteArray(128)
+            private var suppLen = 0
+
+            private fun appendMain(src: ByteArray, offset: Int, len: Int) {
+              if (mainLen + len > mainBuf.size) {
+                mainBuf = mainBuf.copyOf(maxOf(mainBuf.size * 2, mainLen + len))
+              }
+              System.arraycopy(src, offset, mainBuf, mainLen, len)
+              mainLen += len
+            }
+
+            override fun format(format: Format) = rawTrack.format(format)
+
+            override fun sampleData(
+              input: DataReader,
+              length: Int,
+              allowEndOfInput: Boolean,
+              sampleDataPart: Int
+            ): Int {
+              if (started || streamSeekable) {
+                return rawTrack.sampleData(input, length, allowEndOfInput, sampleDataPart)
+              }
+              if (mainLen + length > mainBuf.size) {
+                mainBuf = mainBuf.copyOf(maxOf(mainBuf.size * 2, mainLen + length))
+              }
+              val read = input.read(mainBuf, mainLen, length)
+              if (read == -1) {
+                if (allowEndOfInput) return -1
+                throw java.io.EOFException()
+              }
+              mainLen += read
+              return read
+            }
+
+            override fun sampleData(data: ParsableByteArray, length: Int, sampleDataPart: Int) {
+              if (started || streamSeekable) {
+                rawTrack.sampleData(data, length, sampleDataPart)
+                return
+              }
+              if (sampleDataPart == TrackOutput.SAMPLE_DATA_PART_SUPPLEMENTAL) {
+                if (suppLen + length > suppBuf.size) {
+                  suppBuf = suppBuf.copyOf(maxOf(suppBuf.size * 2, suppLen + length))
+                }
+                data.readBytes(suppBuf, suppLen, length)
+                suppLen += length
+              } else {
+                if (mainLen + length > mainBuf.size) {
+                  mainBuf = mainBuf.copyOf(maxOf(mainBuf.size * 2, mainLen + length))
+                }
+                data.readBytes(mainBuf, mainLen, length)
+                mainLen += length
+              }
+            }
+
+            override fun sampleMetadata(
+              timeUs: Long,
+              flags: Int,
+              size: Int,
+              offset: Int,
+              cryptoData: TrackOutput.CryptoData?
+            ) {
+              if (streamSeekable) {
+                if (mainLen > 0) {
+                  rawTrack.sampleData(ParsableByteArray(mainBuf, mainLen), mainLen, TrackOutput.SAMPLE_DATA_PART_MAIN)
+                  mainLen = 0
+                }
+                if (suppLen > 0) {
+                  rawTrack.sampleData(ParsableByteArray(suppBuf, suppLen), suppLen, TrackOutput.SAMPLE_DATA_PART_SUPPLEMENTAL)
+                  suppLen = 0
+                }
+                rawTrack.sampleMetadata(timeUs, flags, size, offset, cryptoData)
+                return
+              }
+              if (!started) {
+                if (timeUs < skipTargetUs) {
+                  mainLen = 0
+                  suppLen = 0
+                  return
+                }
+                started = true
+                firstKeptTimeUs = timeUs
+                joinedOffsetMs = timeUs / 1000L
+                spotifySkipToUs = 0L
+                if (mainLen > 0) {
+                  rawTrack.sampleData(ParsableByteArray(mainBuf, mainLen), mainLen, TrackOutput.SAMPLE_DATA_PART_MAIN)
+                  mainLen = 0
+                }
+                if (suppLen > 0) {
+                  rawTrack.sampleData(ParsableByteArray(suppBuf, suppLen), suppLen, TrackOutput.SAMPLE_DATA_PART_SUPPLEMENTAL)
+                  suppLen = 0
+                }
+              }
+              val rebasedUs = (timeUs - firstKeptTimeUs).coerceAtLeast(0L)
+              rawTrack.sampleMetadata(rebasedUs, flags, size, offset, cryptoData)
+            }
+          }
+        }
+
+        override fun endTracks() = output.endTracks()
+
+        override fun seekMap(seekMap: SeekMap) {
+          streamSeekable = seekMap.isSeekable
+          if (streamSeekable) {
+            joinedOffsetMs = 0L
+            spotifySkipToUs = 0L
+          }
+          output.seekMap(seekMap)
+        }
+      })
+    }
+
+    override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int =
+      delegate.read(input, seekPosition)
+
+    override fun seek(position: Long, timeUs: Long) = delegate.seek(position, timeUs)
+
+    override fun release() = delegate.release()
+  }
+
   private fun ensurePlayer(): ExoPlayer {
     player?.let { return it }
-    val created = ExoPlayer.Builder(this).build()
+    val created = ExoPlayer.Builder(this)
+      .setMediaSourceFactory(DefaultMediaSourceFactory(this, createExtractorsFactory()))
+      .build()
     created.addListener(object : Player.Listener {
       override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
         syncNativePlaybackState()
@@ -424,22 +627,19 @@ class MediaPlaybackService : Service() {
     try {
       val exo = ensurePlayer()
       nativeActive = true
-      // join=1 is meaningful only for Spotify Direct live muxes; seekable
-      // streams (YouTube proxy, RAM-cached Spotify) honor the position directly.
-      val liveJoin = url.contains("join=1") && url.contains("/player/stream/spotify:")
-      joinedOffsetMs = if (liveJoin) positionMs else 0L
-      calibratePending = liveJoin
-      calibrateExpectedMs = positionMs
+      val isSpotifyStream = url.contains("/player/stream/spotify:")
+      val safePosMs = positionMs.coerceAtLeast(0L)
+      spotifySkipToUs = if (isSpotifyStream) safePosMs * 1000L else 0L
+      joinedOffsetMs = if (isSpotifyStream) safePosMs else 0L
       watchdogRetried = false
       stallCount = 0
       lastWatchdogPos = -1L
-      exo.setMediaItem(MediaItem.fromUri(url), positionMs)
+      exo.setMediaItem(MediaItem.fromUri(url), if (isSpotifyStream) 0L else safePosMs)
       exo.setPlaybackSpeed(playbackRate)
       exo.volume = playbackVolume
       exo.playWhenReady = shouldPlay
       exo.prepare()
       syncNativePlaybackState()
-      pollHandler.postDelayed(calibrateRunnable, 2500)
       pollHandler.postDelayed(watchdogRunnable, 4000)
     } catch (err: Exception) {
       nativeError = err.javaClass.simpleName
@@ -448,23 +648,12 @@ class MediaPlaybackService : Service() {
     }
   }
 
-  // A joined live mux rebases its timeline to zero; a seekable stream reports
-  // absolute positions. Decide which one we got once the player has started.
-  private val calibrateRunnable = Runnable {
-    if (!nativeActive || !calibratePending) return@Runnable
-    calibratePending = false
-    val pos = player?.currentPosition ?: 0L
-    if (pos > calibrateExpectedMs / 2) joinedOffsetMs = 0L
-  }
-
   // Dead-stream watchdog: a playing player whose position never advances is a
   // wedged upstream. Retry once without the join marker, then release native
   // ownership so handoff and foreground queries stop trusting a corpse.
   private var watchdogRetried = false
   private var stallCount = 0
   private var lastWatchdogPos = -1L
-  private var calibratePending = false
-  private var calibrateExpectedMs = 0L
 
   private val watchdogRunnable = object : Runnable {
     override fun run() {
@@ -505,8 +694,8 @@ class MediaPlaybackService : Service() {
     durationMs = currentDurationMs()
     nativeActive = false
     joinedOffsetMs = 0L
+    spotifySkipToUs = 0L
     pollHandler.removeCallbacks(watchdogRunnable)
-    pollHandler.removeCallbacks(calibrateRunnable)
     runCatching {
       player?.pause()
       player?.stop()
@@ -534,8 +723,8 @@ class MediaPlaybackService : Service() {
     durationMs = currentDurationMs()
     // Disable callbacks before stopping; an old STATE_ENDED must not consume the queue.
     nativeActive = false
+    spotifySkipToUs = 0L
     pollHandler.removeCallbacks(watchdogRunnable)
-    pollHandler.removeCallbacks(calibrateRunnable)
     runCatching {
       player?.pause()
       player?.stop()
@@ -615,12 +804,12 @@ class MediaPlaybackService : Service() {
         override fun onPause() = setPlaying(false)
         override fun onSkipToNext() = nextTrack()
         override fun onSkipToPrevious() = previousTrack()
-        // No onStop override: the system invokes onStop when the task is removed
-        // from Recents, and tearing playback down there killed the service. It then
-        // could not re-enter foreground from the background (Android 12 denies
-        // "Background started FGS"), so the music died with the swipe.
+        override fun onStop() {
+          setPlaying(false)
+          stopPlayback()
+        }
       })
-      isActive = true
+      isActive = false
       setFlags(
         MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
           MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
@@ -670,6 +859,9 @@ class MediaPlaybackService : Service() {
         .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
         .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
         .apply { artwork?.let { putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it) } }
+        // SystemUI renders the display icon untinted in the media header; without
+        // it OEMs fall back to the tinted smallIcon silhouette.
+        .apply { logoIcon?.let { putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it) } }
         .build()
     )
     mediaSession.setPlaybackState(
@@ -718,9 +910,14 @@ class MediaPlaybackService : Service() {
 
     val builder = NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_stat_noctune)
+      // OEM media headers (itel) tint the smallIcon with a fixed dark color and
+      // ignore the theme; an explicit notification color keeps the mark visible
+      // on dark cards and matches the brand green elsewhere.
+      .setColor(0xFF8DC63F.toInt())
       .setContentTitle(title)
       .setContentText(artist.ifBlank { album })
       .setContentIntent(contentIntent)
+      .setDeleteIntent(actionIntent("dismiss", 4))
       .setOngoing(playing)
       .setOnlyAlertOnce(true)
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -742,11 +939,43 @@ class MediaPlaybackService : Service() {
     return builder.setStyle(mediaStyle).build()
   }
 
+  private fun hasActiveTrack(): Boolean {
+    return trackId.isNotBlank() || nativeActive || (title.isNotBlank() && title != "Noctune") || artist.isNotBlank()
+  }
+
   private fun refreshNotification() {
+    val hasTrack = hasActiveTrack()
+    session?.isActive = hasTrack
+
+    if (!hasTrack) {
+      runCatching {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(NOTIFICATION_ID)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+          @Suppress("DEPRECATION")
+          stopForeground(true)
+        }
+      }
+      return
+    }
+
     publishState()
     runCatching {
+      val notification = buildNotification()
       val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-      manager.notify(NOTIFICATION_ID, buildNotification())
+      if (playing) {
+        startForegroundSafely()
+      } else {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          stopForeground(STOP_FOREGROUND_DETACH)
+        } else {
+          @Suppress("DEPRECATION")
+          stopForeground(false)
+        }
+      }
+      manager.notify(NOTIFICATION_ID, notification)
     }
   }
 
@@ -793,12 +1022,22 @@ class MediaPlaybackService : Service() {
   }
 
   /**
-   * The user swiped the app out of Recents. Keep the audio session and its
-   * notification alive: stopping here means Android later refuses to bring the
-   * service back to the foreground ("Background started FGS: Disallowed").
+   * The user swiped the app out of Recents.
+   * Pause playback so audio stops immediately (matching Spotify behavior),
+   * but keep the media session & notification alive in paused state so the user
+   * can resume or swipe away the mini player.
    */
   override fun onTaskRemoved(rootIntent: Intent?) {
-    runCatching { refreshNotification() }
+    setPlaying(false)
+    runCatching {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        stopForeground(STOP_FOREGROUND_DETACH)
+      } else {
+        @Suppress("DEPRECATION")
+        stopForeground(false)
+      }
+      refreshNotification()
+    }
     super.onTaskRemoved(rootIntent)
   }
 

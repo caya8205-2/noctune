@@ -280,3 +280,25 @@ test('handback releases after a bounded wait when the buffer lead never arrives'
   assert.ok(release.waitedMs >= 19000 && release.waitedMs < 26000,
     `wait must be bounded by the lead timeout, waited ${release.waitedMs}ms`);
 });
+
+test('youtube handoff preserves canonical URL without reloading while spotify adds single join=1', async (t) => {
+  const h = setup(); t.after(h.cleanup);
+  let loads = 0;
+  h.audio.load = () => { loads++; };
+  h.audio.src = 'http://localhost/player/stream/Ws2UqahG3sg?apiKey=test';
+  h.visibility('hidden');
+  const ytHandoff = h.requests()[0];
+  assert.equal(ytHandoff.url, 'http://localhost/player/stream/Ws2UqahG3sg?apiKey=test');
+  h.visibility('visible');
+  const query = h.requests()[0];
+  h.native(snapshot(query.requestId, { streamUrl: ytHandoff.url }));
+  await tick();
+  assert.equal(loads, 0, 'matching youtube stream URL must not cold-reload the audio element');
+  const release = h.requests().find((c) => c.type === 'resume');
+  h.native(snapshot(release.requestId, { active: false, playing: true, streamUrl: ytHandoff.url }));
+
+  h.audio.src = 'http://localhost/player/stream/spotify:1s1n67uXQnz6YXm0nxohya?apiKey=test&join=1';
+  h.visibility('hidden');
+  const spHandoff = h.requests()[0];
+  assert.equal(spHandoff.url, 'http://localhost/player/stream/spotify:1s1n67uXQnz6YXm0nxohya?apiKey=test&join=1');
+});

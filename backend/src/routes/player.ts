@@ -28,6 +28,7 @@ import {
   getPrefetchStatus,
   isPrefetching,
   clearPrefetchForId,
+  refreshPrefetchedUrl,
   schedulePrefetch,
   waitForInFlightPrefetch,
 } from '../services/prefetch.js';
@@ -267,7 +268,7 @@ async function fetchAudioStream(
     const isGoogleVideo = url.includes('googlevideo.com') || url.includes('c=IOS') || url.includes('c=ANDROID');
     if (isGoogleVideo && !boundedRange) return fetchPlayerStream(url, range, signal);
     const upstreamRange = boundedRange ? normalizeUpstreamRange(range) : range;
-    return fetch(url, { headers: upstreamRange ? { Range: upstreamRange, Connection: 'close' } : { Connection: 'close' }, signal });
+    return fetch(url, { headers: upstreamRange ? { Range: upstreamRange } : undefined, signal });
   };
   let res = await requestStream(audioUrl);
 
@@ -293,6 +294,14 @@ async function fetchAudioStream(
     }
     signal?.throwIfAborted();
     refreshTrackUrl(
+      videoId,
+      refreshedAudio.url,
+      refreshedAudio.qualityPreference,
+      refreshedAudio.format,
+      refreshedAudio.quality,
+      refreshedAudio.resolverSource
+    );
+    refreshPrefetchedUrl?.(
       videoId,
       refreshedAudio.url,
       refreshedAudio.qualityPreference,
@@ -942,15 +951,13 @@ export async function playerRoutes(app: FastifyInstance) {
             .header('Access-Control-Allow-Headers', 'Range, Content-Type, Accept')
             .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
             .header('Cross-Origin-Resource-Policy', 'cross-origin')
-            .header('Accept-Ranges', 'none');
+            .header('Accept-Ranges', contentLength || contentRange ? 'bytes' : 'none')
+            .header('Cache-Control', 'no-store');
 
           if (contentRange) reply.header('Content-Range', contentRange);
 
           if (contentLength) {
             reply.header('Content-Length', contentLength);
-            reply.header('Cache-Control', 'public, max-age=3600');
-          } else {
-            reply.header('Cache-Control', 'no-cache');
           }
 
           return reply.send(stream);
@@ -1007,6 +1014,7 @@ export async function playerRoutes(app: FastifyInstance) {
         app.log.info({ videoId, cleanStreamId }, '[player] stream cache stale, refreshing URL');
         const audio = await resolveAudioUrl(cleanStreamId, preference);
         refreshTrackUrl(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality, audio.resolverSource);
+        refreshPrefetchedUrl?.(cleanStreamId, audio.url, audio.qualityPreference, audio.format, audio.quality, audio.resolverSource);
         cached = getPrefetched(cleanStreamId) || getCachedById(cleanStreamId) || getCachedById(videoId);
       } catch (err) {
         app.log.warn(err, `[player] stream stale refresh failed for ${videoId}`);
@@ -1036,7 +1044,7 @@ export async function playerRoutes(app: FastifyInstance) {
         .header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
         .header('Cross-Origin-Resource-Policy', 'cross-origin')
         .header('Accept-Ranges', res.headers.get('accept-ranges') ?? 'bytes')
-        .header('Cache-Control', 'public, max-age=3600');
+        .header('Cache-Control', 'no-store');
       const contentRange = res.headers.get('content-range');
       if (contentRange) reply.header('Content-Range', contentRange);
       if (res.status === 416) {
