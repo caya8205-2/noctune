@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import http from 'node:http';
 import rootPkg from '../package.json';
+import tauriAndroidPkg from '../src-tauri/tauri.android.conf.json';
 
 const BACKEND_HOST = process.env.VITE_BACKEND_HOST || process.env.BACKEND_HOST || '127.0.0.1';
 const PREFERRED_BACKEND_PORT = Number(process.env.VITE_BACKEND_PORT || process.env.PORT || 3131);
@@ -75,7 +76,11 @@ function backendFallbackProxy() {
 export default defineConfig({
   base: './',
   define: {
-    __APP_VERSION__: JSON.stringify(rootPkg.version),
+    __APP_VERSION__: JSON.stringify(
+      (process.env.TAURI_ENV_PLATFORM === 'android' || process.env.TAURI_ANDROID_PROJECT_PATH)
+        ? (tauriAndroidPkg.version || '1.0.0')
+        : rootPkg.version
+    ),
   },
   plugins: [react(), backendFallbackProxy()],
   resolve: {

@@ -23,6 +23,7 @@
     "tauri:build": "npm run prepare:binaries && npm run build:sidecar && npm run build --workspace=frontend && tauri build --bundles nsis",
     "tauri:build:linux": "npm run prepare:binaries && npm run build:sidecar:linux && npm run build --workspace=frontend && tauri build --bundles deb,appimage",
     "version:sync": "node scripts/sync-version.js",
+    "version:sync:mobile": "node scripts/sync-version-mobile.js",
     "sign": "powershell -ExecutionPolicy Bypass -File ./scripts/noctune-signing.ps1"
   },
   "devDependencies": {

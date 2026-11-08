@@ -1,6 +1,6 @@
 const { readFileSync, writeFileSync, existsSync } = require('fs');
 
-const changelogPath = 'CHANGELOG.md';
+const changelogPath = process.argv[4] || 'CHANGELOG.md';
 const outputPath = process.argv[3] || 'RELEASE_NOTES.md';
 
 let version = process.argv[2];

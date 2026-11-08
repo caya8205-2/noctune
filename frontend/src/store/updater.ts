@@ -93,7 +93,29 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
 
     try {
       if (IS_TAURI_MOBILE) {
-        set({ checking: false, updateAvailable: false });
+        try {
+          const res = await fetch('https://raw.githubusercontent.com/caya8205-2/noctune/main/src-tauri/tauri.android.conf.json', { cache: 'no-store' });
+          if (!res.ok) {
+            set({ checking: false, updateAvailable: false, lastChecked: Date.now() });
+            return;
+          }
+          const data = await res.json();
+          const remoteVersion = normalizeVersion(data.version || '');
+          const isNewer = remoteVersion ? compareVersions(remoteVersion, localVersion) > 0 : false;
+          const urgency = isNewer ? getUpdateUrgency(localVersion, remoteVersion) : 'minor';
+          set({
+            checking: false,
+            updateAvailable: isNewer,
+            currentVersion: localVersion,
+            version: remoteVersion || null,
+            urgency,
+            releaseUrl: 'https://github.com/caya8205-2/noctune/releases/tag/mobile-v' + remoteVersion,
+            lastChecked: Date.now(),
+          });
+        } catch (err) {
+          console.warn('[updater] Failed to check for mobile updates:', err);
+          set({ checking: false, updateAvailable: false, lastChecked: Date.now() });
+        }
         return;
       }
 

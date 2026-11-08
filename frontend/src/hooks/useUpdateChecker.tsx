@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink, RotateCcw, X } from 'lucide-react';
 import { useUpdaterStore } from '../store/updater';
-import { IS_TAURI } from '../utils/api';
+import { IS_TAURI, IS_TAURI_MOBILE } from '../utils/api';
 
 export async function openExternalUrl(url: string) {
   if (!IS_TAURI) {
@@ -48,21 +48,22 @@ export function useUpdateChecker() {
     };
   }, [checkForUpdates]);
 
-  const shouldShow = (updateReady || (!IS_TAURI && updateAvailable)) && !toastDismissed && Boolean(version);
+  const isExternalDownload = !IS_TAURI || IS_TAURI_MOBILE;
+  const shouldShow = (updateReady || (isExternalDownload && updateAvailable)) && !toastDismissed && Boolean(version);
 
   const urgencyLabel =
     urgency === 'major'
-      ? (IS_TAURI ? 'Major Update Ready' : 'Major Update Available')
+      ? (updateReady ? 'Major Update Ready' : 'Major Update Available')
       : urgency === 'patch'
-      ? (IS_TAURI ? 'Small Patch Ready' : 'Small Patch Available')
-      : (IS_TAURI ? 'Update Ready' : 'Update Available');
+      ? (updateReady ? 'Small Patch Ready' : 'Small Patch Available')
+      : (updateReady ? 'Update Ready' : 'Update Available');
 
   const urgencyDescription =
     urgency === 'major'
-      ? `Noctune v${version} is ready with major features & fixes. You are on v${currentVersion}. ${IS_TAURI ? 'Restart to apply.' : ''}`
+      ? `Noctune v${version} is ready with major features & fixes. You are on v${currentVersion}.${updateReady ? " Restart to apply." : ""}`
       : urgency === 'patch'
-      ? `Noctune v${version} patch is ready. You are on v${currentVersion}. ${IS_TAURI ? 'Restart whenever you\'re ready.' : ''}`
-      : `Noctune v${version} is ready. You are on v${currentVersion}. ${IS_TAURI ? 'Restart Noctune to apply.' : ''}`;
+      ? `Noctune v${version} patch is ready. You are on v${currentVersion}.${updateReady ? " Restart whenever you're ready." : ""}`
+      : `Noctune v${version} is ready. You are on v${currentVersion}.${updateReady ? " Restart Noctune to apply." : ""}`;
 
   const borderClass =
     urgency === 'major'
@@ -91,7 +92,7 @@ export function useUpdateChecker() {
                 {urgencyDescription}
               </p>
               <div className="mt-3 flex items-center gap-2">
-                {IS_TAURI ? (
+                {updateReady && IS_TAURI && !IS_TAURI_MOBILE ? (
                   <button
                     type="button"
                     onClick={async (e) => {
