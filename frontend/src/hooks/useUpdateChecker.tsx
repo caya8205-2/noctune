@@ -4,14 +4,26 @@ import { ExternalLink, RotateCcw, X } from 'lucide-react';
 import { useUpdaterStore } from '../store/updater';
 import { IS_TAURI, IS_TAURI_MOBILE } from '../utils/api';
 
-export async function openExternalUrl(url: string) {
+export async function openExternalUrl(url?: string | null) {
+  const target = (url || '').trim() || 'https://github.com/caya8205-2/noctune/releases/latest';
+
+  if (IS_TAURI_MOBILE) {
+    const host = window as any;
+    (host.__noctune_native_requests ??= []).push({ type: 'open-url', url: target });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_external_url', { url: target });
+    } catch {}
+    return;
+  }
+
   if (!IS_TAURI) {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(target, '_blank', 'noopener,noreferrer');
     return;
   }
 
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('open_external_url', { url });
+  await invoke('open_external_url', { url: target });
 }
 
 const INITIAL_CHECK_DELAY_MS = 4_000;

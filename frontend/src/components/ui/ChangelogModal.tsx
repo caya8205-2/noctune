@@ -122,6 +122,13 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
+  const MOBILE_V102_HIGHLIGHTS = [
+    {
+      title: 'External Download Link Launching',
+      desc: 'Fixed an issue where tapping the Download button on update notifications and external release links was non-responsive on Android devices by connecting a native Android ACTION_VIEW intent bridge.',
+    },
+  ];
+
   const MOBILE_V101_HIGHLIGHTS = [
     {
       title: 'Media Card Previous & Next Layout',
@@ -310,15 +317,31 @@ export function ChangelogModal() {
             {IS_TAURI_MOBILE ? (
               <div>
                 <div className="flex items-center gap-2 mb-2.5">
-                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v1.0.1</span>
-                  <span className="text-xs font-semibold text-white">Mobile Maintenance & Polish</span>
+                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v1.0.2</span>
+                  <span className="text-xs font-semibold text-white">External Link & Update Hotfix</span>
+                </div>
+                <ul className="space-y-2 text-muted">
+                  {MOBILE_V102_HIGHLIGHTS.map((item, idx) => (
+                    <li key={`mobile-v102-${idx}`} className="flex items-start gap-2">
+                      <span className="text-accent font-bold mt-0.5">•</span>
+                      <span>
+                        <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                        {renderInlineMarkdown(item.desc)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-center gap-2 mt-5 mb-2.5 pt-3 border-t border-white/5">
+                  <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-muted">v1.0.1</span>
+                  <span className="text-xs font-semibold text-muted">Maintenance & Polish</span>
                 </div>
                 <ul className="space-y-2 text-muted">
                   {MOBILE_V101_HIGHLIGHTS.map((item, idx) => (
                     <li key={`mobile-v101-${idx}`} className="flex items-start gap-2">
-                      <span className="text-accent font-bold mt-0.5">•</span>
+                      <span className="text-muted/60 font-bold mt-0.5">•</span>
                       <span>
-                        <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                        <strong className="text-white/80">{renderInlineMarkdown(item.title)}:</strong>{' '}
                         {renderInlineMarkdown(item.desc)}
                       </span>
                     </li>

@@ -2,6 +2,13 @@
 
 All notable changes to the Noctune Mobile application (Android) are documented here.
 
+## v1.0.2 - 2026-11-09
+
+Hotfix release for external link launching and update download actions on Android.
+
+### System Integration & Updates
+- **Fixed External URL Launching on Android**: Connected the native Android `ACTION_VIEW` intent bridge in `MainActivity`, fixing non-responsive "Download" buttons on update notifications and external links throughout the app.
+
 ## v1.0.1 - 2026-11-09
 
 Maintenance, gesture polish, settings update checker, and Discord companion release for Noctune Mobile.

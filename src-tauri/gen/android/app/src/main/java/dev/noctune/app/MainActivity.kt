@@ -2,6 +2,7 @@ package dev.noctune.app
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -130,6 +131,19 @@ class MainActivity : TauriActivity() {
   }
 
   private fun forwardRequest(request: org.json.JSONObject) {
+    if (request.optString("type") == "open-url") {
+      val url = request.optString("url")
+      if (url.isNotBlank()) {
+        runCatching {
+          val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+          }
+          startActivity(intent)
+        }
+      }
+      return
+    }
+
     // ResultReceiver crosses the UI/:media process boundary; service statics do not.
     val intent = Intent(this, MediaPlaybackService::class.java)
       .setAction(MediaPlaybackService.ACTION_REQUEST)
