@@ -70,12 +70,13 @@ jobs:
           distribution: 'microsoft'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Setup Android NDK & SDK components
         run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager --install "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0"
+          NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* | sort -V | tail -n 1)
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "Using Android NDK: $NDK_DIR"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -86,8 +87,6 @@ jobs:
         run: npm ci
 
       - name: Build Mobile APKs
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: npm run tauri android build
 
       - name: Prepare Release Artifacts
