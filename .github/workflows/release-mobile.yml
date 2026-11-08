@@ -88,6 +88,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Ensure resource stubs
+        run: |
+          mkdir -p src-tauri/resources
+          touch src-tauri/resources/yt-dlp.exe src-tauri/resources/innertube.exe src-tauri/resources/spotstream.exe
+
       - name: Build Mobile APKs
         run: npm run tauri android build
 

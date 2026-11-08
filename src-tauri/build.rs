@@ -65,8 +65,21 @@ fn ensure_sidecar_dummy() {
     }
 }
 
+fn ensure_resource_dummies() {
+    let resources_dir = Path::new("resources");
+    let dummy_files = ["yt-dlp.exe", "innertube.exe", "spotstream.exe"];
+    for file in dummy_files {
+        let path = resources_dir.join(file);
+        if !path.exists() {
+            let _ = fs::create_dir_all(resources_dir);
+            let _ = fs::write(&path, b"");
+        }
+    }
+}
+
 fn main() {
     ensure_sidecar_dummy();
+    ensure_resource_dummies();
     load_dotenv(Path::new("../.env"));
     for key in FORWARDED_ENV_KEYS {
         println!("cargo:rerun-if-env-changed={}", key);

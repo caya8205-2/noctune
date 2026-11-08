@@ -4,6 +4,6 @@
   "identifier": "dev.noctune.app",
   "bundle": {
     "externalBin": [],
-    "resources": {}
+    "resources": []
   }
 }
