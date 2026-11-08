@@ -57,8 +57,18 @@ export function ArtworkLightboxModal({
   const [isDragging, setIsDragging] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const clickedOnImageRef = useRef(false);
-  const panStartRef = useRef<{ pointerX: number; pointerY: number; panX: number; panY: number } | null>(null);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const initialPinchRef = useRef<{
+    dist: number;
+    zoom: number;
+    midX: number;
+    midY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+  const singlePanStartRef = useRef<{ pointerX: number; pointerY: number; panX: number; panY: number } | null>(null);
   const panMovedRef = useRef(false);
+  const lastTapTimeRef = useRef(0);
 
   useEffect(() => {
     setZoom(1);
@@ -273,35 +283,122 @@ export function ArtworkLightboxModal({
             const isTargetImage = imageRef.current && (
               event.target === imageRef.current || imageRef.current.contains(event.target as Node)
             );
-            clickedOnImageRef.current = !!isTargetImage;
+            // If touch/click did not target the image and no other pointer is active, let click propagate to backdrop
+            if (!isTargetImage && activePointersRef.current.size === 0) return;
 
-            if (!isTargetImage) return;
+            clickedOnImageRef.current = true;
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch (_) {}
 
-            event.currentTarget.setPointerCapture(event.pointerId);
-            panMovedRef.current = false;
+            activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
             setIsDragging(true);
-            panStartRef.current = { pointerX: event.clientX, pointerY: event.clientY, panX: pan.x, panY: pan.y };
+
+            if (activePointersRef.current.size === 1) {
+              panMovedRef.current = false;
+              singlePanStartRef.current = {
+                pointerX: event.clientX,
+                pointerY: event.clientY,
+                panX: pan.x,
+                panY: pan.y,
+              };
+              initialPinchRef.current = null;
+            } else if (activePointersRef.current.size === 2) {
+              panMovedRef.current = true;
+              const pts = Array.from(activePointersRef.current.values());
+              const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+              const midX = (pts[0].x + pts[1].x) / 2;
+              const midY = (pts[0].y + pts[1].y) / 2;
+              initialPinchRef.current = {
+                dist: Math.max(dist, 1),
+                zoom,
+                midX,
+                midY,
+                panX: pan.x,
+                panY: pan.y,
+              };
+              singlePanStartRef.current = null;
+            }
           }}
           onPointerMove={(event) => {
-            const start = panStartRef.current;
-            if (!start) return;
-            const dx = event.clientX - start.pointerX;
-            const dy = event.clientY - start.pointerY;
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+            if (!activePointersRef.current.has(event.pointerId)) return;
+            activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+            if (activePointersRef.current.size === 2 && initialPinchRef.current) {
+              const pts = Array.from(activePointersRef.current.values());
+              const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+              const midX = (pts[0].x + pts[1].x) / 2;
+              const midY = (pts[0].y + pts[1].y) / 2;
+
+              const pinch = initialPinchRef.current;
+              const scaleRatio = dist / pinch.dist;
+              const nextZoom = Math.min(3.5, Math.max(0.5, pinch.zoom * scaleRatio));
+
+              const panDx = midX - pinch.midX;
+              const panDy = midY - pinch.midY;
+
               panMovedRef.current = true;
+              setZoom(nextZoom);
+              setPan({ x: pinch.panX + panDx, y: pinch.panY + panDy });
+            } else if (activePointersRef.current.size === 1 && singlePanStartRef.current) {
+              const start = singlePanStartRef.current;
+              const dx = event.clientX - start.pointerX;
+              const dy = event.clientY - start.pointerY;
+              if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                panMovedRef.current = true;
+              }
+              setPan({ x: start.panX + dx, y: start.panY + dy });
             }
-            setPan({ x: start.panX + dx, y: start.panY + dy });
           }}
           onPointerUp={(event) => {
-            panStartRef.current = null;
-            setIsDragging(false);
+            const hadMoved = panMovedRef.current;
+            activePointersRef.current.delete(event.pointerId);
+
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
+              try {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              } catch (_) {}
+            }
+
+            if (activePointersRef.current.size === 1) {
+              // 1 pointer left after lifting 1 finger: seamlessly continue single-finger pan
+              const [remaining] = Array.from(activePointersRef.current.values());
+              singlePanStartRef.current = {
+                pointerX: remaining.x,
+                pointerY: remaining.y,
+                panX: pan.x,
+                panY: pan.y,
+              };
+              initialPinchRef.current = null;
+            } else if (activePointersRef.current.size === 0) {
+              singlePanStartRef.current = null;
+              initialPinchRef.current = null;
+              setIsDragging(false);
+
+              // Double-tap zoom detection
+              if (!hadMoved && clickedOnImageRef.current) {
+                const now = Date.now();
+                if (now - lastTapTimeRef.current < 320) {
+                  lastTapTimeRef.current = 0;
+                  if (zoom > 1.1) {
+                    setZoom(1);
+                    setPan({ x: 0, y: 0 });
+                  } else {
+                    setZoom(2.2);
+                  }
+                } else {
+                  lastTapTimeRef.current = now;
+                }
+              }
             }
           }}
-          onPointerCancel={() => {
-            panStartRef.current = null;
-            setIsDragging(false);
+          onPointerCancel={(event) => {
+            activePointersRef.current.delete(event.pointerId);
+            if (activePointersRef.current.size === 0) {
+              singlePanStartRef.current = null;
+              initialPinchRef.current = null;
+              setIsDragging(false);
+            }
           }}
           onWheel={(event) => {
             setZoomLevel(zoom - event.deltaY * 0.001);

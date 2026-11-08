@@ -277,18 +277,47 @@ function AppInner() {
       const touch = e.touches[0];
       const target = touch.target as HTMLElement | null;
 
-      // Do not intercept volume or seek sliders
-      if (target?.closest('input[type="range"]')) return;
+      // Do not intercept sliders, carousels, or interactive horizontal elements
+      if (
+        target?.closest(
+          'input[type="range"], [data-carousel], [data-horizontal-scroll], .carousel, [role="tablist"]'
+        )
+      ) {
+        return;
+      }
+
+      // Check if touch is within any horizontally scrolling container
+      let el: HTMLElement | null = target;
+      while (el && el !== document.body) {
+        if (
+          el.classList.contains('overflow-x-auto') ||
+          el.classList.contains('overflow-x-scroll')
+        ) {
+          return;
+        }
+        const style = window.getComputedStyle(el);
+        if (
+          (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
+          el.scrollWidth > el.clientWidth
+        ) {
+          return;
+        }
+        el = el.parentElement;
+      }
 
       startX = touch.clientX;
       startY = touch.clientY;
       isTracking = true;
 
       if (!mobileMenuOpen) {
-        // Generous zone (left 60% of screen) so users with Android gesture
-        // navigation don't have to touch the 0-25px bezel that triggers OS "Back".
-        const maxStartZone = Math.max(160, window.innerWidth * 0.6);
-        isSwipeRightCandidate = startX <= maxStartZone;
+        // Strict edge zone (left 32px) so swiping within page content or carousels
+        // never triggers drawer opening.
+        const maxStartZone = 32;
+        if (startX > maxStartZone) {
+          isTracking = false;
+          return;
+        }
+        isSwipeRightCandidate = true;
         isDrawerSwipe = false;
       } else {
         // Drawer is open: allow swiping left from inside drawer to close it
@@ -303,22 +332,22 @@ function AppInner() {
       const deltaX = touch.clientX - startX;
       const deltaY = touch.clientY - startY;
 
-      // Cancel only if movement is predominantly vertical (user is scrolling content)
-      if (Math.abs(deltaY) > 45 && Math.abs(deltaY) > deltaX * 1.5) {
+      // Cancel if movement is predominantly vertical (user is scrolling content)
+      if (Math.abs(deltaY) > 25 && Math.abs(deltaY) > Math.abs(deltaX)) {
         isTracking = false;
         return;
       }
 
       if (isSwipeRightCandidate && !mobileMenuOpen) {
-        // Swiping right: trigger when moving right with predominantly horizontal motion
-        if (deltaX > 32 && deltaX > Math.abs(deltaY)) {
+        // Swiping right from left edge: require deliberate horizontal motion (>= 50px)
+        if (deltaX > 50 && deltaX > Math.abs(deltaY) * 1.5) {
           isTracking = false;
           isSwipeRightCandidate = false;
           setMobileMenuOpen(true);
         }
       } else if (isDrawerSwipe && mobileMenuOpen) {
         // Swiping left to close drawer
-        if (deltaX < -32 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX < -40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
           isTracking = false;
           isDrawerSwipe = false;
           setMobileMenuOpen(false);

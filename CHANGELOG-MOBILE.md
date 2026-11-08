@@ -2,6 +2,22 @@
 
 All notable changes to the Noctune Mobile application (Android) are documented here.
 
+## v1.0.1 - 2026-11-09
+
+Maintenance, gesture polish, and Discord companion release for Noctune Mobile.
+
+### Notification & System Integration
+- **Fixed Inverted Media Notification Controls**: Corrected the previous/next vector drawable definitions so that the Previous button (|◀) and Next button (▶|) match standard orientations on Android media cards.
+
+### Mobile UI & Gesture Navigation
+- **Lightbox Pinch-to-Zoom & Double-Tap**: Added full multi-touch gesture support to the artwork lightbox viewer. Pinch with two fingers to smoothly zoom in/out, double-tap to zoom or reset, and pan without image jitter.
+- **Edge Swipe Drawer Restraint**: Confined the left sidebar drawer opening gesture strictly to the screen edge (within 32px) and added horizontal scroll / carousel ignore guards, preventing horizontal carousels from accidentally opening the navigation sidebar.
+- **Touch-Friendly Scrolling**: Removed synthetic 6px desktop webkit scrollbar collisions on mobile touchscreens in favor of native momentum touch scrolling, eliminating scroll freeze and stuck thumbs.
+
+### Integrations & Settings
+- **Discord Rich Presence Companion Sync**: Mobile playback activity now automatically forwards to the desktop companion backend, seamlessly updating your Discord status on your PC while streaming from your phone.
+- **Restored Discord RPC Toggle**: Re-enabled the Discord Rich Presence toggle in mobile Settings with local persistence.
+
 ## v1.0.0 - 2026-11-09
 
 Initial official release of Noctune Mobile (powered by Tauri v2 and native Android audio architecture).

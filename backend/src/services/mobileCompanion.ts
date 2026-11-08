@@ -490,6 +490,7 @@ export async function startMobileCompanion(overrides?: {
         NOCTUNE_MOBILE_INSTANCE: '1',
         PORT: String(MOBILE_BACKEND_PORT),
         HOST: '127.0.0.1',
+        DESKTOP_BACKEND_PORT: String(process.env.PORT || 3131),
         APP_DATA_DIR: mobileDataDir,
         NOCTUNE_API_KEY: cfg.mobileApiKey,
         ALLOW_LOCALHOST_BYPASS: 'false',

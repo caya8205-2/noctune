@@ -122,6 +122,29 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
+  const MOBILE_V101_HIGHLIGHTS = [
+    {
+      title: 'Media Card Previous & Next Layout',
+      desc: 'Fixed inverted button icons on Android media notification cards, placing Previous (|◀) on the left and Next (▶|) on the right.',
+    },
+    {
+      title: 'Artwork Lightbox Pinch-to-Zoom & Double-Tap',
+      desc: 'Added multi-touch gesture support to the artwork lightbox viewer. Pinch with two fingers to zoom in and out smoothly, double-tap to toggle zoom levels, and drag to pan without image jitter.',
+    },
+    {
+      title: 'Polished Left Edge Drawer Swipe',
+      desc: 'The sidebar drawer swipe is now strictly confined to the screen edge (first 32px) with horizontal carousel ignore guards, preventing horizontal carousels from inadvertently triggering the sidebar menu.',
+    },
+    {
+      title: 'Discord Rich Presence via Companion Sync',
+      desc: 'Mobile playback activity now reliably forwards to your desktop companion backend, seamlessly updating your Discord Rich Presence profile when listening from your phone.',
+    },
+    {
+      title: 'Smooth Scrolling Without Stuck Scrollbars',
+      desc: 'Eliminated synthetic 6px desktop scrollbar conflicts on touchscreens in favor of native momentum scrolling, while enhancing desktop scrollbars with comfortable 8px active-drag states.',
+    },
+  ];
+
   const MOBILE_V100_HIGHLIGHTS = [
     {
       title: 'Native Android Audio & Dedicated Background Service',
@@ -283,15 +306,31 @@ export function ChangelogModal() {
             {IS_TAURI_MOBILE ? (
               <div>
                 <div className="flex items-center gap-2 mb-2.5">
-                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v{APP_VERSION}</span>
-                  <span className="text-xs font-semibold text-white">Official Mobile Release Highlights</span>
+                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v1.0.1</span>
+                  <span className="text-xs font-semibold text-white">Mobile Maintenance & Polish</span>
+                </div>
+                <ul className="space-y-2 text-muted">
+                  {MOBILE_V101_HIGHLIGHTS.map((item, idx) => (
+                    <li key={`mobile-v101-${idx}`} className="flex items-start gap-2">
+                      <span className="text-accent font-bold mt-0.5">•</span>
+                      <span>
+                        <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                        {renderInlineMarkdown(item.desc)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-center gap-2 mt-5 mb-2.5 pt-3 border-t border-white/5">
+                  <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-muted">v1.0.0</span>
+                  <span className="text-xs font-semibold text-muted">Initial Release Highlights</span>
                 </div>
                 <ul className="space-y-2 text-muted">
                   {MOBILE_V100_HIGHLIGHTS.map((item, idx) => (
                     <li key={`mobile-v100-${idx}`} className="flex items-start gap-2">
-                      <span className="text-accent font-bold mt-0.5">•</span>
+                      <span className="text-muted/60 font-bold mt-0.5">•</span>
                       <span>
-                        <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                        <strong className="text-white/80">{renderInlineMarkdown(item.title)}:</strong>{' '}
                         {renderInlineMarkdown(item.desc)}
                       </span>
                     </li>

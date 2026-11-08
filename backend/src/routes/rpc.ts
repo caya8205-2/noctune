@@ -3,11 +3,11 @@ import { z } from 'zod';
 import { clearDiscordActivity, getDiscordRpcStatus, updateDiscordActivity } from '../services/discordRpc.js';
 
 const TrackSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  artist: z.string(),
+  id: z.string().default(''),
+  title: z.string().default(''),
+  artist: z.string().default(''),
   album: z.string().optional(),
-  duration: z.number(),
+  duration: z.number().optional().default(0),
   thumbnail: z.string().optional().default(''),
   query: z.string().optional().default(''),
   spotifyId: z.string().optional(),
@@ -15,8 +15,8 @@ const TrackSchema = z.object({
   youtubeId: z.string().optional(),
   youtubeTitle: z.string().optional(),
   youtubeArtist: z.string().optional(),
-  queueSource: z.enum(['manual', 'search', 'playlist', 'autoqueue', 'recommendation', 'play-next', 'history']).optional(),
-});
+  queueSource: z.string().optional(),
+}).passthrough();
 
 const ActivityBody = z.object({
   track: TrackSchema.nullable(),
@@ -34,11 +34,36 @@ export async function rpcRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Invalid body', issues: parsed.error.issues });
     }
 
-    const result = await updateDiscordActivity(parsed.data);
+    // When running as a mobile companion instance, forward the RPC activity to the
+    // main desktop backend process (which holds the active Discord IPC connection on PC).
+    if (process.env.NOCTUNE_MOBILE_INSTANCE === '1') {
+      const desktopPort = process.env.DESKTOP_BACKEND_PORT || '3131';
+      try {
+        const res = await fetch(`http://127.0.0.1:${desktopPort}/rpc/activity`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsed.data),
+        });
+        if (res.ok) {
+          const body = await res.json();
+          return reply.send(body);
+        }
+      } catch {
+        // Fall back to local handling if desktop instance is not reachable
+      }
+    }
+
+    const result = await updateDiscordActivity(parsed.data as any);
     return reply.send({ ok: true, ...result });
   });
 
   app.delete('/rpc/activity', async () => {
+    if (process.env.NOCTUNE_MOBILE_INSTANCE === '1') {
+      const desktopPort = process.env.DESKTOP_BACKEND_PORT || '3131';
+      try {
+        await fetch(`http://127.0.0.1:${desktopPort}/rpc/activity`, { method: 'DELETE' });
+      } catch {}
+    }
     await clearDiscordActivity();
     return { ok: true };
   });

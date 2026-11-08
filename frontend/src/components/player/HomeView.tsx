@@ -484,6 +484,7 @@ function DragCarousel({
   return (
     <div
       ref={containerRef}
+      data-carousel="true"
       onMouseEnter={() => (isHoveredRef.current = true)}
       onMouseLeave={() => (isHoveredRef.current = false)}
       onClickCapture={(e) => {

@@ -119,7 +119,10 @@ export function SettingsView() {
   const [spotifyPairingData, setSpotifyPairingData] = useState<SpotifyPairingInfo | null>(null);
   const [spotifyPairingError, setSpotifyPairingError] = useState<string | null>(null);
   const [recommendationEngine, setRecommendationEngine] = useState<'hybrid-ml' | 'lastfm' | 'innertube-rs' | 'legacy' | 'spotify-radio'>('innertube-rs');
-  const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true);
+  const [discordRpcEnabled, setDiscordRpcEnabled] = useState(() => {
+    const saved = localStorage.getItem('noctune:discord-rpc-enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [closeToTray, setCloseToTray] = useState(() => localStorage.getItem("noctune:close-to-tray") !== "false");
 
   const handleCloseToTrayToggle = (enabled: boolean) => {
@@ -174,7 +177,7 @@ export function SettingsView() {
     setAudioQualityPreference(d.audioQualityPreference ?? 'auto');
     setSpotifyPlayback(d.spotifyPlayback ?? 'youtube-match');
     setRecommendationEngine(d.recommendationEngine ?? 'innertube-rs');
-    setDiscordRpcEnabled(d.discordRpcEnabled ?? true);
+    setDiscordRpcEnabled(d.discordRpcEnabled ?? (localStorage.getItem('noctune:discord-rpc-enabled') !== 'false'));
     if (d.downloadDir) setDownloadDir(d.downloadDir);
 
     if (IS_TAURI) {
@@ -558,6 +561,7 @@ export function SettingsView() {
 
   async function handleDiscordRpcToggle(enabled: boolean) {
     setDiscordRpcEnabled(enabled);
+    localStorage.setItem('noctune:discord-rpc-enabled', String(enabled));
     try {
       const res = await fetch(await apiUrl('/settings'), {
         method: 'PATCH',
@@ -1126,33 +1130,31 @@ export function SettingsView() {
           </p>
         </div>
 
-        {/* Discord Rich Presence (desktop only: it needs the Discord client) */}
-        {IS_TAURI_DESKTOP && (
-          <button
-            type="button"
-            onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
-            className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+        {/* Discord Rich Presence */}
+        <button
+          type="button"
+          onClick={() => handleDiscordRpcToggle(!discordRpcEnabled)}
+          className="flex items-center justify-between gap-3 rounded-lg border border-base-600/70 bg-base-900 p-3 text-left hover:border-base-500 transition-colors"
+        >
+          <span>
+            <span className="block text-sm font-medium text-white">Discord Rich Presence</span>
+            <span className="block text-xs text-muted mt-1">Show what you're listening to on your Discord profile.</span>
+          </span>
+          <span
+            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
+              ? 'border-accent/50 bg-accent/25'
+              : 'border-base-600 bg-base-800'
+              }`}
+            aria-hidden="true"
           >
-            <span>
-              <span className="block text-sm font-medium text-white">Discord Rich Presence</span>
-              <span className="block text-xs text-muted mt-1">Show what you're listening to on your Discord profile.</span>
-            </span>
             <span
-              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors ${discordRpcEnabled
-                ? 'border-accent/50 bg-accent/25'
-                : 'border-base-600 bg-base-800'
+              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
+                ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
+                : 'translate-x-1 bg-muted'
                 }`}
-              aria-hidden="true"
-            >
-              <span
-                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform ${discordRpcEnabled
-                  ? 'translate-x-5 bg-accent shadow-[0_0_12px_rgba(190,255,32,0.35)]'
-                  : 'translate-x-1 bg-muted'
-                  }`}
-              />
-            </span>
-          </button>
-        )}
+            />
+          </span>
+        </button>
 
         {/* Close to System Tray (desktop) */}
         {IS_TAURI_DESKTOP && (

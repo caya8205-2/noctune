@@ -1267,6 +1267,7 @@ export function useAudio() {
     if (!IS_TAURI) return;
 
     function syncDiscordActivity() {
+      if (localStorage.getItem('noctune:discord-rpc-enabled') === 'false') return;
       const state = usePlayerStore.getState();
       api.updateDiscordActivity({
         track: state.currentTrack,
