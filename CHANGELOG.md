@@ -10,6 +10,27 @@ the MIT License, and that grant stays valid for those copies
 (see [docs/licensing-history.md](./docs/licensing-history.md)). This is a license change only —
 no application behaviour changed.
 
+## v4.7.0 - 2026-11-09
+
+### Audio Engine & Stream Reliability
+- **Fresh Upstream Socket per Stitched Chunk**: Fixed stream playback stalls where re-using upstream sockets across stitched audio chunks caused playback to wedge or drop. Each stitched chunk now opens and manages a fresh socket connection to the upstream stream provider.
+- **Wedged Native Stream Recovery**: Automatic recovery mechanism detects wedged or stalled native streams and re-establishes seekable playback without requiring an app restart.
+- **RAM-Cache Stream Resume & Seekability**: Seekable in-memory caching enables smooth scrubbing, rapid seeks, and reliable buffer resumption across active tracks.
+- **Spotify Direct Live-Mux Join Offset**: Fixed offset calculation when joining live muxes on Spotify Direct streams through a sample-rebasing extractor wrapper, ensuring seamless track transitions and bounded stream ranges.
+
+### Companion Host & Remote Connectivity
+- **On-Demand Port 3130 Companion Server**: Introduced an on-demand companion HTTP server running on port 3130 for local network pairing and mobile client remote control.
+- **Cloudflare Secure Tunnel Integration**: Integrated tunnel manager allowing remote pairing over secure Cloudflare tunnels when devices are not on the same local Wi-Fi.
+- **Loopback-Only Desktop Auth**: Restricted desktop authentication and sensitive backend orchestration endpoints strictly to loopback interfaces, securing external connections.
+
+### Equalizer & Audio Processing
+- **Platform-Scoped Dual Equalizer**: Added a 10-band audio equalizer for desktop listening alongside platform-scoped audio processing presets.
+
+### User Interface & Brand Visuals
+- **Unified Brand Icon Mark Ratio**: Unified desktop OS icons, taskbar icon, window header, favicon, and NSIS installer bitmaps (`nsis-header.bmp`, `nsis-sidebar.bmp`) to a consistent 66% mark-to-canvas ratio.
+- **All-Time Listening Statistics Fix**: Resolved cumulative stats calculations to accurately display all-time listening history, top artists, and played tracks.
+- **Album Artwork Lightbox**: Improved artwork lightbox viewer and responsive navigation polish.
+
 ## v4.6.8 - 2026-10-25
 
 ### Licensing Accuracy
