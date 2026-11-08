@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Check, FileText, Info } from 'lucide-react';
-import { apiUrl } from '../../utils/api';
+import { apiUrl, IS_TAURI_MOBILE } from '../../utils/api';
+import mobileChangelogText from '../../../../CHANGELOG-MOBILE.md?raw';
 
 const APP_VERSION = __APP_VERSION__;
 const LAST_SEEN_VERSION_KEY = 'noctune:last-seen-version';
@@ -121,6 +122,29 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   return <ul className="space-y-1.5">{elements}</ul>;
   }
 
+  const MOBILE_V100_HIGHLIGHTS = [
+    {
+      title: 'Native Android Audio & Dedicated Background Service',
+      desc: 'Audio playback runs in an isolated media service with ExoPlayer handoff. Music plays continuously in the background and survives WebView suspensions or app switching.',
+    },
+    {
+      title: 'MediaStyle Notifications & Lock Screen Controls',
+      desc: 'Interactive Android notification with playback controls (Previous, Play/Pause, Next), live seek tracking, and synced artwork metadata for lock screens and Bluetooth devices.',
+    },
+    {
+      title: 'Touch-First Mobile Player & 5-Band Equalizer',
+      desc: 'Redesigned mobile player bar with swipe navigation, full-screen player view, real-time audio spectrum visualizer, and a platform-tuned 5-band equalizer.',
+    },
+    {
+      title: 'Desktop Companion Pairing & Cloudflare Tunnels',
+      desc: 'Connect Noctune Mobile directly to your desktop over local Wi-Fi or secure Cloudflare tunnels to stream your collection and control playback remotely.',
+    },
+    {
+      title: 'Adaptive Icons & System Theme Integration',
+      desc: 'Native adaptive launcher icon, animated splash screen, and an optically balanced status silhouette icon with crisp contrast across Light and Dark themes.',
+    },
+  ];
+
   const V470_HIGHLIGHTS = [
     {
       title: 'Mobile Companion & Remote Control',
@@ -202,6 +226,10 @@ export function ChangelogModal() {
   }, []);
 
   async function fetchChangelog() {
+    if (IS_TAURI_MOBILE) {
+      setChangelogText(mobileChangelogText);
+      return;
+    }
     try {
       const res = await fetch(await apiUrl('/changelog'));
       const data = await res.json();
@@ -252,41 +280,63 @@ export function ChangelogModal() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs leading-relaxed text-soft">
           <div className="rounded-xl border border-white/10 bg-base-950/40 p-4 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.7.0</span>
-                <span className="text-xs font-semibold text-white">Minor Feature Release Highlights</span>
+            {IS_TAURI_MOBILE ? (
+              <div>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v{APP_VERSION}</span>
+                  <span className="text-xs font-semibold text-white">Official Mobile Release Highlights</span>
+                </div>
+                <ul className="space-y-2 text-muted">
+                  {MOBILE_V100_HIGHLIGHTS.map((item, idx) => (
+                    <li key={`mobile-v100-${idx}`} className="flex items-start gap-2">
+                      <span className="text-accent font-bold mt-0.5">•</span>
+                      <span>
+                        <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                        {renderInlineMarkdown(item.desc)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-2 text-muted">
-                {V470_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v470-${idx}`} className="flex items-start gap-2">
-                    <span className="text-accent font-bold mt-0.5">•</span>
-                    <span>
-                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
-                      {renderInlineMarkdown(item.desc)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="rounded bg-accent/20 px-2 py-0.5 text-[11px] font-bold text-accent">v4.7.0</span>
+                    <span className="text-xs font-semibold text-white">Minor Feature Release Highlights</span>
+                  </div>
+                  <ul className="space-y-2 text-muted">
+                    {V470_HIGHLIGHTS.map((item, idx) => (
+                      <li key={`v470-${idx}`} className="flex items-start gap-2">
+                        <span className="text-accent font-bold mt-0.5">•</span>
+                        <span>
+                          <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                          {renderInlineMarkdown(item.desc)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
-            <div className="border-t border-white/10 pt-3.5">
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.6.8</span>
-                <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
-              </div>
-              <ul className="space-y-2 text-muted">
-                {V468_HIGHLIGHTS.map((item, idx) => (
-                  <li key={`v468-${idx}`} className="flex items-start gap-2">
-                    <span className="text-accent font-bold mt-0.5">•</span>
-                    <span>
-                      <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
-                      {renderInlineMarkdown(item.desc)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                <div className="border-t border-white/10 pt-3.5">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-soft">v4.6.8</span>
+                    <span className="text-xs font-semibold text-white">Patch Release Highlights</span>
+                  </div>
+                  <ul className="space-y-2 text-muted">
+                    {V468_HIGHLIGHTS.map((item, idx) => (
+                      <li key={`v468-${idx}`} className="flex items-start gap-2">
+                        <span className="text-accent font-bold mt-0.5">•</span>
+                        <span>
+                          <strong className="text-white">{renderInlineMarkdown(item.title)}:</strong>{' '}
+                          {renderInlineMarkdown(item.desc)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200/90">
@@ -297,7 +347,7 @@ export function ChangelogModal() {
           {changelogText && (
             <details className="group rounded-xl border border-white/10 bg-base-950/30 p-3">
               <summary className="cursor-pointer font-medium text-soft hover:text-white flex items-center justify-between select-none">
-                <span>View Full CHANGELOG.md</span>
+                <span>View Full {IS_TAURI_MOBILE ? 'CHANGELOG-MOBILE.md' : 'CHANGELOG.md'}</span>
                 <span className="text-xs text-muted group-open:rotate-180 transition-transform">▼</span>
               </summary>
               <div className="mt-3 max-h-72 overflow-y-auto rounded-lg bg-base-950/60 p-3.5 border border-white/[0.06] text-left">
