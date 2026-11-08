@@ -26,6 +26,19 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("../noctune.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = project.findProperty("NOCTUNE_KEYSTORE_PASSWORD") as String? ?: System.getenv("NOCTUNE_KEYSTORE_PASSWORD") ?: "noctunemusic"
+                keyAlias = project.findProperty("NOCTUNE_KEY_ALIAS") as String? ?: System.getenv("NOCTUNE_KEY_ALIAS") ?: "noctune"
+                keyPassword = project.findProperty("NOCTUNE_KEY_PASSWORD") as String? ?: System.getenv("NOCTUNE_KEY_PASSWORD") ?: "noctunemusic"
+            } else {
+                initWith(signingConfigs.getByName("debug"))
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -39,7 +52,7 @@ android {
             }
         }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
