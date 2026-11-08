@@ -168,6 +168,7 @@
     }
     * {
       scrollbar-width: none;
+      -ms-overflow-style: none;
     }
   }
 
@@ -182,7 +183,7 @@
     }
 
     ::-webkit-scrollbar-thumb {
-      background: rgb(var(--accent-rgb) / 0.22);
+      background: rgb(var(--accent-rgb) / 0.28);
       border-radius: 999px;
     }
 
@@ -192,6 +193,11 @@
 
     ::-webkit-scrollbar-thumb:active {
       background: rgb(var(--accent-rgb) / 0.75);
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgb(var(--accent-rgb) / 0.28) transparent;
     }
   }
 }

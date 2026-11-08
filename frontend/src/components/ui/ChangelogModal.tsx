@@ -125,23 +125,27 @@ function RenderedChangelog({ markdown }: { markdown: string }) {
   const MOBILE_V101_HIGHLIGHTS = [
     {
       title: 'Media Card Previous & Next Layout',
-      desc: 'Fixed inverted button icons on Android media notification cards, placing Previous (|◀) on the left and Next (▶|) on the right.',
+      desc: 'Fixed inverted button icons on Android media notification cards, correctly placing Previous (|◀) on the left and Next (▶|) on the right.',
     },
     {
-      title: 'Artwork Lightbox Pinch-to-Zoom & Double-Tap',
-      desc: 'Added multi-touch gesture support to the artwork lightbox viewer. Pinch with two fingers to zoom in and out smoothly, double-tap to toggle zoom levels, and drag to pan without image jitter.',
+      title: 'Artwork Lightbox Multi-Touch (Pinch-to-Zoom)',
+      desc: 'Added full multi-touch gesture support to the artwork lightbox viewer. Pinch with two fingers to zoom in and out smoothly, double-tap to toggle zoom levels, and drag to pan without image jitter.',
     },
     {
-      title: 'Polished Left Edge Drawer Swipe',
-      desc: 'The sidebar drawer swipe is now strictly confined to the screen edge (first 32px) with horizontal carousel ignore guards, preventing horizontal carousels from inadvertently triggering the sidebar menu.',
+      title: 'Smart Carousel & Drawer Swipe Protection',
+      desc: 'Swiping right opens the navigation drawer smoothly from anywhere across the screen, while intelligent carousel and horizontal-scroll guards ensure browsing through album and track carousels never accidentally triggers the sidebar.',
+    },
+    {
+      title: 'Update Checker in Mobile Settings',
+      desc: 'Restored the Updates panel at the top of Settings with live version status, Changelog access, update checking, and direct APK download links on mobile devices.',
     },
     {
       title: 'Discord Rich Presence via Companion Sync',
       desc: 'Mobile playback activity now reliably forwards to your desktop companion backend, seamlessly updating your Discord Rich Presence profile when listening from your phone.',
     },
     {
-      title: 'Smooth Scrolling Without Stuck Scrollbars',
-      desc: 'Eliminated synthetic 6px desktop scrollbar conflicts on touchscreens in favor of native momentum scrolling, while enhancing desktop scrollbars with comfortable 8px active-drag states.',
+      title: 'Clean Touch Scrolling',
+      desc: 'Hidden synthetic webkit scrollbars on touchscreens to eliminate freeze-ups, accidental thumb-drags, and ghost-touch interruptions in favor of pure, responsive native momentum scrolling.',
     },
   ];
 

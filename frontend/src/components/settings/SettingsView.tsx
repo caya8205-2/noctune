@@ -17,7 +17,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { keyboardShortcuts } from '../../constants/keyboardShortcuts';
-import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI, IS_TAURI_DESKTOP, isMobileClientMode, setSpotifyPlaybackSetting } from '../../utils/api';
+import { api, apiUrl, type UpdateInfo, type SpotifyAuthStatus, type SpotifyPairingInfo, IS_TAURI, IS_TAURI_DESKTOP, IS_TAURI_MOBILE, isMobileClientMode, setSpotifyPlaybackSetting } from '../../utils/api';
 import { openExternalUrl } from '../../hooks/useUpdateChecker';
 import { useUpdaterStore } from '../../store/updater';
 import { Visualizer, VISUALIZER_PRESETS, type VisualizerMode } from '../player/Visualizer';
@@ -157,6 +157,7 @@ export function SettingsView() {
     updateAvailable: updaterUpdateAvailable,
     updateReady: updaterReady,
     version: updaterVersion,
+    releaseUrl: updaterReleaseUrl,
     error: updaterError,
     checkForUpdates: runUpdaterCheck,
     installUpdate: runUpdateInstall,
@@ -617,10 +618,7 @@ export function SettingsView() {
         </h1>
       </div>
 
-      {/* Mobile Client Server Connection (Mobile) or Updates (Desktop) */}
-      {isMobileClient ? (
-        <MobileServerConnectionSection onReconnected={() => loadSettings().catch(console.error)} />
-      ) : (
+      {/* Updates Section (Desktop & Mobile) */}
         <section className="surface-panel flex flex-col gap-4 p-5">
           <div>
             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
@@ -694,6 +692,15 @@ export function SettingsView() {
                   <Loader2 size={14} className="animate-spin" />
                   Downloading ({updaterProgress}%)
                 </button>
+              ) : IS_TAURI_MOBILE && (updaterUpdateAvailable || updateInfo?.updateAvailable) ? (
+                <button
+                  type="button"
+                  onClick={() => openExternalUrl(updaterReleaseUrl || updateInfo?.releaseUrl || 'https://github.com/caya8205-2/noctune/releases/latest').catch(console.error)}
+                  className="btn-accent px-3 py-2 rounded-xl text-sm flex items-center gap-1.5"
+                >
+                  <ExternalLink size={14} />
+                  Download APK
+                </button>
               ) : IS_TAURI && (updaterUpdateAvailable || updateInfo?.updateAvailable) ? (
                 <button
                   type="button"
@@ -717,7 +724,11 @@ export function SettingsView() {
             </div>
           </div>
         </div>
-        </section>
+      </section>
+
+      {/* Mobile Client Server Connection (Mobile only) */}
+      {isMobileClient && (
+        <MobileServerConnectionSection onReconnected={() => loadSettings().catch(console.error)} />
       )}
 
       {/* Mobile Companion Host Setup (Desktop only) */}

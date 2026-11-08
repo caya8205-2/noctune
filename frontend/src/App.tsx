@@ -310,13 +310,6 @@ function AppInner() {
       isTracking = true;
 
       if (!mobileMenuOpen) {
-        // Strict edge zone (left 32px) so swiping within page content or carousels
-        // never triggers drawer opening.
-        const maxStartZone = 32;
-        if (startX > maxStartZone) {
-          isTracking = false;
-          return;
-        }
         isSwipeRightCandidate = true;
         isDrawerSwipe = false;
       } else {

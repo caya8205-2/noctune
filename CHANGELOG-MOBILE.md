@@ -4,17 +4,18 @@ All notable changes to the Noctune Mobile application (Android) are documented h
 
 ## v1.0.1 - 2026-11-09
 
-Maintenance, gesture polish, and Discord companion release for Noctune Mobile.
+Maintenance, gesture polish, settings update checker, and Discord companion release for Noctune Mobile.
 
 ### Notification & System Integration
 - **Fixed Inverted Media Notification Controls**: Corrected the previous/next vector drawable definitions so that the Previous button (|◀) and Next button (▶|) match standard orientations on Android media cards.
 
 ### Mobile UI & Gesture Navigation
 - **Lightbox Pinch-to-Zoom & Double-Tap**: Added full multi-touch gesture support to the artwork lightbox viewer. Pinch with two fingers to smoothly zoom in/out, double-tap to zoom or reset, and pan without image jitter.
-- **Edge Swipe Drawer Restraint**: Confined the left sidebar drawer opening gesture strictly to the screen edge (within 32px) and added horizontal scroll / carousel ignore guards, preventing horizontal carousels from accidentally opening the navigation sidebar.
-- **Touch-Friendly Scrolling**: Removed synthetic 6px desktop webkit scrollbar collisions on mobile touchscreens in favor of native momentum touch scrolling, eliminating scroll freeze and stuck thumbs.
+- **Smart Carousel & Drawer Swipe Protection**: Swiping right opens the navigation drawer smoothly from anywhere across the screen, while horizontal scroll and carousel ignore guards ensure browsing track carousels never triggers the sidebar unintentionally.
+- **Clean Touch Scrolling**: Hidden synthetic desktop webkit scrollbars on mobile touchscreens in favor of native momentum touch scrolling, eliminating scroll freeze and stuck thumbs.
 
 ### Integrations & Settings
+- **Update Checker in Mobile Settings**: Restored the prominent Updates section at the top of SettingsView for mobile devices, enabling one-tap update checks, release notes viewing, and direct APK download links.
 - **Discord Rich Presence Companion Sync**: Mobile playback activity now automatically forwards to the desktop companion backend, seamlessly updating your Discord status on your PC while streaming from your phone.
 - **Restored Discord RPC Toggle**: Re-enabled the Discord Rich Presence toggle in mobile Settings with local persistence.
 

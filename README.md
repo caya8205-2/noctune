@@ -44,6 +44,7 @@
 - **Adaptive Circular Visualizer**: 6 audio reactive visualizer presets rendering directly around the album disk.
 - **Local Playlists & Library**: Full playlist management, liked songs, cover upload/crop, drag-and-drop reordering, and audio tag scanner (`.flac`, `.mp3`, `.m4a`, etc.).
 - **Debug Dashboard**: Built-in inspector for cache management, stream logs, candidate matching scores, and model stats.
+- **Noctune Mobile (Android Companion)**: Dedicated foreground media service (`MediaPlaybackService`), ExoPlayer stream handoff, MediaStyle lockscreen controls, and desktop companion sync with Discord Rich Presence.
 
 ## How It Works
 
@@ -77,6 +78,7 @@
 | Layer | Tech |
 |---|---|
 | Desktop Shell | Tauri 2, Rust |
+| Mobile Shell | Tauri 2 (Android), Kotlin, ExoPlayer |
 | Frontend | React 18, Vite, Tailwind CSS |
 | UI State | Zustand |
 | Server State | TanStack Query |
@@ -125,6 +127,16 @@ npm run tauri
 npm run tauri:build
 ```
 
+For the Tauri mobile app (Android):
+
+```bash
+# Android debug build
+npm run tauri android build -- --debug
+
+# Android release APK build
+npm run tauri android build
+```
+
 ## Project Structure
 
 ```bash
@@ -161,6 +173,9 @@ Accessible from Settings, the **Debug Dashboard** provides tools for:
 - [Updating](#will-updating-delete-my-library)
 - [Spotify API](#is-spotify-api-necessary)
 - [Database location](#i-wanna-see-the-database-and-all-the-config-file-where-does-it-stored)
+- [Connecting Noctune Mobile to Desktop](#how-do-i-connect-noctune-mobile-to-noctune-desktop)
+- [Mobile background playback](#does-noctune-mobile-support-background-playback-and-lockscreen-controls)
+- [Mobile Discord Rich Presence](#does-discord-rich-presence-work-from-the-mobile-app)
 
 ---
 
@@ -205,9 +220,18 @@ Accessible from Settings, the **Debug Dashboard** provides tools for:
 * the binary is in `%LOCALAPPDATA%\Noctune`
 * while the data is in `%APPDATA%\dev.noctune.desktop`
 
+#### How do I connect Noctune Mobile to Noctune Desktop?
+* In Noctune Desktop, open **Settings ➔ Mobile Companion Host** and ensure the companion service is running (default port 3130). In Noctune Mobile, open **Settings ➔ Desktop Connection** and enter your PC's local IP address or Cloudflare Tunnel URL, then tap **Connect**.
+
+#### Does Noctune Mobile support background playback and lockscreen controls?
+* Yes. Audio playback is managed by a dedicated Android foreground service (`MediaPlaybackService`) using ExoPlayer. It persists playback when your screen is turned off or when switching apps, providing full interactive playback controls on your notification shade and lockscreen.
+
+#### Does Discord Rich Presence work from the mobile app?
+* Yes! When Noctune Mobile is connected to your desktop companion server, playing music on your phone automatically relays track info to your desktop backend, updating your Discord Rich Presence activity on PC in real time.
+
 ## Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md) or [Releases](https://github.com/caya8205-2/noctune/releases)
+See [CHANGELOG.md](./CHANGELOG.md) (Desktop), [CHANGELOG-MOBILE.md](./CHANGELOG-MOBILE.md) (Mobile), or [Releases](https://github.com/caya8205-2/noctune/releases)
 
 ## License
 
