@@ -221,10 +221,13 @@ Accessible from Settings, the **Debug Dashboard** provides tools for:
 * while the data is in `%APPDATA%\dev.noctune.desktop`
 
 #### How do I connect Noctune Mobile to Noctune Desktop?
-* In Noctune Desktop, open **Settings ➔ Mobile Companion Host** and ensure the companion service is running (default port 3130). In Noctune Mobile, open **Settings ➔ Desktop Connection** and enter your PC's local IP address or Cloudflare Tunnel URL, then tap **Connect**.
+* In Noctune Desktop, open Settings -> Start Server on Mobile Companion -> Click on **Pairing QR**. Then open the mobile client, and just scan the QR code. You could also enter your PC's local IP address (default port 3130) or Cloudflare Tunnel URL, enter your access key then tap Connect.
+
+#### What does the "Separate Mobile Database" means?
+* Just like the name, its an option if you want a separate database for your mobile client or not. If you don't care then just turn it off, the good side is your listening data and playlist sync with the desktop version, but queue and history doesn't
 
 #### Does Noctune Mobile support background playback and lockscreen controls?
-* Yes. Audio playback is managed by a dedicated Android foreground service (`MediaPlaybackService`) using ExoPlayer. It persists playback when your screen is turned off or when switching apps, providing full interactive playback controls on your notification shade and lockscreen.
+* Yes. Although its unstable for now, when you minimize the app like switching to another app or go to home, the audio will pause for a bit before continuing. But after that it persist just like normal, the pause only happen when you open the app and minimize it.
 
 #### Does Discord Rich Presence work from the mobile app?
 * Yes! When Noctune Mobile is connected to your desktop companion server, playing music on your phone automatically relays track info to your desktop backend, updating your Discord Rich Presence activity on PC in real time.
