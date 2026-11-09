@@ -10,6 +10,11 @@ the MIT License, and that grant stays valid for those copies
 (see [docs/licensing-history.md](./docs/licensing-history.md)). This is a license change only —
 no application behaviour changed.
 
+## v4.7.1 - 2026-11-09
+
+### Playlist Import & Spotify Web API
+- **Fixed Large Spotify Playlist Import Crash**: Fixed a fatal backend sidecar crash (`0xC0000005: Access Violation`) when importing Spotify playlists with more than 100 tracks. Normalized the pagination query fields on `/v1/playlists/{id}/tracks` and guarded array spreading against undefined page items, allowing multi-page playlists to import completely and reliably without terminating the backend process.
+
 ## v4.7.0 - 2026-11-09
 
 ### Audio Engine & Stream Reliability

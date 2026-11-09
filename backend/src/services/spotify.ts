@@ -398,15 +398,32 @@ export async function getSpotifyPlaylistTracks(id: string, limit = 2000): Promis
 
         const firstData = await spotifyApiFetch<SpotifyPlaylistResponse>(firstUrl);
         const playlistName = firstData.name || 'Spotify Playlist';
-        const allItems = [...firstData.tracks.items];
-        let nextUrl: string | null = firstData.tracks.next;
+        const allItems = [...(firstData.tracks?.items || [])];
+        let nextUrl: string | null = firstData.tracks?.next;
 
         while (nextUrl && allItems.length < limit) {
             try {
-                const pageData = await spotifyApiFetch<SpotifyPlaylistResponse['tracks']>(nextUrl);
-                allItems.push(...pageData.items);
-                nextUrl = pageData.next;
-            } catch {
+                // Spotify's returned nextUrl carries over the playlist-level `tracks.items(...)` field filter,
+                // but the /tracks paging endpoint expects `items(...)` without the `tracks.` prefix.
+                const pageUrl = new URL(nextUrl);
+                const fields = pageUrl.searchParams.get('fields');
+                if (fields) {
+                    pageUrl.searchParams.set(
+                        'fields',
+                        fields
+                            .replace(/tracks\.items/g, 'items')
+                            .replace(/tracks\.next/g, 'next')
+                            .replace(/^name,/, '')
+                    );
+                }
+
+                const pageData = await spotifyApiFetch<{ items?: Array<{ track: SpotifyTrack | null }>; next?: string | null }>(pageUrl);
+                if (Array.isArray(pageData?.items)) {
+                    allItems.push(...pageData.items);
+                }
+                nextUrl = pageData?.next || null;
+            } catch (pageErr) {
+                console.warn('[spotify] Failed to fetch next playlist page:', pageErr);
                 break;
             }
         }
